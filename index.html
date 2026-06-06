@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Raptor Strike: Heavy Fire Edition</title>
+    
+    <link rel="stylesheet" href="/style.css">
+    <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#00ffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+
+    <div id="ui">
+        SCORE: <span id="score-val">0</span>
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        LEVEL: <span id="level-val">1</span>
+    </div>
+    
+    <div id="overlay">
+        <div class="overlay-blur-effect"></div>
+        <div class="menu-content">
+            <h2 class="brand-sub">HEAVY FIRE EDITION</h2>
+            
+            <div class="logo-container">
+                <span class="logo-text">RAPTOR</span>
+                <span class="logo-text highlight">STRIKE</span>
+            </div>
+            
+            <p class="game-lore">Pilote no limite do espaço profundo. Sobreviva à investida alienígena.</p>
+            <button id="start-btn">LIGAR MOTORES DA NAVE</button>
+        </div>
+    </div>
+
+    <div id="mobile-controls">
+        <div id="joystick-area">
+            <div id="stick"></div>
+        </div>
+        <button id="shootBtn" class="mobile-btn fire-btn">🔥 FIRE</button>
+        <button id="pauseBtn" class="mobile-btn pause-btn">⏸</button>
+    </div>
+
+<script type="module" src="/src/index.js"></script>
+
+</body>
+</html>

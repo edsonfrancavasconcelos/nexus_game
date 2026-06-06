@@ -1,0 +1,17 @@
+{
+  "short_name": "RaptorStrike",
+  "name": "Raptor Strike: Heavy Fire",
+  "icons": [
+    {
+      "src": "/assets/img/capa_game.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#020208",
+  "theme_color": "#00ffff",
+  "display": "standalone",
+  "orientation": "landscape"
+}

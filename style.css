@@ -1,0 +1,307 @@
+/* ==================== CONFIGURAÇÃO GLOBAL ==================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent; /* Remove o brilho de toque no mobile */
+}
+
+body {
+    overflow: hidden;
+    background-color: #020208;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    touch-action: none; /* Impede zoom e scroll nativo */
+}
+
+canvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+/* ==================== INTERFACE DO JOGO ==================== */
+#ui {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 10;
+    text-shadow: 0 0 8px #00ffff;
+    pointer-events: none; /* O clique passa pelo texto direto para o jogo */
+}
+
+/* ==================== TELA DE INÍCIO PREMIUM ==================== */
+#overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    /* 🌟 SUA CAPA DE FUNDO EM TELA CHEIA */
+    background: url('/assets/img/capa_game.png') no-repeat center center;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    overflow: hidden;
+    padding: 20px;
+}
+
+/* Camada escura para dar contraste e destacar o letreiro e botão */
+.overlay-blur-effect {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(2, 2, 8, 0.85) 20%, rgba(5, 5, 25, 0.4) 100%);
+    z-index: 101;
+}
+
+/* Alinhamento dos textos */
+.menu-content {
+    position: relative;
+    z-index: 102;
+    text-align: center;
+    max-width: 650px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Subtítulo piscante acima da logo */
+.brand-sub {
+    color: #ff0055;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 6px;
+    text-shadow: 0 0 10px #ff0055;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    animation: pulseGlow 2s infinite alternate;
+}
+
+/* ==================== DESIGN DA LOGO SCI-FI ==================== */
+.logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 10px 0 25px 0;
+    padding: 15px 35px;
+    background: rgba(0, 0, 0, 0.45);
+    border-top: 2px solid rgba(0, 243, 255, 0.4);
+    border-bottom: 2px solid rgba(0, 243, 255, 0.4);
+    box-shadow: inset 0 0 25px rgba(0, 243, 255, 0.15);
+    transform: skewX(-12deg); /* Dá o efeito aerodinâmico de velocidade */
+}
+
+.logo-text {
+    font-family: 'Impact', 'Arial Black', sans-serif;
+    font-size: 76px;
+    font-weight: 900;
+    line-height: 0.95;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    /* Efeito de metal escovado/cromado */
+    background: linear-gradient(to bottom, #ffffff 0%, #bbbbbb 50%, #ffffff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+}
+
+/* Segunda palavra com o Neon Ciano matador */
+.logo-text.highlight {
+    font-size: 68px;
+    letter-spacing: 11px;
+    background: linear-gradient(to bottom, #00ffff 0%, #0088cc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 15px #00ffff) drop-shadow(0 0 30px #00f3ff);
+    animation: logoGlow 1.5s infinite alternate;
+}
+
+.game-lore {
+    color: #cccccc;
+    font-size: 13px;
+    letter-spacing: 2px;
+    margin-bottom: 40px;
+    text-transform: uppercase;
+    font-weight: 400;
+    opacity: 0.85;
+    max-width: 85%;
+}
+
+/* Botão Estilo Cockpit Futurista */
+#overlay button {
+    padding: 18px 50px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #00ffff;
+    background: rgba(0, 243, 255, 0.05);
+    border: 3px solid #00ffff;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), inset 0 0 10px rgba(0, 255, 255, 0.2);
+    transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+#overlay button:hover {
+    background: #00ffff;
+    color: #020208;
+    box-shadow: 0 0 40px #00ffff, 0 0 10px #00ffff;
+    transform: scale(1.05);
+}
+
+#overlay button:active {
+    transform: scale(0.98);
+}
+
+/* ==================== CONTROLES MOBILE ==================== */
+#mobile-controls {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 50; 
+    pointer-events: none; /* Evita cliques fantasmas bloqueando o jogo */
+    display: none; 
+}
+
+#mobile-controls > * {
+    pointer-events: auto; /* Devolve o toque apenas para os botões e analógico */
+}
+
+#joystick-area {
+    position: absolute;
+    bottom: 40px;
+    left: 40px;
+    width: 130px;
+    height: 130px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 3px solid rgba(0, 255, 255, 0.3);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: none;
+}
+
+#stick {
+    width: 55px;
+    height: 55px;
+    background: #00ffff;
+    border-radius: 50%;
+    box-shadow: 0 0 20px #00ffff, inset 0 0 10px rgba(255,255,255,0.6);
+    pointer-events: none;
+}
+
+#shootBtn {
+    position: absolute;
+    bottom: 35px;
+    right: 35px;
+    width: 95px;
+    height: 95px;
+    background: radial-gradient(circle at 40% 40%, #ff3366, #cc1122);
+    border: 4px solid #ff3366;
+    border-radius: 50%;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 0 25px #ff3366;
+    touch-action: manipulation;
+    transition: transform 0.1s;
+}
+
+#shootBtn:active { 
+    transform: scale(0.85); 
+}
+
+#pauseBtn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 55px;
+    height: 55px;
+    background: #ef4444;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    color: white;
+    font-size: 22px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: manipulation;
+    z-index: 60;
+}
+
+/* ==================== SCORE POPUP ==================== */
+.score-popup {
+    position: absolute;
+    color: #ffff00;
+    font-weight: bold;
+    text-shadow:
+        0 0 8px #ff0000,
+        0 0 15px #ff6600;
+    pointer-events: none;
+    z-index: 9999;
+    white-space: nowrap;
+    transform-origin: center center;
+}
+
+/* ==================== ANIMAÇÕES VIA CSS ==================== */
+@keyframes logoGlow {
+    0% { filter: drop-shadow(0 0 10px #00ffff) drop-shadow(0 0 20px #00f3ff); }
+    100% { filter: drop-shadow(0 0 20px #00ffff) drop-shadow(0 0 40px #00f3ff); }
+}
+
+@keyframes pulseGlow {
+    0% { opacity: 0.7; text-shadow: 0 0 6px #ff0055; }
+    100% { opacity: 1; text-shadow: 0 0 15px #ff0055, 0 0 20px #ff0055; }
+}
+
+/* ==================== RESPONSIVIDADE MOBILE ==================== */
+@media (pointer: coarse) {
+    #mobile-controls { display: block; }
+}
+
+@media (max-width: 480px) {
+    #overlay h1 { font-size: 38px; }
+    .logo-container { padding: 8px 20px; }
+    .logo-text { font-size: 46px; letter-spacing: 4px; }
+    .logo-text.highlight { font-size: 40px; letter-spacing: 8px; }
+    .brand-sub { font-size: 11px; letter-spacing: 3px; }
+    .game-lore { font-size: 11px; margin-bottom: 30px; }
+    #overlay button { padding: 14px 35px; font-size: 16px; }
+    
+    #shootBtn { width: 80px; height: 80px; bottom: 25px; right: 25px; font-size: 18px; }
+    #joystick-area { width: 110px; height: 110px; bottom: 25px; left: 25px; }
+    #pauseBtn { width: 45px; height: 45px; font-size: 18px; }
+    #ui { font-size: 18px; top: 15px; left: 15px; }
+}
+
+@media (max-height: 450px) {
+    .logo-container { padding: 5px 15px; margin: 5px 0 15px 0; }
+    .logo-text { font-size: 36px; }
+    .logo-text.highlight { font-size: 30px; }
+    .game-lore { display: none; } /* Oculta a lore em telas deitadas curtas para dar espaço */
+    #overlay button { padding: 10px 30px; font-size: 14px; }
+    #shootBtn { width: 75px; height: 75px; bottom: 15px; right: 15px; }
+    #joystick-area { width: 95px; height: 95px; bottom: 15px; left: 15px; }
+}
