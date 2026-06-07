@@ -80,7 +80,8 @@ function startGame() {
     player.mesh.position.set(0, -1, 8);
 
     enemyManager.clearAllEnemies();
-    enemyManager.spawnWave(player);
+    // 🛠️ CORREÇÃO 1: Passando a variável global 'score' (que reiniciou em 0) aqui
+    enemyManager.spawnWave(player, score);
 
     // 🚀 O GRAU: Força o motor a ligar/reiniciar sempre que uma partida nova começar
     if (audioInitialized) {
@@ -109,12 +110,13 @@ function animate() {
 
         player.update(input, deltaTime);
         
-        // Atualiza o ambiente espacial (nebulosa/estrelas)
-        if (spaceEnvironment && typeof spaceEnvironment.update === 'function') {
-            spaceEnvironment.update(deltaTime);
+    // --- Atualiza o ambiente espacial (nebulosa/estrelas) ---
+        if (spaceEnvironment && typeof spaceEnvironment.update === 'function') {      
+            const velocidadeCenario = deltaTime * 8.0; 
+            spaceEnvironment.update(velocidadeCenario);
         }
 
-        // Deixamos o EnemyManager rodar a colisão comparando as posições atuais
+        // --- LOOP DO ENEMY MANAGER ---
         enemyManager.update(
             laserManager,
             (pts, enemyPosition) => {
@@ -137,7 +139,8 @@ function animate() {
             player,
             deltaTime,
             explosionManager,
-            soundManager
+            soundManager,
+            score // 🛠️ CORREÇÃO 2: Passando a variável 'score' aqui para a lógica de ondas funcionar!
         );
 
         // Atualiza os lasers depois de processar as colisões do frame
@@ -160,6 +163,7 @@ function onResize() {
 
     renderer.setSize(width, height);
 }
+
 function updateOrientationUI() {
     const isPortrait = window.innerHeight > window.innerWidth;
 

@@ -1,11 +1,28 @@
 export class SoundManager {
     constructor() {
         this.sounds = {
+            // --- JOGADOR ---
             laser: new Audio('/assets/sounds/laser.mp3'),
+            nave: new Audio('/assets/sounds/nave.mp3'), // Som do motor principal
+
+            // --- INIMIGOS COMUNS / GERAIS ---
             enemyLaser: new Audio('/assets/sounds/laser_inimigo.mp3'),
             explosion: new Audio('/assets/sounds/explosao_inimiga.mp3'),
-            nave: new Audio('/assets/sounds/nave.mp3'), // Som do motor principal
-            enemyPass: new Audio('/assets/sounds/inimiga_passando.mp3')
+            enemyPass: new Audio('/assets/sounds/inimiga_passando.mp3'),
+
+            // --- LASERS DOS INIMIGOS DE NÍVEL ---
+            laserInimi5: new Audio('/assets/sounds/laser_inimi_5.mp3'),
+            laserInim10: new Audio('/assets/sounds/laser_inim_10.mp3'),
+            laserInim15: new Audio('/assets/sounds/laser_invert_15.mp3'), // Mapeado para o seu laser_inim_15.mp3
+
+            // --- SONS DE NAVE PASSANDO RASPANDO ---
+            navePass5: new Audio('/assets/sounds/nave_pass_5.mp3'),
+            navePss10: new Audio('/assets/sounds/nave_pss_10.mp3'),
+            navePass15: new Audio('/assets/sounds/nave_pass_15.mp3'),
+
+            // --- DRONE E METEORO ---
+            dronePass: new Audio('/assets/sounds/drone.mp3'),       // Usando o som físico do drone
+            meteoroPass: new Audio('/assets/sounds/meteoro.mp3')    // Usando o som físico do meteoro
         };
 
         Object.values(this.sounds).forEach(sound => {
@@ -16,7 +33,7 @@ export class SoundManager {
     }
 
     init() {
-        console.log('Inicializando sons...');
+        console.log('🔊 Inicializando todos os sons do jogo...');
         Object.values(this.sounds).forEach(sound => sound.load());
     }
 
@@ -52,11 +69,17 @@ export class SoundManager {
             return;
         }
 
-        const baseSound = this.sounds[name];
-        if (!baseSound) return;
+        // Caso o EnemyManager chame 'explosaoInimiga', redireciona para a chave certa 'explosion'
+        const soundKey = name === 'explosaoInimiga' ? 'explosion' : name;
+
+        const baseSound = this.sounds[soundKey];
+        if (!baseSound) {
+            console.warn(`Som não encontrado no SoundManager: ${name}`);
+            return;
+        }
 
         // Trava de spam para o laser do jogador
-        if (name === 'laser') {
+        if (soundKey === 'laser') {
             const now = Date.now();
             if (now - this.lastLaserTime < 60) return;
             this.lastLaserTime = now;
@@ -65,12 +88,15 @@ export class SoundManager {
         // Sistema de canais dinâmicos para tiros e explosões
         const soundClone = baseSound.cloneNode(true);
 
-        if (name === 'laser' || name === 'enemyLaser') {
-            soundClone.volume = 0.25;
-        } else if (name === 'explosion') {
-            soundClone.volume = 0.55;
+        // --- CONTROLE DE VOLUMES INDIVIDUAIS POR CATEGORIA ---
+        if (soundKey.toLowerCase().includes('laser')) {
+            soundClone.volume = 0.20; // Lasers de todo mundo um pouco mais baixos para não irritar
+        } else if (soundKey === 'explosion') {
+            soundClone.volume = 0.55; // Explosão bem forte para dar impacto
+        } else if (soundKey === 'dronePass' || soundKey === 'meteoroPass') {
+            soundClone.volume = 0.45; // Drones e meteoros ganham destaque ao passar raspando
         } else {
-            soundClone.volume = 0.40;
+            soundClone.volume = 0.35; // Volume padrão para passagens de naves de nível
         }
 
         soundClone.play().catch(e =>
