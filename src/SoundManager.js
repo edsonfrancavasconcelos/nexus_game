@@ -13,11 +13,13 @@ export class SoundManager {
             // --- LASERS DOS INIMIGOS DE NÍVEL ---
             laserInimi5: new Audio('/assets/sounds/laser_inimi_5.mp3'),
             laserInim10: new Audio('/assets/sounds/laser_inim_10.mp3'),
-            laserInim15: new Audio('/assets/sounds/laser_invert_15.mp3'), // Mapeado para o seu laser_inim_15.mp3
+            // 🛠️ Corrigido de 'laser_invert_15.mp3' para o nome real do seu arquivo
+            laserInim15: new Audio('/assets/sounds/laser_inim_15.mp3'), 
 
             // --- SONS DE NAVE PASSANDO RASPANDO ---
             navePass5: new Audio('/assets/sounds/nave_pass_5.mp3'),
-            navePss10: new Audio('/assets/sounds/nave_pss_10.mp3'),
+            // 🛠️ Corrigido de 'nave_pss_10.mp3' para 'nave_pass_10.mp3' para bater com seu arquivo do windows
+            navePss10: new Audio('/assets/sounds/nave_pass_10.mp3'),
             navePass15: new Audio('/assets/sounds/nave_pass_15.mp3'),
 
             // --- DRONE E METEORO ---
