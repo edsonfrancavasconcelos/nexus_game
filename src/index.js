@@ -112,7 +112,7 @@ function animate() {
         
     // --- Atualiza o ambiente espacial (nebulosa/estrelas) ---
         if (spaceEnvironment && typeof spaceEnvironment.update === 'function') {      
-            const velocidadeCenario = deltaTime * 8.0; 
+            const velocidadeCenario = deltaTime * 10.0; 
             spaceEnvironment.update(velocidadeCenario);
         }
 
