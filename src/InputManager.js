@@ -6,7 +6,7 @@ export class InputManager {
             ArrowDown: false,
             ArrowLeft: false,
             ArrowRight: false,
-            Space: false
+            Space: false // Certifique-se de que o event.code enviado seja exatamente 'Space'
         };
 
         this.inputAcceleration = 0.22;
@@ -20,20 +20,22 @@ export class InputManager {
 
     _initKeyboard() {
         window.addEventListener('keydown', (event) => {
-            if (this.keys.hasOwnProperty(event.code)) {
+            if (Object.prototype.hasOwnProperty.call(this.keys, event.code)) {
                 event.preventDefault();
                 this.keys[event.code] = true;
             }
         });
 
         window.addEventListener('keyup', (event) => {
-            if (this.keys.hasOwnProperty(event.code)) {
+            if (Object.prototype.hasOwnProperty.call(this.keys, event.code)) {
                 this.keys[event.code] = false;
             }
         });
 
         window.addEventListener('blur', () => {
-            Object.keys(this.keys).forEach(key => this.keys[key] = false);
+            for (let key in this.keys) {
+                this.keys[key] = false;
+            }
             this.currentX = 0;
             this.currentY = 0;
             this.moveInput.x = 0;
@@ -95,8 +97,18 @@ export class InputManager {
 
             this.currentX += (targetX - this.currentX) * this.inputAcceleration;
             this.currentY += (targetY - this.currentY) * this.inputAcceleration;
-            return { x: this.currentX, y: this.currentY };
+            
+            return { 
+                x: this.currentX, 
+                y: this.currentY,
+                isFiring: this.keys.Space // Adicionei isso caso você precise disparar pelo teclado
+            };
         }
-        return { x: this.moveInput.x * 1.7, y: this.moveInput.y * 1.7 };
+        
+        return { 
+            x: this.moveInput.x * 1.7, 
+            y: this.moveInput.y * 1.7,
+            isFiring: false // Joystick normalmente não dispara aqui, a menos que tenha botão extra
+        };
     }
 }

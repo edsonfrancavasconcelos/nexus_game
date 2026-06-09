@@ -105,16 +105,16 @@ export class ExplosionManager {
         };
 
         // Otimização das frações de partículas para evitar superposição excessive
-        addPart(GEO.debris, 0xffffff, false, 5);
-        addPart(GEO.debris, 0xffff00, false, 8);
-        addPart(GEO.debris, 0xff8800, false, 10);
-        addPart(GEO.debris, 0xff2200, false, 8);
-        addPart(GEO.debris, 0xffdd66, false, 12);
+        addPart(GEO.debris, 0xffffff, false, 15);
+        addPart(GEO.debris, 0xffff00, false, 20);
+        addPart(GEO.debris, 0xff8800, false, 25);
+        addPart(GEO.debris, 0xff2200, false, 20);
+        addPart(GEO.debris, 0xffdd66, false, 30);
         
         // --- 🛠️ CAMADAS DE METAIS ALTERADAS PARA GEO.SHARD (ESTILHAÇOS RETORCIDOS ASSIMÉTRICOS) ---
-        addPart(GEO.shard, 0x1a1a1a, false, 12, true); // Pedaços de metal queimado/carbonizado fosco
-        addPart(GEO.shard, 0x555555, false, 10, true); // Pedaços de fuselagem cinza metálica
-        addPart(GEO.shard, 0x888888, false, 6, true);  // Placas de metal claro da estrutura interna
+        addPart(GEO.shard, 0x1a1a1a, false, 30, true); // Pedaços de metal queimado/carbonizado fosco
+        addPart(GEO.shard, 0x555555, false, 25, true); // Pedaços de fuselagem cinza metálica
+        addPart(GEO.shard, 0x888888, false, 15, true);  // Placas de metal claro da estrutura interna
 
         addPart(GEO.smoke, 0x222222, true, proximoAoJogador ? 4 : 10);
 
@@ -196,14 +196,14 @@ export class ExplosionManager {
 
             if (exp.life <= 0) {
                 this.scene.remove(exp.group);
-
-                // Limpeza correta apenas de materiais e geometrias dinâmicas locais
-                if (exp.flashGeo) exp.flashGeo.dispose();
-                if (exp.flash && exp.flash.material) exp.flash.material.dispose();
-
-                exp.fragments.forEach(f => {
-                    if (f.mesh.material) f.mesh.material.dispose();
-                    // Não damos dispose no GEO global para evitar quebrar as próximas explosions
+                
+                // Remove os filhos do grupo para ajudar o Garbage Collector
+                exp.group.traverse((child) => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                        else child.material.dispose();
+                    }
                 });
 
                 this.explosions.splice(i, 1);

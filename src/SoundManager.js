@@ -3,7 +3,8 @@ export class SoundManager {
         this.sounds = {
             // --- JOGADOR ---
             laser: new Audio('/assets/sounds/laser.mp3'),
-            nave: new Audio('/assets/sounds/nave.mp3'), // Som do motor principal
+            nave: new Audio('/assets/sounds/nave.mp3'),
+            pdc: new Audio('/assets/sounds/pdc_shot.mp3'), // ADICIONADO: Som do PDC
 
             // --- INIMIGOS COMUNS / GERAIS ---
             enemyLaser: new Audio('/assets/sounds/laser_inimigo.mp3'),
@@ -13,18 +14,16 @@ export class SoundManager {
             // --- LASERS DOS INIMIGOS DE NÍVEL ---
             laserInimi5: new Audio('/assets/sounds/laser_inimi_5.mp3'),
             laserInim10: new Audio('/assets/sounds/laser_inim_10.mp3'),
-            // 🛠️ Corrigido de 'laser_invert_15.mp3' para o nome real do seu arquivo
             laserInim15: new Audio('/assets/sounds/laser_inim_15.mp3'), 
 
             // --- SONS DE NAVE PASSANDO RASPANDO ---
             navePass5: new Audio('/assets/sounds/nave_pass_5.mp3'),
-            // 🛠️ Corrigido de 'nave_pss_10.mp3' para 'nave_pass_10.mp3' para bater com seu arquivo do windows
             navePss10: new Audio('/assets/sounds/nave_pass_10.mp3'),
             navePass15: new Audio('/assets/sounds/nave_pass_15.mp3'),
 
             // --- DRONE E METEORO ---
-            dronePass: new Audio('/assets/sounds/drone.mp3'),       // Usando o som físico do drone
-            meteoroPass: new Audio('/assets/sounds/meteoro.mp3')    // Usando o som físico do meteoro
+            dronePass: new Audio('/assets/sounds/drone.mp3'), 
+            meteoroPass: new Audio('/assets/sounds/meteoro.mp3')
         };
 
         Object.values(this.sounds).forEach(sound => {
@@ -32,6 +31,7 @@ export class SoundManager {
         });
 
         this.lastLaserTime = 0;
+        this.lastPdcTime = 0; // Trava de spam para o PDC
     }
 
     init() {
@@ -39,74 +39,59 @@ export class SoundManager {
         Object.values(this.sounds).forEach(sound => sound.load());
     }
 
-    /**
-     * Liga o som do motor da nave de forma contínua (Loop)
-     */
     startShipEngine() {
         const engine = this.sounds['nave'];
         if (engine) {
-            engine.loop = true;      // Força o som a recomeçar sozinho quando terminar
-            engine.volume = 0.15;    // Volume baixo para ser um som de fundo agradável
-            
-            engine.play().catch(e =>
-                console.warn("Áudio do motor aguardando clique do jogador:", e)
-            );
+            engine.loop = true;
+            engine.volume = 0.15;
+            engine.play().catch(e => console.warn("Áudio do motor aguardando interação:", e));
         }
     }
 
-    /**
-     * Desliga o motor se o jogo for pausado ou der GameOver
-     */
     stopShipEngine() {
         const engine = this.sounds['nave'];
-        if (engine) {
-            engine.pause();
-        }
+        if (engine) engine.pause();
     }
 
     play(name) {
-        // Se tentarem tocar o som da nave pelo play normal, joga para a função de loop
         if (name === 'nave') {
             this.startShipEngine();
             return;
         }
 
-        // Caso o EnemyManager chame 'explosaoInimiga', redireciona para a chave certa 'explosion'
         const soundKey = name === 'explosaoInimiga' ? 'explosion' : name;
-
         const baseSound = this.sounds[soundKey];
+        
         if (!baseSound) {
             console.warn(`Som não encontrado no SoundManager: ${name}`);
             return;
         }
 
-        // Trava de spam para o laser do jogador
-        if (soundKey === 'laser') {
-            const now = Date.now();
-            if (now - this.lastLaserTime < 60) return;
-            this.lastLaserTime = now;
-        }
+        // --- TRAVAS DE SPAM ---
+        const now = Date.now();
+        if (soundKey === 'laser' && now - this.lastLaserTime < 60) return;
+        if (soundKey === 'pdc' && now - this.lastPdcTime < 40) return; // Limita o som do PDC
+        
+        if (soundKey === 'laser') this.lastLaserTime = now;
+        if (soundKey === 'pdc') this.lastPdcTime = now;
 
-        // Sistema de canais dinâmicos para tiros e explosões
+        // --- SISTEMA DE CANAIS ---
         const soundClone = baseSound.cloneNode(true);
 
-        // --- CONTROLE DE VOLUMES INDIVIDUAIS POR CATEGORIA ---
-        if (soundKey.toLowerCase().includes('laser')) {
-            soundClone.volume = 0.20; // Lasers de todo mundo um pouco mais baixos para não irritar
+        // --- CONTROLE DE VOLUMES ---
+        if (soundKey === 'pdc') {
+            soundClone.volume = 0.10; // PDC é rápido e constante, mantém baixo
+        } else if (soundKey.toLowerCase().includes('laser')) {
+            soundClone.volume = 0.20;
         } else if (soundKey === 'explosion') {
-            soundClone.volume = 0.55; // Explosão bem forte para dar impacto
+            soundClone.volume = 0.55;
         } else if (soundKey === 'dronePass' || soundKey === 'meteoroPass') {
-            soundClone.volume = 0.45; // Drones e meteoros ganham destaque ao passar raspando
+            soundClone.volume = 0.45;
         } else {
-            soundClone.volume = 0.35; // Volume padrão para passagens de naves de nível
+            soundClone.volume = 0.35;
         }
 
-        soundClone.play().catch(e =>
-            console.warn("Áudio bloqueado pelo navegador:", e)
-        );
-
-        soundClone.onended = () => {
-            soundClone.remove();
-        };
+        soundClone.play().catch(e => console.warn("Áudio bloqueado:", e));
+        soundClone.onended = () => soundClone.remove();
     }
 }

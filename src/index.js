@@ -30,17 +30,14 @@ document.body.appendChild(renderer.domElement);
 
 // --- Instâncias ---
 const soundManager = new SoundManager();
+window.soundManager = soundManager;
 const laserManager = new LaserManager(scene, soundManager); 
-const player = new Player(scene, laserManager);
+const explosionManager = new ExplosionManager(scene, soundManager);
+window.explosionManager = explosionManager;
 const inputManager = new InputManager();
-
-// Crie o ScorePopup primeiro, pois o EnemyManager precisa dele
 const scorePopup = new ScorePopup(scene, camera);
-
-// Agora o enemyManager pode usar a variável scorePopup sem erros
+const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup);
-
-const explosionManager = new ExplosionManager(scene, soundManager); 
 const spaceEnvironment = new SpaceEnvironment(scene);
 const progressionManager = new ProgressionManager();
 
@@ -64,9 +61,9 @@ function updateHUD() {
     if (scoreVal) scoreVal.textContent = score.toString().padStart(7, '0');
 }
 
-
 async function initGame() {
     enemyManager.init(); 
+    criarPainelDebugNivel(); // 🔥 Injetando a interface de testes assim que o jogo inicia
 }
 
 function startGame() {
@@ -80,8 +77,9 @@ function startGame() {
     player.mesh.position.set(0, -1, 8);
 
     enemyManager.clearAllEnemies();
-    // 🛠️ CORREÇÃO 1: Passando a variável global 'score' (que reiniciou em 0) aqui
-    enemyManager.spawnWave(player, score);
+    
+    // 🔥 CORREÇÃO 1: Passando o Nível Inicial Correto (1) em vez do Score zerado para criar a primeira onda
+    enemyManager.spawnWave(player, progressionManager.getLevel());
 
     // 🚀 O GRAU: Força o motor a ligar/reiniciar sempre que uma partida nova começar
     if (audioInitialized) {
@@ -92,12 +90,57 @@ function startGame() {
     updateLevelHUD();
 }
 
-
 function updateLevelHUD() {
     const levelVal = document.getElementById('level-val');
     if (levelVal) {
         levelVal.textContent = progressionManager.getLevel();
     }
+}
+
+// --- 🛠️ INTERFACE DO SELETOR DE NÍVEIS (DEBUG) ---
+function criarPainelDebugNivel() {
+    const debugContainer = document.createElement('div');
+    debugContainer.style.position = 'absolute';
+    debugContainer.style.top = '20px';
+    debugContainer.style.left = '20px';
+    debugContainer.style.zIndex = '99999';
+    debugContainer.style.background = 'rgba(5, 5, 15, 0.9)';
+    debugContainer.style.padding = '12px';
+    debugContainer.style.borderRadius = '8px';
+    debugContainer.style.border = '2px solid #ff3344';
+    debugContainer.style.fontFamily = 'monospace';
+    debugContainer.style.color = '#fff';
+    debugContainer.style.boxShadow = '0 0 15px rgba(255, 51, 68, 0.4)';
+
+    debugContainer.innerHTML = `
+        <div style="margin-bottom: 8px; font-weight: bold; color: #ff3344; letter-spacing: 1px;">🛸 NEXUS DEBUG PANEL</div>
+        <select id="debugLevelSelect" style="background: #111; color: #fff; border: 1px solid #ff3344; padding: 6px; width: 100%; cursor: pointer; font-family: monospace; border-radius: 4px;">
+            <option value="1">Nível 1 (Naves Base)</option>
+            <option value="21">Nível 21 (Naves Gigantes Tipo 5)</option>
+            <option value="31">Nível 31 (Naves Gigantes Tipo 10)</option>
+            <option value="51">Nível 51 (Naves Gigantes Tipo 15)</option>
+        </select>
+    `;
+
+    document.body.appendChild(debugContainer);
+
+    document.getElementById('debugLevelSelect').addEventListener('change', (e) => {
+        const nivelSelecionado = parseInt(e.target.value);
+        
+        // Força o progressionManager a retornar o nível escolhido alterando o método getLevel dinamicamente
+        progressionManager.getLevel = () => nivelSelecionado;
+        
+        // Atualiza o HUD visual do jogo
+        updateLevelHUD();
+        
+        // Limpa as naves antigas da tela para nascerem as novas imediatamente se o jogo estiver rodando
+        if (currentState === GAME_STATE.PLAYING && enemyManager) {
+            enemyManager.clearAllEnemies();
+            enemyManager.spawnWave(player, nivelSelecionado);
+        }
+        
+        console.log(`🛠️ [DEBUG] Nível forçado com sucesso para: ${nivelSelecionado}`);
+    });
 }
 
 // --- LOOP PRINCIPAL ATUALIZADO ---
@@ -108,9 +151,10 @@ function animate() {
     if (currentState === GAME_STATE.PLAYING) {
         const input = inputManager.update();
 
-        player.update(input, deltaTime);
+        // 🔥 CORREÇÃO 2: Injetando o 'enemyManager' no update do Player para ativar o PDC autônomo!
+        player.update(input, deltaTime, enemyManager); 
         
-    // --- Atualiza o ambiente espacial (nebulosa/estrelas) ---
+        // --- Atualiza o ambiente espacial (nebulosa/estrelas) ---
         if (spaceEnvironment && typeof spaceEnvironment.update === 'function') {      
             const velocidadeCenario = deltaTime * 10.0; 
             spaceEnvironment.update(velocidadeCenario);
@@ -140,7 +184,7 @@ function animate() {
             deltaTime,
             explosionManager,
             soundManager,
-            score // 🛠️ CORREÇÃO 2: Passando a variável 'score' aqui para a lógica de ondas funcionar!
+            progressionManager.getLevel() // 🔥 CORREÇÃO 3: Passando o Level Real do jogo em vez do score total!
         );
 
         // Atualiza os lasers depois de processar as colisões do frame
@@ -152,7 +196,6 @@ function animate() {
 
     renderer.render(scene, camera);
 }
-
 
 function onResize() {
     const width = window.innerWidth;
