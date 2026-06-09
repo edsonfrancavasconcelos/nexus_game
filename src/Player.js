@@ -37,7 +37,7 @@ export class Player {
 
         // 🛰️ CONFIGURAÇÃO PDC (DOIS CANHÕES)
         this.pdcRange = 650;
-        this.pdcCooldown = 0.05;
+        this.pdcCooldown = 0.15;
         this.pdcTimer = 0;
         this.pdcProjectiles = [];
         this.pdcBulletGeo = new THREE.CylinderGeometry(0.10, 0.10, 5, 6);

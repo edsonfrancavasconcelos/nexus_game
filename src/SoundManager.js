@@ -53,7 +53,7 @@ export class SoundManager {
         if (engine) engine.pause();
     }
 
-    play(name) {
+play(name) {
         if (name === 'nave') {
             this.startShipEngine();
             return;
@@ -70,18 +70,25 @@ export class SoundManager {
         // --- TRAVAS DE SPAM ---
         const now = Date.now();
         if (soundKey === 'laser' && now - this.lastLaserTime < 60) return;
-        if (soundKey === 'pdc' && now - this.lastPdcTime < 40) return; // Limita o som do PDC
+        // Aumentei o tempo de 40ms para 200ms para o PDC não sobrecarregar o processador
+        if (soundKey === 'pdc' && now - this.lastPdcTime < 200) return; 
         
         if (soundKey === 'laser') this.lastLaserTime = now;
         if (soundKey === 'pdc') this.lastPdcTime = now;
 
-        // --- SISTEMA DE CANAIS ---
+        // --- OTIMIZAÇÃO: REUTILIZAÇÃO PARA PDC ---
+        if (soundKey === 'pdc') {
+            baseSound.currentTime = 0; // Reinicia o som existente sem criar um novo objeto
+            baseSound.volume = 0.10;
+            baseSound.play().catch(e => console.warn("Áudio bloqueado:", e));
+            return; // Sai da função aqui, não cria clone
+        }
+
+        // --- SISTEMA DE CANAIS PARA OUTROS SONS (Explosão/Laser) ---
         const soundClone = baseSound.cloneNode(true);
 
         // --- CONTROLE DE VOLUMES ---
-        if (soundKey === 'pdc') {
-            soundClone.volume = 0.10; // PDC é rápido e constante, mantém baixo
-        } else if (soundKey.toLowerCase().includes('laser')) {
+        if (soundKey.toLowerCase().includes('laser')) {
             soundClone.volume = 0.20;
         } else if (soundKey === 'explosion') {
             soundClone.volume = 0.55;
@@ -93,5 +100,4 @@ export class SoundManager {
 
         soundClone.play().catch(e => console.warn("Áudio bloqueado:", e));
         soundClone.onended = () => soundClone.remove();
-    }
-}
+    }}
