@@ -9,6 +9,7 @@ import { EnemyManager } from './EnemyManager.js';
 import { ExplosionManager } from './ExplosionManager.js';
 import { SpaceEnvironment } from './SpaceEnvironment.js';
 import { ProgressionManager } from './ProgressionManager.js';
+import { PickupManager } from './PickupManager.js';
 
 window.fflate = { unzipSync, strFromU8 };
 
@@ -40,6 +41,8 @@ const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup);
 const spaceEnvironment = new SpaceEnvironment(scene);
 const progressionManager = new ProgressionManager();
+const pickupManager = new PickupManager(scene);
+window.pickupManager = pickupManager;
 
 // --- FUNÇÕES DE APOIO ---
 function updateCamera() {
@@ -96,74 +99,105 @@ function updateLevelHUD() {
         levelVal.textContent = progressionManager.getLevel();
     }
 }
-
-// --- 🛠️ INTERFACE DO SELETOR DE NÍVEIS (DEBUG) ---
 function criarPainelDebugNivel() {
     const debugContainer = document.createElement('div');
-    debugContainer.style.position = 'absolute';
-    debugContainer.style.top = '20px';
-    debugContainer.style.left = '20px';
-    debugContainer.style.zIndex = '99999';
-    debugContainer.style.background = 'rgba(5, 5, 15, 0.9)';
-    debugContainer.style.padding = '12px';
-    debugContainer.style.borderRadius = '8px';
-    debugContainer.style.border = '2px solid #ff3344';
-    debugContainer.style.fontFamily = 'monospace';
-    debugContainer.style.color = '#fff';
-    debugContainer.style.boxShadow = '0 0 15px rgba(255, 51, 68, 0.4)';
+    debugContainer.id = 'debugPanel';
+    
+    // Estilização estilo "HUD Sci-Fi"
+    debugContainer.style.cssText = `
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 99999;
+        background: rgba(10, 10, 20, 0.75);
+        backdrop-filter: blur(10px);
+        padding: 16px;
+        border-radius: 4px;
+        border-left: 4px solid #ff3344;
+        border-top: 1px solid #333;
+        border-right: 1px solid #333;
+        border-bottom: 1px solid #333;
+        font-family: 'Courier New', Courier, monospace;
+        color: #fff;
+        box-shadow: 0 0 20px rgba(255, 51, 68, 0.2);
+        cursor: default;
+        transition: all 0.3s ease;
+    `;
 
     debugContainer.innerHTML = `
-        <div style="margin-bottom: 8px; font-weight: bold; color: #ff3344; letter-spacing: 1px;">🛸 NEXUS DEBUG PANEL</div>
-        <select id="debugLevelSelect" style="background: #111; color: #fff; border: 1px solid #ff3344; padding: 6px; width: 100%; cursor: pointer; font-family: monospace; border-radius: 4px;">
-            <option value="1">Nível 1 (Naves Base)</option>
-            <option value="21">Nível 21 (Naves Gigantes Tipo 5)</option>
-            <option value="31">Nível 31 (Naves Gigantes Tipo 10)</option>
-            <option value="51">Nível 51 (Naves Gigantes Tipo 15)</option>
+        <div style="margin-bottom: 12px; font-weight: 800; color: #ff3344; letter-spacing: 2px; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #ff3344; padding-bottom: 5px;">
+            🛸 NEXUS: SELETOR DE ZONA
+        </div>
+        <select id="debugLevelSelect" style="
+            background: #050505; 
+            color: #ff3344; 
+            border: 1px solid #ff3344; 
+            padding: 8px; 
+            width: 100%; 
+            cursor: pointer; 
+            font-family: inherit; 
+            font-weight: bold;
+            outline: none;
+            transition: 0.2s;
+        ">
+            <option value="1">ZONA 01: SETOR ALPHA</option>
+            <option value="21">ZONA 21: GIGANTES TIPO 05</option>
+            <option value="31">ZONA 31: GIGANTES TIPO 10</option>
+            <option value="51">ZONA 51: GIGANTES TIPO 15</option>
         </select>
+        <div style="margin-top: 10px; font-size: 10px; color: #888; opacity: 0.8;">SISTEMA DE TESTE DE NÍVEIS ATIVO</div>
     `;
 
     document.body.appendChild(debugContainer);
 
-    document.getElementById('debugLevelSelect').addEventListener('change', (e) => {
+    // Efeito Hover no Dropdown
+    const select = document.getElementById('debugLevelSelect');
+    select.onmouseover = () => { select.style.background = '#1a0a0a'; };
+    select.onmouseout = () => { select.style.background = '#050505'; };
+
+    select.addEventListener('change', (e) => {
         const nivelSelecionado = parseInt(e.target.value);
         
-        // Força o progressionManager a retornar o nível escolhido alterando o método getLevel dinamicamente
+        // Efeito de feedback visual rápido
+        debugContainer.style.borderColor = '#00ffcc';
+        setTimeout(() => debugContainer.style.borderColor = '#ff3344', 500);
+
         progressionManager.getLevel = () => nivelSelecionado;
-        
-        // Atualiza o HUD visual do jogo
         updateLevelHUD();
         
-        // Limpa as naves antigas da tela para nascerem as novas imediatamente se o jogo estiver rodando
         if (currentState === GAME_STATE.PLAYING && enemyManager) {
             enemyManager.clearAllEnemies();
             enemyManager.spawnWave(player, nivelSelecionado);
         }
         
-        console.log(`🛠️ [DEBUG] Nível forçado com sucesso para: ${nivelSelecionado}`);
+        console.log(`%c🚀 [NEXUS] Nível alterado para: ${nivelSelecionado}`, 'color: #ff3344; font-weight: bold;');
     });
 }
 
 // --- LOOP PRINCIPAL ATUALIZADO ---
 function animate() {
     requestAnimationFrame(animate);
+
+    // 1. Calculamos o tempo no início de tudo
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
     if (currentState === GAME_STATE.PLAYING) {
         const input = inputManager.update();
 
-        // 🔥 CORREÇÃO 2: Injetando o 'enemyManager' no update do Player para ativar o PDC autônomo!
-        player.update(input, deltaTime, enemyManager); 
-        
-        // --- Atualiza o ambiente espacial (nebulosa/estrelas) ---
-        if (spaceEnvironment && typeof spaceEnvironment.update === 'function') {      
-            const velocidadeCenario = deltaTime * 10.0; 
-            spaceEnvironment.update(velocidadeCenario);
+        // 2. Atualiza o Jogador (que também processa o PDC)
+        player.update(input, deltaTime, enemyManager);
+
+        // 3. Atualiza o Ambiente
+        if (spaceEnvironment && typeof spaceEnvironment.update === 'function') {
+            spaceEnvironment.update(deltaTime * 10.0);
         }
 
-        // --- LOOP DO ENEMY MANAGER ---
+        // 4. Atualiza os Inimigos (ÚNICA CHAMADA)
+        // Aqui dentro o inimigo dropa itens via window.pickupManager
         enemyManager.update(
             laserManager,
             (pts, enemyPosition) => {
+                // Lógica de Score unificada
                 score += pts;
                 const levelUp = progressionManager.addScore(pts);
                 updateHUD();
@@ -177,17 +211,19 @@ function animate() {
                     enemyManager.enemySpeed *= 1.10;
                     enemyManager.maxEnemiesOnScreen += 1;
                     enemyManager.waveCooldown *= 0.95;
-                    console.log(`LEVEL ${progressionManager.getLevel()}`);
                 }
             },
             player,
             deltaTime,
             explosionManager,
             soundManager,
-            progressionManager.getLevel() // 🔥 CORREÇÃO 3: Passando o Level Real do jogo em vez do score total!
+            progressionManager.getLevel() // Nível real do jogo
         );
 
-        // Atualiza os lasers depois de processar as colisões do frame
+        // 5. Atualiza o PickupManager (coleta de reparos)
+        pickupManager.update(deltaTime, player);
+
+        // 6. Finaliza os sistemas
         laserManager.update(deltaTime);
         explosionManager.update(deltaTime);
         scorePopup.update(deltaTime);

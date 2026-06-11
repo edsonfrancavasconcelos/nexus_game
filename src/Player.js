@@ -6,6 +6,7 @@ export class Player {
         this.scene = scene;
         this.laserManager = laserManager;
         
+        this.pdcDurability = 100;
         this.isFiring = false;
         this.isPaused = false;
 
@@ -35,14 +36,21 @@ export class Player {
             depthWrite: false
         });
 
-        // 🛰️ CONFIGURAÇÃO PDC (DOIS CANHÕES)
+        // 🛰️ CONFIGURAÇÃO PDC
         this.pdcRange = 650;
-        this.pdcCooldown = 0.15;
+        this.pdcCooldown = 0.08;
         this.pdcTimer = 0;
         this.pdcProjectiles = [];
-        this.pdcBulletGeo = new THREE.CylinderGeometry(0.10, 0.10, 5, 6);
+        this.pdcBulletGeo = new THREE.CylinderGeometry(0.35, 0.15, 6.0, 8);
         this.pdcBulletGeo.rotateX(Math.PI / 2);
-        this.pdcBulletMat = new THREE.MeshBasicMaterial({ color: 0xffee88, toneMapped: false });
+        
+        // CORREÇÃO: Usando MeshStandardMaterial para evitar erros de console
+        this.pdcBulletMat = new THREE.MeshStandardMaterial({ 
+            color: 0xffff00, 
+            emissive: 0xff4400, 
+            emissiveIntensity: 5.0, 
+            toneMapped: false 
+        });
 
         this.pdcCannons = [
             { container: new THREE.Group(), offset: new THREE.Vector3(-3.5, 4.5, -3) },
@@ -66,6 +74,112 @@ export class Player {
         this._loadModel();
         this._initKeyboard();
         this._initTouchControls();
+    }
+
+    // --- MÉTODOS CORRETAMENTE POSICIONADOS FORA DO CONSTRUTOR ---
+
+    repairPDC() {
+        this.pdcDurability = 100;
+        console.log("PDC em 100%");
+    }
+
+    _updatePDC(enemyManager, dt) {
+        if (this.pdcDurability <= 0) {
+            this._updatePDCProjectiles(enemyManager, dt);
+            return;
+        }
+
+        this.pdcTimer += dt;
+        if (!this.shipModel || !enemyManager?.enemies?.length) {
+            this._updatePDCProjectiles(enemyManager, dt);
+            return;
+        }
+
+        let closestEnemy = null;
+        let closestDist = Infinity;
+        enemyManager.enemies.forEach((enemy) => {
+            if (!enemy || enemy.userData?.type === 'meteoro') return;
+            const dist = this.mesh.position.distanceTo(enemy.position);
+            if (dist < this.pdcRange && dist < closestDist) {
+                closestDist = dist;
+                closestEnemy = enemy;
+            }
+        });
+
+        if (closestEnemy) {
+            const targetPos = new THREE.Vector3();
+            closestEnemy.getWorldPosition(targetPos);
+            this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
+
+            if (this.pdcTimer >= this.pdcCooldown) {
+                this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
+                this.pdcTimer = 0;
+            }
+        }
+        this._updatePDCProjectiles(enemyManager, dt);
+    }
+
+    _firePDCShot(targetPos, cannon) {
+        for (let i = 0; i < 4; i++) {
+            const bullet = new THREE.Mesh(this.pdcBulletGeo, this.pdcBulletMat);
+            const spawnPos = new THREE.Vector3();
+            cannon.container.getWorldPosition(spawnPos);
+            bullet.position.copy(spawnPos);
+            
+            const spread = 0.4; 
+            bullet.rotation.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
+            this.scene.add(bullet);
+            
+            if (i === 0 && window.soundManager) window.soundManager.play('pdc');
+
+            const dir = new THREE.Vector3().subVectors(targetPos, spawnPos).normalize();
+            this.pdcProjectiles.push({ 
+                mesh: bullet, 
+                dir: dir, 
+                startTime: Date.now(),
+                offset: Math.random() * Math.PI * 2 
+            });
+        }
+    }
+
+    _updatePDCProjectiles(enemyManager, dt) {
+        const now = Date.now();
+        for (let i = this.pdcProjectiles.length - 1; i >= 0; i--) {
+            const b = this.pdcProjectiles[i];
+            const elapsed = (now - b.startTime) * 0.04;
+            const waveX = Math.sin(elapsed * 8 + b.offset) * 3.0; 
+            const waveY = Math.cos(elapsed * 8 + b.offset) * 3.0;
+            
+            const moveDir = b.dir.clone().multiplyScalar(2000 * dt);
+            b.mesh.position.add(moveDir);
+            b.mesh.position.x += waveX * dt * 5;
+            b.mesh.position.y += waveY * dt * 5;
+            
+            b.mesh.lookAt(b.mesh.position.clone().add(b.dir));
+            b.mesh.scale.set(1.5, 1.5, 1.5);
+
+            let hit = false;
+            if (enemyManager?.enemies) {
+                for (let j = enemyManager.enemies.length - 1; j >= 0; j--) {
+                    const e = enemyManager.enemies[j];
+                    if (!e || e.userData?.type === 'meteoro') continue;
+                    if (b.mesh.position.distanceTo(e.position) < 30) {
+                        const canExplode = enemyManager.damageEnemy ? enemyManager.damageEnemy(e, 15, b.mesh.position) : true;
+                        if (canExplode) {
+                            if (window.explosionManager) window.explosionManager.create(b.mesh.position.clone());
+                            this.scene.remove(e);
+                            enemyManager.enemies.splice(j, 1);
+                        }
+                        hit = true; break;
+                    }
+                }
+            }
+
+            if (hit || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
+                this.scene.remove(b.mesh);
+                this.pdcProjectiles.splice(i, 1);
+            }
+        }
     }
 
     _loadModel() {
@@ -164,117 +278,36 @@ export class Player {
         }
     }
 
-    _updatePDC(enemyManager, dt) {
-        this.pdcTimer += dt;
-        if (!this.shipModel || !enemyManager?.enemies?.length) {
-            this._updatePDCProjectiles(enemyManager, dt);
-            return;
-        }
-        let closestEnemy = null;
-        let closestDist = Infinity;
-        enemyManager.enemies.forEach((enemy) => {
-            if (!enemy || enemy.userData?.type === 'meteoro') return;
-            const dist = this.mesh.position.distanceTo(enemy.position);
-            if (dist < this.pdcRange && dist < closestDist) {
-                closestDist = dist;
-                closestEnemy = enemy;
-            }
-        });
-        if (closestEnemy) {
-            const targetPos = new THREE.Vector3();
-            closestEnemy.getWorldPosition(targetPos);
-            this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
-            if (this.pdcTimer >= this.pdcCooldown) {
-                this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
-                this.pdcTimer = 0;
-            }
-        }
-        this._updatePDCProjectiles(enemyManager, dt);
-    }
-
-_firePDCShot(targetPos, cannon) {
-    const bullet = new THREE.Mesh(this.pdcBulletGeo, this.pdcBulletMat);
-    const spawnPos = new THREE.Vector3();
-    cannon.container.getWorldPosition(spawnPos);
-    bullet.position.copy(spawnPos);
-    bullet.lookAt(targetPos);
-    this.scene.add(bullet);
-    
-    // --- CORREÇÃO AQUI: Acessando o soundManager via window ---
-    if (window.soundManager) {
-        window.soundManager.play('pdc');
-    }
-    // ---------------------------------------------------------
-
-    const dir = new THREE.Vector3().subVectors(targetPos, spawnPos).normalize();
-    this.pdcProjectiles.push({ mesh: bullet, dir: dir });
-}
-
-    _updatePDCProjectiles(enemyManager, dt) {
-        for (let i = this.pdcProjectiles.length - 1; i >= 0; i--) {
-            const b = this.pdcProjectiles[i];
-            b.mesh.position.addScaledVector(b.dir, 950 * dt);
-            let hit = false;
-            if (enemyManager?.enemies) {
-                for (let j = enemyManager.enemies.length - 1; j >= 0; j--) {
-                    const e = enemyManager.enemies[j];
-                    if (!e || e.userData?.type === 'meteoro') continue;
-                    if (b.mesh.position.distanceTo(e.position) < 38) {
-                        // Aplica dano e verifica se deve explodir
-                        const canExplode = enemyManager.damageEnemy ? enemyManager.damageEnemy(e, 22, b.mesh.position) : true;
-                    // ... dentro do seu _updatePDCProjectiles, substitua o bloco 'if (canExplode)' por este:
-
-// Substitua o bloco if (canExplode) no seu arquivo Player.js por este aqui:
-
-if (canExplode) {
-    // Tenta disparar a explosão de 3 formas diferentes para garantir que funcione
-    try {
-        if (window.explosionManager) {
-            window.explosionManager.create(b.mesh.position.clone());
-        } else if (typeof explosionManager !== 'undefined') {
-            explosionManager.create(b.mesh.position.clone());
-        } else {
-            console.error("ExplosionManager não encontrado no escopo global!");
-        }
-    } catch (err) {
-        console.error("Erro ao tentar executar a explosão:", err);
-    }
-
-    this.scene.remove(e);
-    enemyManager.enemies.splice(j, 1);
-}
-                        hit = true; 
-                        break;
-                    }
-                }
-            }
-            if (hit || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
-                this.scene.remove(b.mesh);
-                this.pdcProjectiles.splice(i, 1);
-            }
-        }
-    }
-
     update(moveInput, deltaTime, enemyManager) { 
         if (!this.shipModel || this.isPaused) return;
+        
         const inputX = -moveInput.x;
         const inputY = moveInput.y; 
         const dt = Math.min(deltaTime, 0.1);
         const acel = 65.0; 
+        
         this.velocity.x += inputX * acel * dt;
         this.velocity.y += inputY * acel * dt;
         this.velocity.multiplyScalar(0.88); 
         this.mesh.position.x += this.velocity.x * dt * 10;
         this.mesh.position.y += this.velocity.y * dt * 10;
-        if (Math.abs(this.mesh.position.x) > 350) { this.mesh.position.x = 350 * Math.sign(this.mesh.position.x); this.velocity.x = 0; }
-        if (Math.abs(this.mesh.position.y) > 250) { this.mesh.position.y = 250 * Math.sign(this.mesh.position.y); this.velocity.y = 0; }
+
+        const limiteX = 350;
+        const limiteY = 250;
+        if (this.mesh.position.x > limiteX) this.mesh.position.x = -limiteX;
+        else if (this.mesh.position.x < -limiteX) this.mesh.position.x = limiteX;
+        if (this.mesh.position.y > limiteY) this.mesh.position.y = -limiteY;
+        else if (this.mesh.position.y < -limiteY) this.mesh.position.y = limiteY;
+
         this.pitch = THREE.MathUtils.lerp(this.pitch, inputY * 0.45, this.rotationSpeed * dt);
         this.roll = THREE.MathUtils.lerp(this.roll, -inputX * 0.65, this.rotationSpeed * dt);
         this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
         this.mesh.updateMatrixWorld();
+        
         if (this.isFiring) this._shoot();
         this._updatePDC(enemyManager, dt);
         this._emitHeatWash();
+        
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
             p.mesh.position.z += p.speedZ * dt; 
@@ -284,10 +317,34 @@ if (canExplode) {
             const currentScale = (1.0 - p.life) * 4.0 + 1.0; 
             p.mesh.scale.set(currentScale, currentScale, currentScale);
             p.mesh.material.opacity = p.life * 0.18;
-            if (p.life <= 0) { this.scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); this.particles.splice(i, 1); }
+            if (p.life <= 0) { 
+                this.scene.remove(p.mesh); 
+                p.mesh.geometry.dispose(); 
+                p.mesh.material.dispose(); 
+                this.particles.splice(i, 1); 
+            }
         }
+
+        const debugPanel = document.getElementById('debugPanel');
+    const shootBtn = document.getElementById('shootBtn');
+    
+    const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputY) > 0.05;
+
+    if (debugPanel) {
+        if (isMoving) {
+            debugPanel.style.opacity = '0';
+            debugPanel.style.pointerEvents = 'none';
+        } else {
+            debugPanel.style.opacity = '1';
+            debugPanel.style.pointerEvents = 'auto';
+        }
+    }
+        
         const time = Date.now() * 0.003;
         if (this.fuselageLight) this.fuselageLight.intensity = 110 + Math.sin(time * 2) * 20;
-        this.thrusters.forEach((t) => { t.core.scale.set(0.8, 1 + Math.sin(time * 10) * 0.1, 0.8); t.light.intensity = 100 + Math.sin(time * 50) * 30; });
+        this.thrusters.forEach((t) => { 
+            t.core.scale.set(0.8, 1 + Math.sin(time * 10) * 0.1, 0.8); 
+            t.light.intensity = 100 + Math.sin(time * 50) * 30; 
+        });
     }
 }
