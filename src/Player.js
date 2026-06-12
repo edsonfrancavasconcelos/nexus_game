@@ -5,7 +5,8 @@ export class Player {
     constructor(scene, laserManager) {
         this.scene = scene;
         this.laserManager = laserManager;
-        
+        this.pdcActive = false; // Estado do PDC
+        this.missileCount = 3;  // Munição inicial de mísseis        
         this.pdcDurability = 100;
         this.isFiring = false;
         this.isPaused = false;
@@ -76,36 +77,34 @@ export class Player {
         this._initTouchControls();
     }
 
-    // --- MÉTODOS CORRETAMENTE POSICIONADOS FORA DO CONSTRUTOR ---
-
     repairPDC() {
         this.pdcDurability = 100;
         console.log("PDC em 100%");
     }
 
-    _updatePDC(enemyManager, dt) {
-        if (this.pdcDurability <= 0) {
+_updatePDC(enemyManager, dt) {
+        // 1. SE O PDC ESTIVER DESLIGADO, NÃO FAZ NADA (além de limpar projéteis antigos)
+        if (!this.pdcActive) {
             this._updatePDCProjectiles(enemyManager, dt);
             return;
         }
 
+        // 2. Lógica de busca de alvo
         this.pdcTimer += dt;
-        if (!this.shipModel || !enemyManager?.enemies?.length) {
-            this._updatePDCProjectiles(enemyManager, dt);
-            return;
-        }
-
         let closestEnemy = null;
         let closestDist = Infinity;
-        enemyManager.enemies.forEach((enemy) => {
-            if (!enemy || enemy.userData?.type === 'meteoro') return;
-            const dist = this.mesh.position.distanceTo(enemy.position);
-            if (dist < this.pdcRange && dist < closestDist) {
-                closestDist = dist;
-                closestEnemy = enemy;
-            }
-        });
 
+        if (enemyManager?.enemies) {
+            enemyManager.enemies.forEach((enemy) => {
+                const dist = this.mesh.position.distanceTo(enemy.position);
+                if (dist < this.pdcRange && dist < closestDist) {
+                    closestDist = dist;
+                    closestEnemy = enemy;
+                }
+            });
+        }
+
+        // 3. Só dispara se encontrar um inimigo E o timer permitir
         if (closestEnemy) {
             const targetPos = new THREE.Vector3();
             closestEnemy.getWorldPosition(targetPos);
@@ -113,9 +112,10 @@ export class Player {
 
             if (this.pdcTimer >= this.pdcCooldown) {
                 this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
-                this.pdcTimer = 0;
+                this.pdcTimer = 0; // Reseta o timer
             }
         }
+
         this._updatePDCProjectiles(enemyManager, dt);
     }
 
@@ -141,6 +141,50 @@ export class Player {
             });
         }
     }
+
+    togglePDC() {
+        this.pdcActive = !this.pdcActive;
+        console.log("PDC está agora:", this.pdcActive ? "ATIVO" : "DESATIVADO");
+        return this.pdcActive;
+    }
+
+fireMissile() {
+    console.log("DEBUG [Player]: Função fireMissile iniciada.");
+    
+    if (this.missileCount <= 0) {
+        console.log("DEBUG [Player]: Sem mísseis disponíveis! Count:", this.missileCount);
+        return;
+    }
+
+    this.missileCount--;
+    console.log("DEBUG [Player]: Míssil lançado! Restam:", this.missileCount);
+
+    // 1. Referência do objeto
+    const ship = this.shipModel || this.mesh; 
+    console.log("DEBUG [Player]: Usando ship mesh/model:", ship ? "OK" : "ERRO (null)");
+
+    // 2. Cálculo do offset
+    const side = (this.missileCount % 2 === 0) ? 2.5 : -2.5;
+    const wingOffset = new THREE.Vector3(side, 0, 0); 
+    
+    // 3. Aplica rotação e calcula posição
+    wingOffset.applyQuaternion(ship.quaternion);
+    const spawnPos = ship.position.clone().add(wingOffset);
+    console.log("DEBUG [Player]: Posição de spawn calculada:", spawnPos);
+
+    // 4. Captura rotação
+    const missileQuat = new THREE.Quaternion();
+    ship.getWorldQuaternion(missileQuat);
+    console.log("DEBUG [Player]: Quaternion gerado:", missileQuat);
+    
+    // 5. Disparo
+    if (this.laserManager && typeof this.laserManager.createMissile === 'function') {
+        console.log("DEBUG [Player]: Chamando laserManager.createMissile...");
+        this.laserManager.createMissile(spawnPos, missileQuat);
+    } else {
+        console.error("DEBUG [Player]: ERRO! laserManager ou createMissile não encontrado.");
+    }
+}
 
     _updatePDCProjectiles(enemyManager, dt) {
         const now = Date.now();
@@ -187,7 +231,7 @@ export class Player {
         loader.load('/assets/models/nave_game.glb', (gltf) => {
             this.shipModel = gltf.scene;
             this.shipModel.scale.set(2, 2, 2);
-            this.shipModel.rotation.set(0, Math.PI, 0);
+            this.shipModel.rotation.set(0, Math.PI, 0);           
             this.shipModel.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -338,8 +382,7 @@ export class Player {
             debugPanel.style.opacity = '1';
             debugPanel.style.pointerEvents = 'auto';
         }
-    }
-        
+    }        
         const time = Date.now() * 0.003;
         if (this.fuselageLight) this.fuselageLight.intensity = 110 + Math.sin(time * 2) * 20;
         this.thrusters.forEach((t) => { 

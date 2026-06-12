@@ -9,9 +9,6 @@ import { EnemyManager } from './EnemyManager.js';
 import { ExplosionManager } from './ExplosionManager.js';
 import { SpaceEnvironment } from './SpaceEnvironment.js';
 import { ProgressionManager } from './ProgressionManager.js';
-import { PickupManager } from './PickupManager.js';
-
-window.fflate = { unzipSync, strFromU8 };
 
 // --- DECLARAÇÕES GLOBAIS ---
 let audioInitialized = false;
@@ -41,8 +38,7 @@ const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup);
 const spaceEnvironment = new SpaceEnvironment(scene);
 const progressionManager = new ProgressionManager();
-const pickupManager = new PickupManager(scene);
-window.pickupManager = pickupManager;
+
 
 // --- FUNÇÕES DE APOIO ---
 function updateCamera() {
@@ -66,7 +62,7 @@ function updateHUD() {
 
 async function initGame() {
     enemyManager.init(); 
-    criarPainelDebugNivel(); // 🔥 Injetando a interface de testes assim que o jogo inicia
+    criarPainelDebugNivel();
 }
 
 function startGame() {
@@ -77,14 +73,20 @@ function startGame() {
 
     document.getElementById('overlay').style.display = 'none';
 
+    const nexusSelector = document.getElementById('nexusSelector');
+    if (nexusSelector) {
+        nexusSelector.style.display = 'none';
+    }
+
     player.mesh.position.set(0, -1, 8);
 
     enemyManager.clearAllEnemies();
-    
-    // 🔥 CORREÇÃO 1: Passando o Nível Inicial Correto (1) em vez do Score zerado para criar a primeira onda
-    enemyManager.spawnWave(player, progressionManager.getLevel());
 
-    // 🚀 O GRAU: Força o motor a ligar/reiniciar sempre que uma partida nova começar
+    enemyManager.spawnWave(
+        player,
+        progressionManager.getLevel()
+    );
+
     if (audioInitialized) {
         soundManager.startShipEngine();
     }
@@ -100,55 +102,41 @@ function updateLevelHUD() {
     }
 }
 function criarPainelDebugNivel() {
-    const debugContainer = document.createElement('div');
-    debugContainer.id = 'debugPanel';
-    
-    // Estilização estilo "HUD Sci-Fi"
-    debugContainer.style.cssText = `
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        z-index: 99999;
-        background: rgba(10, 10, 20, 0.75);
-        backdrop-filter: blur(10px);
-        padding: 16px;
-        border-radius: 4px;
-        border-left: 4px solid #ff3344;
-        border-top: 1px solid #333;
-        border-right: 1px solid #333;
-        border-bottom: 1px solid #333;
-        font-family: 'Courier New', Courier, monospace;
-        color: #fff;
-        box-shadow: 0 0 20px rgba(255, 51, 68, 0.2);
-        cursor: default;
-        transition: all 0.3s ease;
-    `;
+   function criarPainelDebugNivel() {
 
-    debugContainer.innerHTML = `
-        <div style="margin-bottom: 12px; font-weight: 800; color: #ff3344; letter-spacing: 2px; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #ff3344; padding-bottom: 5px;">
-            🛸 NEXUS: SELETOR DE ZONA
-        </div>
-        <select id="debugLevelSelect" style="
-            background: #050505; 
-            color: #ff3344; 
-            border: 1px solid #ff3344; 
-            padding: 8px; 
-            width: 100%; 
-            cursor: pointer; 
-            font-family: inherit; 
-            font-weight: bold;
-            outline: none;
-            transition: 0.2s;
-        ">
-            <option value="1">ZONA 01: SETOR ALPHA</option>
-            <option value="21">ZONA 21: GIGANTES TIPO 05</option>
-            <option value="31">ZONA 31: GIGANTES TIPO 10</option>
-            <option value="51">ZONA 51: GIGANTES TIPO 15</option>
-        </select>
-        <div style="margin-top: 10px; font-size: 10px; color: #888; opacity: 0.8;">SISTEMA DE TESTE DE NÍVEIS ATIVO</div>
-    `;
+    const debugContainer = document.getElementById('nexusSelector');
 
-    document.body.appendChild(debugContainer);
+    const select = document.getElementById('debugLevelSelect');
+
+    if (!debugContainer || !select) {
+        console.error('Nexus Selector não encontrado.');
+        return;
+    }
+
+    select.addEventListener('change', (e) => {
+        const nivelSelecionado = parseInt(e.target.value);
+
+        debugContainer.style.borderColor = '#00ffcc';
+
+        setTimeout(() => {
+            debugContainer.style.borderColor = '#ff3344';
+        }, 500);
+
+        progressionManager.getLevel = () => nivelSelecionado;
+
+        updateLevelHUD();
+
+        if (currentState === GAME_STATE.PLAYING && enemyManager) {
+            enemyManager.clearAllEnemies();
+            enemyManager.spawnWave(player, nivelSelecionado);
+        }
+
+        console.log(
+            `%c🚀 [NEXUS] Nível alterado para: ${nivelSelecionado}`,
+            'color: #ff3344; font-weight: bold;'
+        );
+    });
+}
 
     // Efeito Hover no Dropdown
     const select = document.getElementById('debugLevelSelect');
@@ -177,6 +165,15 @@ function criarPainelDebugNivel() {
 // --- LOOP PRINCIPAL ATUALIZADO ---
 function animate() {
     requestAnimationFrame(animate);
+    if (player.shipModel && player.cockpitView) {
+        // A câmera agora "cola" no cockpit da nave
+        const camPos = new THREE.Vector3();
+        player.cockpitView.getWorldPosition(camPos);
+        camera.position.lerp(camPos, 0.5); // lerp suaviza o movimento
+        
+        // Faz a câmera olhar para onde a nave está indo
+        camera.quaternion.slerp(player.shipModel.getWorldQuaternion(new THREE.Quaternion()), 0.5);
+    }
 
     // 1. Calculamos o tempo no início de tudo
     const deltaTime = Math.min(clock.getDelta(), 0.1);
@@ -192,8 +189,7 @@ function animate() {
             spaceEnvironment.update(deltaTime * 10.0);
         }
 
-        // 4. Atualiza os Inimigos (ÚNICA CHAMADA)
-        // Aqui dentro o inimigo dropa itens via window.pickupManager
+
         enemyManager.update(
             laserManager,
             (pts, enemyPosition) => {
@@ -219,10 +215,6 @@ function animate() {
             soundManager,
             progressionManager.getLevel() // Nível real do jogo
         );
-
-        // 5. Atualiza o PickupManager (coleta de reparos)
-        pickupManager.update(deltaTime, player);
-
         // 6. Finaliza os sistemas
         laserManager.update(deltaTime);
         explosionManager.update(deltaTime);
@@ -251,12 +243,51 @@ function updateOrientationUI() {
 }
 
 window.addEventListener('resize', () => {
+
+    
     onResize();
     updateOrientationUI();
 });
 
 window.addEventListener('DOMContentLoaded', () => {
 
+    updateOrientationUI();
+    onResize();
+
+    // --- CONFIGURAÇÃO DOS NOVOS BOTÕES ---
+    
+    // Adicionamos uma verificação 'if' para evitar erros se o botão não for encontrado
+    const btnMissile = document.getElementById('btnMissile');
+    if (btnMissile) {
+        btnMissile.addEventListener('click', () => {
+            console.log("Míssil disparado!");
+            player.fireMissile(); 
+        });
+    }
+
+    const btnPDC = document.getElementById('btnPDC');
+    if (btnPDC) {
+        btnPDC.addEventListener('click', (e) => {
+            const active = player.togglePDC();
+            // Muda a opacidade para dar feedback visual de Ligado/Desligado
+            e.target.style.opacity = active ? "1" : "0.5";
+            // Opcional: mudar a borda para ficar mais claro
+            e.target.style.border = active ? "2px solid #00ff00" : "2px solid #555555";
+        });
+    }
+});
+
+    document.getElementById('btnShoot').addEventListener('pointerdown', () => player.isFiring = true);
+    document.getElementById('btnShoot').addEventListener('pointerup', () => player.isFiring = false);
+
+    document.getElementById('btnPause').addEventListener('click', () => {
+        currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
+    });
+
+    // --- LÓGICA EXISTENTE DO START ---
+    document.getElementById('start-btn')?.addEventListener('click', () => {
+        // ... seu código de start atual ...
+    });
     updateOrientationUI();
     onResize();
 
@@ -270,7 +301,10 @@ window.addEventListener('DOMContentLoaded', () => {
         soundManager.startShipEngine();
         
         startGame();
+        const nexusSelector = document.getElementById('nexusSelector');
+if (nexusSelector) {
+    nexusSelector.style.display = 'none';
+}
     });
 
     initGame().then(() => animate());
-});

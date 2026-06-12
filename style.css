@@ -1,4 +1,11 @@
 /* ==================== CONFIGURAÇÃO GLOBAL ==================== */
+
+
+:root{
+    --glass-bg: rgba(5,10,20,.55);
+    --glass-border: rgba(0,255,255,.18);
+    --glass-glow: rgba(0,255,255,.20);
+}
 * {
     margin: 0;
     padding: 0;
@@ -304,4 +311,626 @@ canvas {
     #overlay button { padding: 10px 30px; font-size: 14px; }
     #shootBtn { width: 75px; height: 75px; bottom: 15px; right: 15px; }
     #joystick-area { width: 95px; height: 95px; bottom: 15px; left: 15px; }
+}
+/* ==================== BOTÕES DE COMBATE ==================== */
+
+#btnShoot,
+#btnMissile,
+#btnPDC,
+#btnPause {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    position: fixed;
+
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.25);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    color: #fff;
+    font-size: 30px;
+
+    cursor: pointer;
+
+    transition: all .2s ease;
+
+    z-index: 999;
+}
+
+/* TIRO */
+#btnShoot {
+    bottom: 25px;
+    right: 25px;
+
+    width: 95px;
+    height: 95px;
+
+    background: rgba(255,0,90,.18);
+
+    border-color: #ff0055;
+
+    box-shadow:
+        0 0 15px #ff0055,
+        0 0 35px rgba(255,0,85,.5),
+        inset 0 0 20px rgba(255,0,85,.4);
+}
+
+/* MÍSSIL */
+#btnMissile {
+    bottom: 135px;
+    right: 40px;
+
+    width: 70px;
+    height: 70px;
+
+    background: rgba(0,255,255,.15);
+
+    border-color: #00ffff;
+
+    box-shadow:
+        0 0 15px #00ffff,
+        0 0 30px rgba(0,255,255,.4),
+        inset 0 0 15px rgba(0,255,255,.3);
+}
+
+/* ESCUDO */
+#btnPDC {
+    bottom: 220px;
+    right: 40px;
+
+    width: 70px;
+    height: 70px;
+
+    background: rgba(0,255,136,.15);
+
+    border-color: #00ff88;
+
+    box-shadow:
+        0 0 15px #00ff88,
+        0 0 30px rgba(0,255,136,.4),
+        inset 0 0 15px rgba(0,255,136,.3);
+}
+
+/* PAUSE */
+#btnPause {
+    top: 20px;
+    right: 20px;
+
+    width: 55px;
+    height: 55px;
+
+    background: rgba(255,255,255,.12);
+
+    border-color: rgba(255,255,255,.5);
+
+    box-shadow:
+        0 0 15px rgba(255,255,255,.3);
+}
+
+/* EFEITOS */
+#btnShoot:hover,
+#btnMissile:hover,
+#btnPDC:hover,
+#btnPause:hover {
+    transform: scale(1.08);
+}
+
+#btnShoot:active,
+#btnMissile:active,
+#btnPDC:active,
+#btnPause:active {
+    transform: scale(.92);
+}
+/* ==================== TELA DE INÍCIO CINEMATOGRÁFICA ==================== */
+
+#overlay {
+    position: absolute;
+    inset: 0;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(0,0,0,.25) 0%,
+            rgba(2,2,8,.75) 70%,
+            rgba(2,2,8,.95) 100%
+        ),
+        url('/assets/img/capa_game.png');
+
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    overflow: hidden;
+
+    z-index: 100;
+
+    animation: menuZoom 12s ease-in-out infinite alternate;
+}
+
+.overlay-blur-effect {
+    position: absolute;
+    inset: 0;
+
+    background:
+        radial-gradient(
+            circle at center,
+            rgba(0,255,255,.06),
+            transparent 60%
+        );
+
+    pointer-events: none;
+}
+
+.menu-content {
+    position: relative;
+    z-index: 101;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    text-align: center;
+
+    max-width: 500px;
+
+    padding: 15px;
+}
+
+/* ==================== SUBTÍTULO ==================== */
+
+.brand-sub {
+    color: #ff0055;
+
+    font-size: 11px;
+    font-weight: 800;
+
+    letter-spacing: 4px;
+
+    text-transform: uppercase;
+
+    margin-bottom: 6px;
+
+    text-shadow:
+        0 0 8px #ff0055,
+        0 0 15px #ff0055;
+
+    animation: pulseGlow 2s infinite alternate;
+}
+
+/* ==================== LOGO ==================== */
+
+.logo-container {
+    background: rgba(0,0,0,.35);
+
+    backdrop-filter: blur(10px);
+
+    border: 1px solid rgba(0,255,255,.15);
+
+    border-radius: 14px;
+
+    padding: 10px 25px;
+
+    margin-bottom: 15px;
+
+    box-shadow:
+        0 0 20px rgba(0,255,255,.12),
+        inset 0 0 15px rgba(0,255,255,.08);
+}
+
+.logo-text {
+    display: block;
+
+    font-family: Impact, sans-serif;
+
+    font-size: 62px;
+
+    line-height: .92;
+
+    letter-spacing: 3px;
+
+    text-transform: uppercase;
+
+    background:
+        linear-gradient(
+            180deg,
+            #ffffff 0%,
+            #d8d8d8 50%,
+            #ffffff 100%
+        );
+
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+
+    text-shadow:
+        0 0 15px rgba(255,255,255,.15);
+}
+
+.logo-text.highlight {
+    font-size: 54px;
+
+    letter-spacing: 6px;
+
+    background:
+        linear-gradient(
+            180deg,
+            #00ffff,
+            #008cff
+        );
+
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+
+    filter:
+        drop-shadow(0 0 6px #00ffff)
+        drop-shadow(0 0 15px #00ffff)
+        drop-shadow(0 0 25px #00aaff);
+}
+
+/* ==================== TEXTO ==================== */
+
+.game-lore {
+    color: rgba(255,255,255,.85);
+
+    font-size: 12px;
+
+    line-height: 1.5;
+
+    letter-spacing: 1px;
+
+    max-width: 420px;
+
+    margin-bottom: 20px;
+}
+
+/* ==================== BOTÃO START ==================== */
+
+#start-btn {
+    min-width: 250px;
+
+    padding: 14px 28px;
+
+    border-radius: 10px;
+
+    border: 2px solid #00ffff;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(0,255,255,.18),
+            rgba(0,120,255,.08)
+        );
+
+    color: white;
+
+    font-size: 15px;
+    font-weight: 800;
+
+    letter-spacing: 1px;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 0 15px rgba(0,255,255,.3),
+        inset 0 0 12px rgba(0,255,255,.12);
+
+    transition: all .25s ease;
+}
+
+#start-btn:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 0 25px rgba(0,255,255,.5),
+        0 0 50px rgba(0,255,255,.2);
+}
+
+#start-btn:active {
+    transform: scale(.96);
+}
+
+/* ==================== ANIMAÇÕES ==================== */
+
+@keyframes pulseGlow {
+    from {
+        opacity: .7;
+    }
+
+    to {
+        opacity: 1;
+        text-shadow:
+            0 0 8px #ff0055,
+            0 0 15px #ff0055,
+            0 0 25px #ff0055;
+    }
+}
+
+@keyframes menuZoom {
+    from {
+        background-size: 100%;
+    }
+
+    to {
+        background-size: 105%;
+    }
+}
+
+/* ==================== MOBILE ==================== */
+
+@media (max-width: 768px) {
+
+    .logo-text {
+        font-size: 42px;
+    }
+
+    .logo-text.highlight {
+        font-size: 36px;
+    }
+
+    .logo-container {
+        padding: 8px 18px;
+    }
+
+    .brand-sub {
+        font-size: 9px;
+        letter-spacing: 3px;
+    }
+
+    .game-lore {
+        font-size: 10px;
+        max-width: 280px;
+        margin-bottom: 15px;
+    }
+
+    #start-btn {
+        min-width: 210px;
+        padding: 12px 20px;
+        font-size: 13px;
+    }
+}
+
+#nexusSelector {
+    position: fixed;
+
+    top: 90px;
+    left: 20px; /* era right */
+
+    width: 240px;
+
+    padding: 12px;
+
+    background: rgba(5,10,20,.85);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    border: 1px solid rgba(255,51,68,.35);
+
+    border-radius: 14px;
+
+    box-shadow:
+        0 0 20px rgba(255,51,68,.25),
+        inset 0 0 15px rgba(255,51,68,.08);
+
+    z-index: 999;
+
+    transition: all .25s ease;
+}
+
+.nexus-title {
+    color: #ff3344;
+
+    font-weight: 800;
+
+    font-size: 12px;
+
+    letter-spacing: 1px;
+
+    text-transform: uppercase;
+
+    margin-bottom: 10px;
+
+    padding-bottom: 6px;
+
+    border-bottom: 1px solid rgba(255,51,68,.4);
+
+    text-shadow: 0 0 8px #ff3344;
+}
+
+#debugLevelSelect {
+    width: 100%;
+
+    padding: 10px;
+
+    border-radius: 8px;
+
+    background: rgba(0,0,0,.6);
+
+    color: #ffffff;
+
+    border: 1px solid rgba(255,51,68,.4);
+
+    outline: none;
+
+    cursor: pointer;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    transition: .25s;
+}
+
+#debugLevelSelect:hover {
+    border-color: #ff3344;
+
+    box-shadow:
+        0 0 10px rgba(255,51,68,.4);
+}
+
+.nexus-status {
+    margin-top: 8px;
+
+    font-size: 9px;
+
+    color: #999;
+
+    text-align: center;
+
+    letter-spacing: 1px;
+}
+#ui {
+    position: fixed;
+
+    top: 15px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    display: flex;
+    align-items: center;
+    gap: 20px;
+
+    padding: 10px 25px;
+
+    background: rgba(5,10,20,.75);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    border: 1px solid rgba(0,255,255,.25);
+
+    border-radius: 16px;
+
+    box-shadow:
+        0 0 20px rgba(0,255,255,.15),
+        inset 0 0 15px rgba(0,255,255,.08);
+
+    z-index: 999;
+
+    color: white;
+
+    font-family: Orbitron, Arial, sans-serif;
+
+    font-weight: 700;
+
+    letter-spacing: 1px;
+}
+
+#ui span {
+    color: #00ffff;
+
+    text-shadow:
+        0 0 8px #00ffff,
+        0 0 15px #00ffff;
+}
+
+#score-val,
+#level-val {
+    font-size: 22px;
+}
+#ui{
+    background: var(--glass-bg);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+
+    border: 1px solid var(--glass-border);
+
+    box-shadow:
+        0 0 20px var(--glass-glow),
+        inset 0 0 15px rgba(255,255,255,.04);
+}
+#nexusSelector{
+    background: var(--glass-bg);
+
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+
+    border: 1px solid rgba(255,51,68,.25);
+
+    box-shadow:
+        0 0 25px rgba(255,51,68,.18),
+        inset 0 0 15px rgba(255,255,255,.03);
+}
+
+
+@media (max-width: 768px) {
+
+    #ui {
+        top: 10px;
+
+        padding: 8px 15px;
+
+        gap: 12px;
+
+        font-size: 12px;
+    }
+
+    #score-val,
+    #level-val {
+        font-size: 16px;
+    }
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+
+    #nexusSelector {
+        top: 75px;
+        left: 10px;
+
+        width: 180px;
+
+        padding: 10px;
+    }
+
+    .nexus-title {
+        font-size: 10px;
+    }
+
+    #debugLevelSelect {
+        font-size: 10px;
+        padding: 8px;
+    }
+
+    .nexus-status {
+        font-size: 8px;
+    }
+}
+
+/* ==================== MOBILE ==================== */
+
+@media (max-width: 768px) {
+
+    #btnShoot {
+        width: 90px;
+        height: 90px;
+        font-size: 34px;
+        bottom: 25px;
+        right: 20px;
+    }
+
+    #btnMissile {
+        width: 68px;
+        height: 68px;
+        bottom: 130px;
+        right: 30px;
+    }
+
+    #btnPDC {
+        width: 68px;
+        height: 68px;
+        bottom: 210px;
+        right: 30px;
+    }
+
+    #btnPause {
+        width: 50px;
+        height: 50px;
+    }
 }

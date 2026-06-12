@@ -103,7 +103,9 @@ export class EnemyManager {
         loader.load('/assets/models/drone.glb', (gltf) => {
             this.droneTemplate = gltf.scene;
             this.droneTemplate.rotation.y = Math.PI;
-            this.droneTemplate.scale.set(12, 12, 12);
+            this.droneTemplate.scale.set(80,80,80
+                
+            );
         });
 
         loader.load('/assets/models/meteoro.glb', (gltf) => {
