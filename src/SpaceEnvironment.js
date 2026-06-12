@@ -56,7 +56,7 @@ loadNebula() {
     update(deltaTime) {
         if (this.nebula) {
             // Pequena rotação no cenário para dar dinamismo ao espaço
-            this.nebula.rotation.z += 0.01 * deltaTime;
+            this.nebula.rotation.z += (0.001 * deltaTime);
         }
     }
 }
