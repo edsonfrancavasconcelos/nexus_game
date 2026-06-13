@@ -77,7 +77,7 @@ export class EnemyManager {
         loader.load('/assets/models/nave_inim_5.glb', (gltf) => {
             // Teste com Math.PI / 2 (90°). Se ela apontar para o lado errado, mude para -Math.PI / 2
             this.enemyTemplate5 = this._createOrientedTemplate(gltf.scene, Math.PI / 2);
-            this.enemyTemplate5.scale.set(30, 30, 30);
+            this.enemyTemplate5.scale.set(40,40,40);
             console.log("✅ Nave Nível 5 alinhada");
         }, undefined, (err) => console.error("Erro nave_inim_5:", err));
 

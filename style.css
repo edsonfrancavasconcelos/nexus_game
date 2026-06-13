@@ -1,5 +1,18 @@
 /* ==================== CONFIGURAÇÃO GLOBAL ==================== */
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Remove as barras de rolagem */
+    background-color: #020208;
+}
 
+canvas {
+    display: block; /* Remove espaços brancos abaixo do canvas */
+    width: 100vw;
+    height: 100vh;
+}
 
 :root{
     --glass-bg: rgba(5,10,20,.55);

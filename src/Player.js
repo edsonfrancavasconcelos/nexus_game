@@ -231,7 +231,7 @@ fireMissile() {
         loader.load('/assets/models/nave_game.glb', (gltf) => {
             this.shipModel = gltf.scene;
             this.shipModel.scale.set(2, 2, 2);
-            this.shipModel.rotation.set(0, Math.PI, 0);           
+         this.shipModel.rotation.set(0, Math.PI, 0);          
             this.shipModel.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -321,36 +321,48 @@ fireMissile() {
             this.particles.push({ mesh: particleMesh, life: 1.0, speedZ: 180, driftX: (Math.random() - 0.5) * 4, driftY: (Math.random() - 0.5) * 4 });
         }
     }
+update(moveInput, deltaTime, enemyManager) { 
+    if (!this.shipModel || this.isPaused) return;
+    
+    const inputX = -moveInput.x;
+    const inputY = moveInput.y; 
+    const dt = Math.min(deltaTime, 0.1);
+    
+    // Diminua o acel para a nave demorar mais a ganhar velocidade
+    const acel = 20.0; 
+    
+    this.velocity.x += inputX * acel * dt;
+    this.velocity.y += inputY * acel * dt;
+    
+    // Atrito: quanto menor, mais a nave "escorrega". 
+    // Mantenha próximo de 0.88 - 0.92 para um bom equilíbrio
+    this.velocity.multiplyScalar(0.90); 
 
-    update(moveInput, deltaTime, enemyManager) { 
-        if (!this.shipModel || this.isPaused) return;
-        
-        const inputX = -moveInput.x;
-        const inputY = moveInput.y; 
-        const dt = Math.min(deltaTime, 0.1);
-        const acel = 65.0; 
-        
-        this.velocity.x += inputX * acel * dt;
-        this.velocity.y += inputY * acel * dt;
-        this.velocity.multiplyScalar(0.88); 
-        this.mesh.position.x += this.velocity.x * dt * 10;
-        this.mesh.position.y += this.velocity.y * dt * 10;
+    // AQUI ESTÁ O SEGREDO: Diminua esse '10' para um valor menor (ex: 4 ou 5)
+    // Isso reduz o deslocamento por frame, deixando a nave mais lenta.
+    const movimentoSuave = 2.0; 
+    this.mesh.position.x += this.velocity.x * dt * 2;
+    this.mesh.position.y += this.velocity.y * dt * 2;
 
-        const limiteX = 350;
-        const limiteY = 250;
-        if (this.mesh.position.x > limiteX) this.mesh.position.x = -limiteX;
-        else if (this.mesh.position.x < -limiteX) this.mesh.position.x = limiteX;
-        if (this.mesh.position.y > limiteY) this.mesh.position.y = -limiteY;
-        else if (this.mesh.position.y < -limiteY) this.mesh.position.y = limiteY;
+    // ... o restante do seu código ...
+    
+    const limiteX = 350;
+    const limiteY = 250;
+    if (this.mesh.position.x > limiteX) this.mesh.position.x = -limiteX;
+    else if (this.mesh.position.x < -limiteX) this.mesh.position.x = limiteX;
+    if (this.mesh.position.y > limiteY) this.mesh.position.y = -limiteY;
+    else if (this.mesh.position.y < -limiteY) this.mesh.position.y = limiteY;
+const suavidade = 0.01; // Quanto menor este número, mais "pesada" a nave parece girar
 
-        this.pitch = THREE.MathUtils.lerp(this.pitch, inputY * 0.45, this.rotationSpeed * dt);
-        this.roll = THREE.MathUtils.lerp(this.roll, -inputX * 0.65, this.rotationSpeed * dt);
-        this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
-        this.mesh.updateMatrixWorld();
-        
-        if (this.isFiring) this._shoot();
-        this._updatePDC(enemyManager, dt);
-        this._emitHeatWash();
+this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.5, suavidade);
+this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.7, suavidade);
+this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
+    this.mesh.updateMatrixWorld();
+    
+    if (this.isFiring) this._shoot();
+    this._updatePDC(enemyManager, dt);
+    this._emitHeatWash();
+
         
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
@@ -389,5 +401,4 @@ fireMissile() {
             t.core.scale.set(0.8, 1 + Math.sin(time * 10) * 0.1, 0.8); 
             t.light.intensity = 100 + Math.sin(time * 50) * 30; 
         });
-    }
-}
+    }}

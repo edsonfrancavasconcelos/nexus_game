@@ -10,11 +10,13 @@ import { ExplosionManager } from './ExplosionManager.js';
 import { SpaceEnvironment } from './SpaceEnvironment.js';
 import { ProgressionManager } from './ProgressionManager.js';
 
+window.moveInput = { x: 0, y: 0 };
+
 // --- DECLARAÇÕES GLOBAIS ---
 let audioInitialized = false;
 let currentState = 'menu';
 let score = 0;
-const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused', GAME_OVER: 'game_over' };
+const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
 
 // Scene, Camera, Renderer
 const scene = new THREE.Scene();
@@ -39,20 +41,24 @@ const enemyManager = new EnemyManager(scene, camera, scorePopup);
 const spaceEnvironment = new SpaceEnvironment(scene);
 const progressionManager = new ProgressionManager();
 
-
-// --- FUNÇÕES DE APOIO ---
 function updateCamera() {
-    if (!player.mesh) return;
- 
-    const targetPosition = new THREE.Vector3(
-        player.mesh.position.x * 0.5, 
-        player.mesh.position.y + 10,  
-        player.mesh.position.z + 40   
-    );
+    if (!player.shipModel) return;
 
+    // Aumente o valor de -50 para algo maior, como -80 ou -100
+    // O valor Y (15) controla a altura, pode manter ou ajustar se quiser.
+    const offset = new THREE.Vector3(0, 15, -80); 
+    
+    // Aplica a rotação da nave no offset
+    offset.applyQuaternion(player.shipModel.quaternion);
+
+    // Calcula a posição alvo
+    const targetPosition = new THREE.Vector3().copy(player.shipModel.position).add(offset);
+
+    // O lerp mantém o movimento suave
     camera.position.lerp(targetPosition, 0.08);    
 
-    camera.lookAt(player.mesh.position.x, player.mesh.position.y, player.mesh.position.z);
+    // Olha para a nave
+    camera.lookAt(player.shipModel.position);
 }
 
 function updateHUD() {
@@ -62,24 +68,24 @@ function updateHUD() {
 
 async function initGame() {
     enemyManager.init(); 
-    criarPainelDebugNivel();
+    setupNexusSelector(); // Nome mais adequado
 }
 
-function startGame() {
+function startGame(level) {
     if (currentState === GAME_STATE.PLAYING) return;
 
     currentState = GAME_STATE.PLAYING;
     score = 0;
 
-    document.getElementById('overlay').style.display = 'none';
+   document.getElementById('overlay').style.display = 'none';
+    document.getElementById('nexusSelector').style.display = 'none';
 
     const nexusSelector = document.getElementById('nexusSelector');
     if (nexusSelector) {
         nexusSelector.style.display = 'none';
     }
 
-    player.mesh.position.set(0, -1, 8);
-
+ player.mesh.position.set(0, -1, 8);
     enemyManager.clearAllEnemies();
 
     enemyManager.spawnWave(
@@ -91,8 +97,8 @@ function startGame() {
         soundManager.startShipEngine();
     }
 
-    updateHUD();
-    updateLevelHUD();
+updateHUD();
+    document.getElementById('level-val').textContent = level;
 }
 
 function updateLevelHUD() {
@@ -162,46 +168,37 @@ function criarPainelDebugNivel() {
     });
 }
 
-// --- LOOP PRINCIPAL ATUALIZADO ---
 function animate() {
     requestAnimationFrame(animate);
+    const deltaTime = Math.min(clock.getDelta(), 0.1);
+
+    // Movimentação da câmera (cockpit)
     if (player.shipModel && player.cockpitView) {
-        // A câmera agora "cola" no cockpit da nave
         const camPos = new THREE.Vector3();
         player.cockpitView.getWorldPosition(camPos);
-        camera.position.lerp(camPos, 0.5); // lerp suaviza o movimento
-        
-        // Faz a câmera olhar para onde a nave está indo
+        camera.position.lerp(camPos, 0.5);
         camera.quaternion.slerp(player.shipModel.getWorldQuaternion(new THREE.Quaternion()), 0.5);
     }
 
-    // 1. Calculamos o tempo no início de tudo
-    const deltaTime = Math.min(clock.getDelta(), 0.1);
-
     if (currentState === GAME_STATE.PLAYING) {
-        const input = inputManager.update();
+        const input = inputManager.update(); // Pega o input atualizado
 
-        // 2. Atualiza o Jogador (que também processa o PDC)
+        // Atualiza Jogador
         player.update(input, deltaTime, enemyManager);
 
-        // 3. Atualiza o Ambiente
-        if (spaceEnvironment && typeof spaceEnvironment.update === 'function') {
-            spaceEnvironment.update(deltaTime * 10.0);
+        // Atualiza Ambiente passando o input (isso faz girar o disco)
+        if (spaceEnvironment) {
+            spaceEnvironment.update(deltaTime, player.mesh.position, input);
         }
 
-
+        // Atualiza Inimigos
         enemyManager.update(
             laserManager,
             (pts, enemyPosition) => {
-                // Lógica de Score unificada
                 score += pts;
                 const levelUp = progressionManager.addScore(pts);
                 updateHUD();
-
-                if (enemyPosition) {
-                    scorePopup.show(pts, enemyPosition);
-                }
-
+                if (enemyPosition) scorePopup.show(pts, enemyPosition);
                 if (levelUp) {
                     updateLevelHUD();
                     enemyManager.enemySpeed *= 1.10;
@@ -209,13 +206,9 @@ function animate() {
                     enemyManager.waveCooldown *= 0.95;
                 }
             },
-            player,
-            deltaTime,
-            explosionManager,
-            soundManager,
-            progressionManager.getLevel() // Nível real do jogo
+            player, deltaTime, explosionManager, soundManager, progressionManager.getLevel()
         );
-        // 6. Finaliza os sistemas
+
         laserManager.update(deltaTime);
         explosionManager.update(deltaTime);
         scorePopup.update(deltaTime);
@@ -242,69 +235,114 @@ function updateOrientationUI() {
     document.body.classList.toggle('landscape', !isPortrait);
 }
 
-window.addEventListener('resize', () => {
+// Dentro do seu src/index.js
 
-    
-    onResize();
-    updateOrientationUI();
+window.addEventListener('DOMContentLoaded', () => {
+    const startBtn = document.getElementById('start-btn');
+    const nexusSelector = document.getElementById('nexusSelector');
+    const debugLevelSelect = document.getElementById('debugLevelSelect');
+
+    startBtn.addEventListener('click', () => {
+        // 1. Captura o nível escolhido
+        const level = parseInt(debugLevelSelect.value);
+        
+        // 2. Esconde a UI do Nexus e o Overlay
+        nexusSelector.style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+
+        // 3. Inicia o jogo passando o nível
+        startGame(level);
+    });
+});
+
+function setupNexusSelector() {
+    const debugContainer = document.getElementById('nexusSelector');
+    const select = document.getElementById('debugLevelSelect');
+
+    if (!debugContainer || !select) return;
+
+    select.addEventListener('change', (e) => {
+        const nivelSelecionado = parseInt(e.target.value);
+        progressionManager.getLevel = () => nivelSelecionado;
+        document.getElementById('level-val').textContent = nivelSelecionado;
+
+        if (currentState === GAME_STATE.PLAYING) {
+            enemyManager.clearAllEnemies();
+            enemyManager.spawnWave(player, nivelSelecionado);
+        }
+    });
+}
+
+window.addEventListener('resize', () => {
+    // Atualiza a proporção da câmera
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    // Atualiza o tamanho do renderizador
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Melhora a nitidez
 });
 
 window.addEventListener('DOMContentLoaded', () => {
-
-    updateOrientationUI();
     onResize();
 
-    // --- CONFIGURAÇÃO DOS NOVOS BOTÕES ---
+    // Botões
+    document.getElementById('start-btn').addEventListener('click', () => {
+        if (!audioInitialized) {
+            soundManager.init();
+            audioInitialized = true;
+        }
+        soundManager.startShipEngine();
+        
+        // Pega o nível atual do seletor
+        const level = parseInt(document.getElementById('debugLevelSelect').value);
+        startGame(level);
+    });   
     
-    // Adicionamos uma verificação 'if' para evitar erros se o botão não for encontrado
-    const btnMissile = document.getElementById('btnMissile');
-    if (btnMissile) {
-        btnMissile.addEventListener('click', () => {
-            console.log("Míssil disparado!");
-            player.fireMissile(); 
-        });
-    }
 
     const btnPDC = document.getElementById('btnPDC');
     if (btnPDC) {
         btnPDC.addEventListener('click', (e) => {
             const active = player.togglePDC();
-            // Muda a opacidade para dar feedback visual de Ligado/Desligado
             e.target.style.opacity = active ? "1" : "0.5";
-            // Opcional: mudar a borda para ficar mais claro
             e.target.style.border = active ? "2px solid #00ff00" : "2px solid #555555";
         });
     }
+
+    const btnShoot = document.getElementById('btnShoot');
+    if (btnShoot) {
+        btnShoot.addEventListener('pointerdown', () => player.isFiring = true);
+        btnShoot.addEventListener('pointerup', () => player.isFiring = false);
+    }
+
+    const btnPause = document.getElementById('btnPause');
+    if (btnPause) {
+        btnPause.addEventListener('click', () => {
+            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
+        });
+    }
+
+    // 3. Botão Start (Lógica do Motor e Início)
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn) {
+        startBtn.addEventListener('click', () => {
+            if (!audioInitialized) {
+                soundManager.init();
+                audioInitialized = true;
+            }
+            
+            // 🚀 Liga o motor após o clique do usuário (necessário para navegadores)
+            soundManager.startShipEngine();
+            
+            startGame();
+            
+            const nexusSelector = document.getElementById('nexusSelector');
+            if (nexusSelector) {
+                nexusSelector.style.display = 'none';
+            }
+        });
+    }
+
+    // 4. Inicializa o jogo e o loop principal somente após carregar tudo
+    initGame().then(() => animate()); 
 });
-
-    document.getElementById('btnShoot').addEventListener('pointerdown', () => player.isFiring = true);
-    document.getElementById('btnShoot').addEventListener('pointerup', () => player.isFiring = false);
-
-    document.getElementById('btnPause').addEventListener('click', () => {
-        currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
-    });
-
-    // --- LÓGICA EXISTENTE DO START ---
-    document.getElementById('start-btn')?.addEventListener('click', () => {
-        // ... seu código de start atual ...
-    });
-    updateOrientationUI();
-    onResize();
-
-    document.getElementById('start-btn')?.addEventListener('click', () => {
-        if(!audioInitialized) {
-            soundManager.init();
-            audioInitialized = true;
-        }
-        
-        // 🚀 LIGA O MOTOR AQUI: Ativa o som contínuo aproveitando o clique de start do usuário!
-        soundManager.startShipEngine();
-        
-        startGame();
-        const nexusSelector = document.getElementById('nexusSelector');
-if (nexusSelector) {
-    nexusSelector.style.display = 'none';
-}
-    });
-
-    initGame().then(() => animate());
