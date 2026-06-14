@@ -20,6 +20,7 @@ export class SpaceEnvironment {
         this.scene = scene;
         this.loader = new GLTFLoader();
         this.nebula = null;
+        this.globe = null;
         this.nebulaPivot = new THREE.Group(); 
         this.scene.add(this.nebulaPivot);
         
@@ -35,7 +36,22 @@ export class SpaceEnvironment {
         
         this.initParticles();
         this.initEnvironment();
-        this.loadNebula(); 
+        this.loadNebula();
+        this.initGlobe();
+    }
+
+    initGlobe() {
+        // Globo começa pequeno (raio 20)
+        const geometry = new THREE.SphereGeometry(20, 32, 32); 
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0x2244ff, 
+            wireframe: true, 
+            transparent: true,
+            opacity: 0.4
+        });
+        this.globe = new THREE.Mesh(geometry, material);
+        this.globe.position.set(0, 0, -5000); 
+        this.scene.add(this.globe);
     }
 
     initParticles() {
@@ -60,7 +76,6 @@ export class SpaceEnvironment {
             color: 0x446688,
             blending: THREE.NormalBlending 
         });
-        
         this.clouds = new THREE.Points(this.cloudGeometry, cloudMat);
         this.scene.add(this.clouds);
     }
@@ -80,7 +95,7 @@ export class SpaceEnvironment {
     }
 
     loadNebula() {
-        this.loader.load('/assets/models/spaco.glb', (gltf) => {
+        this.loader.load('assets/models/spaco.glb', (gltf) => {
             this.nebula = gltf.scene;
             this.nebula.scale.set(80, 80, 80);
             this.nebula.position.set(0, 0, -1500); 
@@ -88,45 +103,42 @@ export class SpaceEnvironment {
             this.nebulaPivot.add(this.nebula);
         });
     }
-update(deltaTime, playerPosition, moveInput) {
-    // 1. Rotação do PIVÔ
-    if (this.nebulaPivot) {
-        this.nebulaPivot.rotation.z += (moveInput.x * 0.5) * deltaTime;
-        this.nebulaPivot.rotation.x += (moveInput.y * 0.3) * deltaTime;
-    }
 
-    // 2. Nebulosa (Muito lenta para dar sensação de distância)
-    if (this.nebula) {
-        this.nebula.position.z += 5.0 * deltaTime; // Reduzido para 5
-        if (this.nebula.position.z > 500) this.nebula.position.z = -1500;
-    }
-
-    // 3. MOVIMENTO DAS ESTRELAS E NUVENS (Ajuste aqui para diminuir)
-    // O último parâmetro é o speedMultiplier. 
-    // Diminua esses valores para deixar o movimento mais lento.
-    // Antes estava 80.0 e 40.0, agora coloquei 20.0 e 10.0
-    this.moveParticles(this.starPositions, this.starVelocities, this.starCount, this.stars, deltaTime, moveInput, 20.0);
-    this.moveParticles(this.cloudPositions, this.cloudVelocities, this.cloudCount, this.clouds, deltaTime, moveInput, 10.0);
-}
-
-moveParticles(pos, vel, count, points, dt, moveInput, speedMultiplier) {
-    for (let i = 0; i < count; i++) {
-        let i3 = i * 3;
-        
-        // Movimento Z (Profundidade) - Controlado pelo speedMultiplier
-        pos[i3 + 2] += vel[i] * speedMultiplier * dt;
-        
-        // Drift lateral (reduzido para não ficar agressivo)
-        pos[i3] -= moveInput.x * 20.0 * dt; 
-        pos[i3 + 1] -= moveInput.y * 20.0 * dt;
-
-        // Reset
-        if (pos[i3 + 2] > 50) {
-            pos[i3 + 2] = -2000;
-            pos[i3] = (Math.random() - 0.5) * 1000;
-            pos[i3 + 1] = (Math.random() - 0.5) * 1000;
+    update(deltaTime, playerPosition, moveInput) {
+        // 1. Nebulosa
+        if (this.nebula) {
+            this.nebulaPivot.rotation.z += (moveInput.x * 0.5) * deltaTime;
+            this.nebulaPivot.rotation.x += (moveInput.y * 0.3) * deltaTime;
+            this.nebula.position.z += 5.0 * deltaTime;
+            if (this.nebula.position.z > 500) this.nebula.position.z = -1500;
         }
+
+        // 2. Globo (crescendo gradualmente)
+        if (this.globe) {
+            this.globe.position.z += 15.0 * deltaTime; 
+            const distanceFactor = Math.max(0, 1 - (Math.abs(this.globe.position.z) / 5000));
+            const scale = 0.1 + (distanceFactor * 15); 
+            this.globe.scale.set(scale, scale, scale);
+            if (this.globe.position.z > 100) this.globe.position.z = -5000;
+        }
+
+        // 3. ESTRELAS E NUVENS (Agora de volta!)
+        this.moveParticles(this.starPositions, this.starVelocities, this.starCount, this.stars, deltaTime, moveInput, 20.0);
+        this.moveParticles(this.cloudPositions, this.cloudVelocities, this.cloudCount, this.clouds, deltaTime, moveInput, 10.0);
     }
-    points.geometry.attributes.position.needsUpdate = true;
-}
+
+    moveParticles(pos, vel, count, points, dt, moveInput, speedMultiplier) {
+        for (let i = 0; i < count; i++) {
+            let i3 = i * 3;
+            pos[i3 + 2] += vel[i] * speedMultiplier * dt;
+            pos[i3] -= moveInput.x * 20.0 * dt; 
+            pos[i3 + 1] -= moveInput.y * 20.0 * dt;
+            if (pos[i3 + 2] > 50) {
+                pos[i3 + 2] = -2000;
+                pos[i3] = (Math.random() - 0.5) * 1000;
+                pos[i3 + 1] = (Math.random() - 0.5) * 1000;
+            }
+        }
+        points.geometry.attributes.position.needsUpdate = true;
+    }
 }
