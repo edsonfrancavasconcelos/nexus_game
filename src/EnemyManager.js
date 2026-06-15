@@ -22,7 +22,8 @@ export class EnemyManager {
         this.enemyTemplate10 = null;  
         this.enemyTemplate15 = null;  
         this.droneTemplate = null;    
-        this.meteoroTemplate = null;  
+        this.meteoroTemplate = null; 
+        this.naveMaeTemplate = null; 
 
         this._loadEnemyModel();
     }
@@ -81,6 +82,14 @@ export class EnemyManager {
             console.log("✅ Nave Nível 5 alinhada");
         }, undefined, (err) => console.error("Erro nave_inim_5:", err));
 
+loader.load('/assets/models/nave_mae.glb', (gltf) => {
+    this.naveMaeTemplate = this._createOrientedTemplate(gltf.scene, 0);
+    this.naveMaeTemplate.scale.set(100, 100, 100);
+    console.log("✅ Nave Mãe carregada com sucesso!");
+}, undefined, (err) => {
+    console.error("❌ Erro ao carregar Nave Mãe (verifique o caminho do arquivo):", err);
+});
+
 
 
         // ==================== NÍVEL 31-50 (nave_inim_10) ====================
@@ -114,7 +123,7 @@ export class EnemyManager {
         });
     }
 
-    damageEnemy(enemy, damage = 22, hitPoint = null) {
+        damageEnemy(enemy, damage = 22, hitPoint = null) {
         if (!enemy || !enemy.userData) return false;
         enemy.userData.hp = (enemy.userData.hp || 1) - damage;
 
@@ -127,131 +136,155 @@ export class EnemyManager {
         return false;
     }
 
-       _enemyShoot(enemy, player, soundManager) {
-        if (enemy.userData.type === 'meteoro' || !player?.mesh) return;
+    spawnNaveMae() {
+    if (!this.naveMaeTemplate) return;
+    
+    const naveMae = this.naveMaeTemplate.clone();
+    naveMae.userData = {
+        type: 'nave_mae',
+        hp: 500, // Muita vida para ela não sumir rápido
+        speed: 150,
+        moveDir: new THREE.Vector3(0, 0, 1), 
+        shootTimer: 1.0
+    };
+    
+    // Posiciona lá no fundo, vindo em direção ao jogador
+    naveMae.position.set(0, 200, -5000);
+    this.scene.add(naveMae);
+    this.enemies.push(naveMae);
+}
 
-        const pPos = new THREE.Vector3();
-        player.mesh.getWorldPosition(pPos);
+  _enemyShoot(enemy, player, soundManager) {
+    if (enemy.userData.type === 'meteoro' || !player?.mesh) return;
 
-        const forwardDir = new THREE.Vector3();
-        const rightDir = new THREE.Vector3();
+    const pPos = new THREE.Vector3();
+    player.mesh.getWorldPosition(pPos);
 
-        // CORREÇÃO: Se a nave for um Grupo, pegamos a rotação real do modelo interno (filho)
-        const actualModel = (enemy.children && enemy.children.length > 0) ? enemy.children[0] : enemy;
-        
-        actualModel.getWorldDirection(forwardDir);
-        rightDir.setFromMatrixColumn(actualModel.matrixWorld, 0).normalize();
+    const forwardDir = new THREE.Vector3();
+    const rightDir = new THREE.Vector3();
 
-        let bicoOffset = 18;
-        let asaOffset = 12;
-        let laserSpeed = 520;
+    const actualModel = (enemy.children && enemy.children.length > 0) ? enemy.children[0] : enemy;
+    
+    actualModel.getWorldDirection(forwardDir);
+    rightDir.setFromMatrixColumn(actualModel.matrixWorld, 0).normalize();
 
-        // AJUSTES DE OFFSETS DEPENDENDO DO TIPO DE NAVE
-        if (enemy.userData.type === 'drone') {
-            bicoOffset = 10;
-            asaOffset = 0;
-            laserSpeed = 680;
-        } 
-        else if (enemy.userData.type === 'nave_inim_5') {
-            // Como essa nave tem escala 50, aumentamos o espaço para o tiro sair da ponta
-            bicoOffset = 45; 
-            asaOffset = 30;
-        } 
-        else if (enemy.userData.type === 'nave_inim_10' || enemy.userData.type === 'nave_inim_15') {
-            bicoOffset = 20;
-            asaOffset = 15;
-        }
+    // 1. DECLARAÇÃO COM VALORES PADRÃO (Isso evita o erro ReferenceError)
+    let bicoOffset = 18;
+    let asaOffset = 12;
+    let laserSpeed = 520;
 
-        const spawnPoints = [];
-        if (asaOffset > 0) {
-            const asaEsquerda = enemy.position.clone()
-                .addScaledVector(forwardDir, bicoOffset)
-                .addScaledVector(rightDir, -asaOffset);
-            const asaDireita = enemy.position.clone()
-                .addScaledVector(forwardDir, bicoOffset)
-                .addScaledVector(rightDir, asaOffset);
-            spawnPoints.push(asaEsquerda, asaDireita);
-        } else {
-            const bicoCentral = enemy.position.clone().addScaledVector(forwardDir, bicoOffset);
-            spawnPoints.push(bicoCentral);
-        }
+    // 2. AJUSTES DE OFFSETS POR TIPO
+    if (enemy.userData.type === 'drone') {
+        bicoOffset = 10;
+        asaOffset = 0;
+        laserSpeed = 680;
+    } 
+    else if (enemy.userData.type === 'nave_inim_5') {
+        bicoOffset = 45; 
+        asaOffset = 30;
+    } 
+    else if (enemy.userData.type === 'nave_inim_10' || enemy.userData.type === 'nave_inim_15') {
+        bicoOffset = 20;
+        asaOffset = 15;
+    }
+    else if (enemy.userData.type === 'nave_mae') {
+        bicoOffset = 120;
+        asaOffset = 60;
+        laserSpeed = 400;
+    }
 
-        spawnPoints.forEach((posicaoDeSaida) => {
-            const laserDir = new THREE.Vector3().subVectors(pPos, posicaoDeSaida).normalize();
-            const laser = new THREE.Mesh(ENEMY_LASER_GEO, ENEMY_LASER_MAT);
-            laser.position.copy(posicaoDeSaida);
-            laser.lookAt(pPos);
-            this.scene.add(laser);
-            this.enemyProjectiles.push({ mesh: laser, dir: laserDir, speed: laserSpeed });
-        });
-        
-        if (soundManager && enemy.userData.laserSound) {
-            soundManager.play(enemy.userData.laserSound);
+    // O restante do seu código (spawnPoints, forEach, etc) continua igual abaixo...
+    const spawnPoints = [];
+    if (asaOffset > 0) {
+        const asaEsquerda = enemy.position.clone()
+            .addScaledVector(forwardDir, bicoOffset)
+            .addScaledVector(rightDir, -asaOffset);
+        const asaDireita = enemy.position.clone()
+            .addScaledVector(forwardDir, bicoOffset)
+            .addScaledVector(rightDir, asaOffset);
+        spawnPoints.push(asaEsquerda, asaDireita);
+    } else {
+        const bicoCentral = enemy.position.clone().addScaledVector(forwardDir, bicoOffset);
+        spawnPoints.push(bicoCentral);
+    }
+
+    spawnPoints.forEach((posicaoDeSaida) => {
+        const laserDir = new THREE.Vector3().subVectors(pPos, posicaoDeSaida).normalize();
+        const laser = new THREE.Mesh(ENEMY_LASER_GEO, ENEMY_LASER_MAT);
+        laser.position.copy(posicaoDeSaida);
+        laser.lookAt(pPos);
+        this.scene.add(laser);
+        this.enemyProjectiles.push({ mesh: laser, dir: laserDir, speed: laserSpeed });
+    });
+    
+    if (soundManager && enemy.userData.laserSound) {
+        soundManager.play(enemy.userData.laserSound);
+    }
+}
+
+
+   spawnWave(player, currentLevel = 1) {
+  if (currentLevel === 2) {
+        console.log("🔥 FORÇANDO SPAWN DA NAVE MÃE");
+        this.spawnNaveMae();
+        return; }
+
+    if (!this.enemyTemplate || !player?.mesh || this.enemies.length >= this.maxEnemiesOnScreen) return;
+
+    const rand = Math.random();
+    let selectedTemplate = this.enemyTemplate;
+    let type = 'comum';
+    let speed = this.enemySpeed + Math.random() * 60;
+    let passSound = 'enemyPass';
+    let laserSound = 'enemyLaser';
+    let hp = 1;
+
+    if (rand < 0.20) {
+        selectedTemplate = this.droneTemplate || this.enemyTemplate;
+        type = 'drone';
+        speed = 410; 
+        passSound = 'drone'; 
+        laserSound = 'enemyLaser'; 
+        hp = 1;
+    } else if (rand >= 0.20 && rand < 0.40) {
+        selectedTemplate = this.meteoroTemplate || this.enemyTemplate;
+        type = 'meteoro';
+        speed = 140; 
+        passSound = 'meteoro'; 
+        laserSound = null; 
+        hp = 3;       
+    } else {
+        if (currentLevel >= 1 && currentLevel <= 20) {
+            selectedTemplate = this.enemyTemplate;
+            type = 'comum';
+            passSound = 'inimiga_passando';
+            laserSound = 'laser_inimigo';
+            hp = 1;
+        } else if (currentLevel >= 21 && currentLevel <= 30) {
+            selectedTemplate = this.enemyTemplate5 || this.enemyTemplate;
+            type = 'nave_inim_5';
+            speed += 40;
+            passSound = 'nave_pass_5';
+            laserSound = 'laser_inimi_5';
+            hp = 2;
+        } else if (currentLevel >= 31 && currentLevel <= 50) {
+            selectedTemplate = this.enemyTemplate10 || this.enemyTemplate;
+            type = 'nave_inim_10';
+            speed += 80;
+            passSound = 'nave_pss_10';
+            laserSound = 'laser_inim_10';
+            hp = 3;
+        } else if (currentLevel >= 51 && currentLevel <= 200) {
+            selectedTemplate = this.enemyTemplate15 || this.enemyTemplate;
+            type = 'nave_inim_15';
+            speed += 150;
+            passSound = 'nave_pass_15';
+            laserSound = 'laser_inim_15';
+            hp = 5;
         }
     }
 
-
-    spawnWave(player, currentLevel = 1) {
-        if (!this.enemyTemplate || !player?.mesh || this.enemies.length >= this.maxEnemiesOnScreen) return;
-
-        const rand = Math.random();
-        let selectedTemplate = this.enemyTemplate;
-        let type = 'comum';
-        let speed = this.enemySpeed + Math.random() * 60;
-        let passSound = 'enemyPass';
-        let laserSound = 'enemyLaser';
-        let hp = 1;
-
-        if (rand < 0.20) {
-            selectedTemplate = this.droneTemplate ? this.droneTemplate : this.enemyTemplate;
-            type = 'drone';
-            speed = 410; 
-            passSound = 'drone'; 
-            laserSound = 'enemyLaser'; 
-            hp = 1;
-        } else if (rand >= 0.20 && rand < 0.40) {
-            selectedTemplate = this.meteoroTemplate ? this.meteoroTemplate : this.enemyTemplate;
-            type = 'meteoro';
-            speed = 140; 
-            passSound = 'meteoro'; 
-            laserSound = null; 
-            hp = 3;      
-        } else {
-            if (currentLevel >= 1 && currentLevel <= 20) {
-                // A continuação lógica da sua wave segue aqui...
-
-              
-                selectedTemplate = this.enemyTemplate;
-                type = 'comum';
-                passSound = 'inimiga_passando';
-                laserSound = 'laser_inimigo';
-                hp = 1;
-            } 
-     else if (currentLevel >= 21 && currentLevel <= 30) {
-                selectedTemplate = this.enemyTemplate5 ? this.enemyTemplate5 : this.enemyTemplate;
-                type = 'nave_inim_5';
-                speed += 40;
-                passSound = 'nave_pass_5';
-                laserSound = 'laser_inimi_5';
-                hp = 2;
-            }  
-            else if (currentLevel >= 31 && currentLevel <= 50) {
-                selectedTemplate = this.enemyTemplate10 ? this.enemyTemplate10 : this.enemyTemplate;
-                type = 'nave_inim_10';
-                speed += 80;
-                passSound = 'nave_pss_10';
-                laserSound = 'laser_inim_10';
-                hp = 3;
-            } 
-            else if (currentLevel >= 51 && currentLevel <= 200) {
-                selectedTemplate = this.enemyTemplate15 ? this.enemyTemplate15 : this.enemyTemplate;
-                type = 'nave_inim_15';
-                speed += 150;
-                passSound = 'nave_pass_15';
-                laserSound = 'laser_inim_15';
-                hp = 5;
-            }
-        }
+    // ... (o restante da sua lógica de posicionamento continua aqui)
 const enemy = selectedTemplate.clone();
 
 if (type === 'nave_inim_5') {
@@ -320,7 +353,7 @@ if (type === 'nave_inim_5') {
     }
 
 
-    update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
+update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
     if (!player?.mesh || !deltaTime) return;
 
     const adjustedCooldown = Math.max(0.4, this.waveCooldown - (currentLevel * 0.012));
@@ -366,6 +399,7 @@ if (type === 'nave_inim_5') {
                     data.burstCount--;
                     data.burstTimer = 0.2; 
                 }
+                
             }
         }
 
@@ -412,25 +446,17 @@ if (type === 'nave_inim_5') {
             data.passSoundPlayed = true;
         }
 
-   if (foiAtingidoPorLaser && pontoDoImpactoReal) {
+        if (foiAtingidoPorLaser && pontoDoImpactoReal) {
             if (explosionManager) explosionManager.create(pontoDoImpactoReal);
             
-            // --- CÓDIGO ATUALIZADO (DINÂMICO) ---
-            let chanceDrop = 0.20; // 20% para inimigos comuns (comum, drone, meteoro)
-            
-            // Ajusta a chance se for um inimigo mais forte
-            if (data.type === 'nave_inim_15') {
-                chanceDrop = 0.50; // 50% para naves grandes (níveis 51+)
-            } else if (data.type === 'nave_inim_10') {
-                chanceDrop = 0.35; // 35% para naves médias (níveis 31-50)
-            } else if (data.type === 'nave_inim_5') {
-                chanceDrop = 0.25; // 25% para naves de nível 21-30
-            }
+            let chanceDrop = 0.20;
+            if (data.type === 'nave_inim_15') chanceDrop = 0.50;
+            else if (data.type === 'nave_inim_10') chanceDrop = 0.35;
+            else if (data.type === 'nave_inim_5') chanceDrop = 0.25;
 
             if (window.pickupManager && Math.random() < chanceDrop) {
                 window.pickupManager.spawnPickup(enemy.position);
             }
-            // ------------------------------------
 
             this.scene.remove(enemy);
             this.enemies.splice(i, 1);
@@ -443,5 +469,5 @@ if (type === 'nave_inim_5') {
             this.scene.remove(enemy);
             this.enemies.splice(i, 1);
         }
-    }
+    } 
 }}

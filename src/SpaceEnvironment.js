@@ -19,10 +19,7 @@ export class SpaceEnvironment {
     constructor(scene, starCount = 2000, cloudCount = 400) {
         this.scene = scene;
         this.loader = new GLTFLoader();
-        this.nebula = null;
-        this.globe = null;
-        this.nebulaPivot = new THREE.Group(); 
-        this.scene.add(this.nebulaPivot);
+        this.globe = null; // Apenas o globo agora
         
         this.starCount = starCount;
         this.starPositions = new Float32Array(starCount * 3);
@@ -36,23 +33,22 @@ export class SpaceEnvironment {
         
         this.initParticles();
         this.initEnvironment();
-        this.loadNebula();
-        this.initGlobe();
+        this.initGlobe(); // Carrega apenas o planeta
     }
 
-    initGlobe() {
-        // Globo começa pequeno (raio 20)
-        const geometry = new THREE.SphereGeometry(20, 32, 32); 
-        const material = new THREE.MeshBasicMaterial({ 
-            color: 0x2244ff, 
-            wireframe: true, 
-            transparent: true,
-            opacity: 0.4
-        });
-        this.globe = new THREE.Mesh(geometry, material);
-        this.globe.position.set(0, 0, -5000); 
+initGlobe() {
+    this.loader.load('/assets/models/planeta.glb', (gltf) => {
+        this.globe = gltf.scene;
+        
+        // Ajuste: Y positivo (ex: 2000) coloca ele acima da nave.
+        // Ajuste: X positivo (ex: 1000) coloca ele levemente à direita.
+        // Isso garante que a trajetória não passe pelo centro da câmera (0,0).
+        this.globe.position.set(1000, 2000, -10000); 
+        
+        this.globe.scale.set(1, 1, 1); 
         this.scene.add(this.globe);
-    }
+    }, undefined, (error) => console.error("Erro ao carregar planeta:", error));
+}
 
     initParticles() {
         this.starGeometry = new THREE.BufferGeometry();
@@ -93,39 +89,34 @@ export class SpaceEnvironment {
         this.scene.add(ambientLight);
         this.scene.background = new THREE.Color(0x000000);
     }
+update(deltaTime, playerPosition, moveInput) {
+    // 1. Lógica do Planeta
+    if (this.globe) {
+        this.globe.position.z += 25.0 * deltaTime; 
+        
+        const distanceFactor = Math.max(0, 1 - (Math.abs(this.globe.position.z) / 10000));
+        const scale = 5 + (distanceFactor * 150);
+        this.globe.scale.set(scale, scale, scale);
 
-    loadNebula() {
-        this.loader.load('assets/models/spaco.glb', (gltf) => {
-            this.nebula = gltf.scene;
-            this.nebula.scale.set(80, 80, 80);
-            this.nebula.position.set(0, 0, -1500); 
-            this.nebula.traverse(child => { if(child.isMesh) child.material.depthWrite = false; });
-            this.nebulaPivot.add(this.nebula);
-        });
+        this.globe.position.x -= 2.0 * deltaTime; 
+        this.globe.position.y -= 2.0 * deltaTime; 
+
+        if (this.globe.position.z > 2000) {
+            this.scene.remove(this.globe);
+            this.globe = null;
+        }
     }
 
-    update(deltaTime, playerPosition, moveInput) {
-        // 1. Nebulosa
-        if (this.nebula) {
-            this.nebulaPivot.rotation.z += (moveInput.x * 0.5) * deltaTime;
-            this.nebulaPivot.rotation.x += (moveInput.y * 0.3) * deltaTime;
-            this.nebula.position.z += 5.0 * deltaTime;
-            if (this.nebula.position.z > 500) this.nebula.position.z = -1500;
-        }
+    // 2. Efeito de Realismo: Opacidade variável em vez de tamanho
+    // Isso evita o "borrado" estático e cria um "pulso" no espaço
+    const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;
+    this.stars.material.opacity = 0.5 * pulse;
+    this.clouds.material.opacity = 0.3 * pulse;
 
-        // 2. Globo (crescendo gradualmente)
-        if (this.globe) {
-            this.globe.position.z += 15.0 * deltaTime; 
-            const distanceFactor = Math.max(0, 1 - (Math.abs(this.globe.position.z) / 5000));
-            const scale = 0.1 + (distanceFactor * 15); 
-            this.globe.scale.set(scale, scale, scale);
-            if (this.globe.position.z > 100) this.globe.position.z = -5000;
-        }
-
-        // 3. ESTRELAS E NUVENS (Agora de volta!)
-        this.moveParticles(this.starPositions, this.starVelocities, this.starCount, this.stars, deltaTime, moveInput, 20.0);
-        this.moveParticles(this.cloudPositions, this.cloudVelocities, this.cloudCount, this.clouds, deltaTime, moveInput, 10.0);
-    }
+    // 3. Movimento das partículas
+    this.moveParticles(this.starPositions, this.starVelocities, this.starCount, this.stars, deltaTime, moveInput, 20.0);
+    this.moveParticles(this.cloudPositions, this.cloudVelocities, this.cloudCount, this.clouds, deltaTime, moveInput, 10.0);
+}
 
     moveParticles(pos, vel, count, points, dt, moveInput, speedMultiplier) {
         for (let i = 0; i < count; i++) {
