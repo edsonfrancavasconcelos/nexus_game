@@ -171,32 +171,33 @@ function startGame() {
     updateLevelHUD();
 }
 
+// Substitua sua função animate inteira
 function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
     if (currentState === GAME_STATE.PLAYING) {
-        // 1. Captura o input do teclado/mouse
         const keyboardInput = inputManager.update();
-
-        // 2. Mescla com o input do Joystick virtual (global)
         const input = {
             x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
             y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
         };
 
-        // 3. Atualiza o jogador com o input mesclado
         player.update(input, deltaTime, enemyManager);
-
-        // 4. Atualiza ambiente e inimigos
         if (spaceEnvironment) spaceEnvironment.update(deltaTime, player.mesh.position, input);
 
+        // --- ATUALIZAÇÃO DE SCORE E NÍVEL ---
         enemyManager.update(laserManager, (pts, hitPosition) => {
             score += pts;
             updateHUD();
+            
             const levelUp = progressionManager.addScore(pts);
+            
             if (hitPosition) scorePopup.show(pts, hitPosition);
-            if (levelUp) window.showLevelUp(progressionManager.getLevel());
+            if (levelUp) {
+                updateLevelHUD();
+                window.showLevelUp(progressionManager.getLevel());
+            }
         }, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
 
         laserManager.update(deltaTime);
@@ -204,21 +205,29 @@ function animate() {
         scorePopup.update(deltaTime);
         updateCamera();
     }
-
     renderer.render(scene, camera);
 }
 
-// ==================== BOTÕES ====================
 window.addEventListener('DOMContentLoaded', () => {
-    // Start Button
     const startBtn = document.getElementById('start-btn');
+    
+    // Função unificada de início
+    const handleStart = async (e) => {
+        if (e) e.preventDefault();
+        
+        // Ativa áudio obrigatório para mobile
+        if (!audioInitialized) {
+            await soundManager.init();
+            audioInitialized = true;
+        }
+        
+        soundManager.startShipEngine();
+        startGame();
+    };
+
     if (startBtn) {
-        startBtn.addEventListener('click', () => {
-            if (!audioInitialized) { soundManager.init(); audioInitialized = true; }
-            soundManager.startShipEngine();
-            startGame();
-        });
-        startBtn.addEventListener('touchstart', (e) => { e.preventDefault(); /* same action */ });
+        startBtn.addEventListener('click', handleStart);
+        startBtn.addEventListener('touchstart', handleStart, { passive: false });
     }
 
     // Shoot Button

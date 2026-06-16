@@ -302,7 +302,7 @@ export class EnemyManager {
         const camUp = new THREE.Vector3();
         camUp.setFromMatrixColumn(this.camera.matrixWorld, 1).normalize();
 
-        const spawnDistance = 1400; 
+        const spawnDistance = 1550 
         const centerSpawnPoint = camPos.clone().addScaledVector(camDirection, spawnDistance);
 
         const sideChoice = Math.random() < 0.5 ? -1 : 1;
