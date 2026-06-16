@@ -210,50 +210,43 @@ function animate() {
 
 // ==================== BOTÕES ====================
 window.addEventListener('DOMContentLoaded', () => {
-    // Start Button
     const startBtn = document.getElementById('start-btn');
+    
+    // Função para iniciar o áudio e o jogo
+    const handleStart = async (e) => {
+        e.preventDefault(); // Impede comportamento padrão de toque
+        
+        // 1. Inicializa áudio no contexto do clique (obrigatório para iOS/Android)
+        if (!audioInitialized) {
+            try {
+                await soundManager.init(); // Certifique-se que o init é async
+                audioInitialized = true;
+                console.log("Áudio inicializado com sucesso.");
+            } catch (err) {
+                console.error("Erro ao inicializar áudio:", err);
+            }
+        }
+        
+        // 2. Inicia o motor sonoro
+        soundManager.startShipEngine();
+        
+        // 3. Inicia a lógica do jogo
+        startGame();
+        
+        // 4. Opcional: esconde o botão após o clique
+        startBtn.style.display = 'none';
+    };
+
     if (startBtn) {
-        startBtn.addEventListener('click', () => {
-            if (!audioInitialized) { soundManager.init(); audioInitialized = true; }
-            soundManager.startShipEngine();
-            startGame();
-        });
-        startBtn.addEventListener('touchstart', (e) => { e.preventDefault(); /* same action */ });
+        // Escuta tanto clique quanto toque
+        startBtn.addEventListener('click', handleStart);
+        startBtn.addEventListener('touchstart', handleStart, { passive: false });
     }
 
-    // Shoot Button
-    const btnShoot = document.getElementById('btnShoot');
-    if (btnShoot) {
-        btnShoot.addEventListener('mousedown', () => player.isFiring = true);
-        btnShoot.addEventListener('mouseup', () => player.isFiring = false);
-        btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); player.isFiring = true; });
-        btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); player.isFiring = false; });
-    }
-
-    // Pause Button
-    const btnPause = document.getElementById('btnPause');
-    if (btnPause) {
-        btnPause.addEventListener('click', () => {
-            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
-            console.log("Pause toggled:", currentState);
-        });
-        btnPause.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
-        });
-    }
-
-    // PDC Button
-    const btnPDC = document.getElementById('btnPDC');
-    if (btnPDC) {
-        btnPDC.addEventListener('click', (e) => {
-            e.preventDefault();
-            const active = player.togglePDC();
-            e.target.style.opacity = active ? "1" : "0.5";
-        });
-    }
-
-    initGame().then(() => animate());
+    // Inicializa o restante do jogo
+    initGame().then(() => {
+        console.log("Jogo inicializado e aguardando start.");
+    });
 });
 
 window.addEventListener('resize', () => {
