@@ -175,10 +175,18 @@ function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
-    if (currentState === GAME_STATE.PLAYING) {
-        const input = inputManager.update();
+   if (currentState === GAME_STATE.PLAYING) {
+    const keyboardInput = inputManager.update();
+    
+    // Mescla o teclado (ou mouse) com o joystick virtual
+    // Se o joystick estiver sendo usado (movimento > 0), ele tem prioridade
+    const combinedInput = {
+        x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
+        y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
+    };
 
-        player.update(input, deltaTime, enemyManager);
+    // Agora enviamos o input combinado
+    player.update(combinedInput, deltaTime, enemyManager);
 
         if (spaceEnvironment) spaceEnvironment.update(deltaTime, player.mesh.position, input);
 
