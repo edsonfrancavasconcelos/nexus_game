@@ -40,7 +40,7 @@ const enemyManager = new EnemyManager(scene, camera, scorePopup);
 const spaceEnvironment = new SpaceEnvironment(scene);
 const progressionManager = new ProgressionManager();
 
-// ==================== JOYSTICK VIRTUAL PARA MOBILE ====================
+// ==================== JOYSTICK VIRTUAL ====================
 let joystickActive = false;
 let joystickBase = null;
 let joystickThumb = null;
@@ -54,26 +54,27 @@ function createVirtualJoystick() {
         position: fixed;
         bottom: 30px;
         left: 30px;
-        width: 120px;
-        height: 120px;
-        border: 3px solid rgba(0, 255, 255, 0.4);
+        width: 130px;
+        height: 130px;
+        border: 4px solid rgba(0, 255, 255, 0.35);
         border-radius: 50%;
         display: none;
         z-index: 1000;
         touch-action: none;
+        background: rgba(0, 0, 0, 0.2);
     `;
 
     const thumb = document.createElement('div');
     thumb.style.cssText = `
         position: absolute;
-        width: 45px;
-        height: 45px;
-        background: rgba(0, 255, 255, 0.7);
+        width: 48px;
+        height: 48px;
+        background: rgba(0, 255, 255, 0.75);
         border-radius: 50%;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        box-shadow: 0 0 15px #00ffff;
+        box-shadow: 0 0 20px #00ffff;
     `;
 
     joystickContainer.appendChild(thumb);
@@ -82,7 +83,6 @@ function createVirtualJoystick() {
     joystickBase = joystickContainer;
     joystickThumb = thumb;
 
-    // Mostrar apenas em mobile
     if ('ontouchstart' in window) {
         joystickBase.style.display = 'block';
     }
@@ -91,37 +91,30 @@ function createVirtualJoystick() {
 }
 
 function setupJoystickEvents() {
-    let startX, startY;
-
     joystickBase.addEventListener('touchstart', (e) => {
         e.preventDefault();
         joystickActive = true;
         const touch = e.touches[0];
-        startX = touch.clientX;
-        startY = touch.clientY;
-        joystickCenterX = startX;
-        joystickCenterY = startY;
+        joystickCenterX = touch.clientX;
+        joystickCenterY = touch.clientY;
     });
 
     document.addEventListener('touchmove', (e) => {
         if (!joystickActive) return;
         e.preventDefault();
-        
         const touch = e.touches[0];
         let dx = touch.clientX - joystickCenterX;
         let dy = touch.clientY - joystickCenterY;
-
-        const distance = Math.min(45, Math.sqrt(dx*dx + dy*dy));
+        const dist = Math.min(48, Math.sqrt(dx*dx + dy*dy));
         const angle = Math.atan2(dy, dx);
 
-        dx = Math.cos(angle) * distance;
-        dy = Math.sin(angle) * distance;
+        dx = Math.cos(angle) * dist;
+        dy = Math.sin(angle) * dist;
 
-        joystickThumb.style.transform = `translate(${dx - 22.5}px, ${dy - 22.5}px)`;
+        joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
 
-        // Normaliza input (-1 a 1)
-        window.moveInput.x = dx / 45;
-        window.moveInput.y = dy / 45;
+        window.moveInput.x = dx / 48;
+        window.moveInput.y = dy / 48;
     });
 
     document.addEventListener('touchend', () => {
@@ -133,7 +126,30 @@ function setupJoystickEvents() {
     });
 }
 
-// ==================== OUTRAS FUNÇÕES ====================
+// ==================== CARD DE LEVEL UP ====================
+window.showLevelUp = function(level) {
+    const existing = document.getElementById('level-up-card');
+    if (existing) existing.remove();
+
+    const card = document.createElement('div');
+    card.id = 'level-up-card';
+    card.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: rgba(0, 20, 40, 0.96); border: 4px solid #00ffff;
+        padding: 35px 70px; border-radius: 16px; text-align: center;
+        z-index: 10000; box-shadow: 0 0 50px #00ffff; color: white;
+        font-family: system-ui, sans-serif;
+    `;
+    card.innerHTML = `
+        <h2 style="color:#00ffff; margin:0; font-size:26px;">NOVA ZONA ALCANÇADA</h2>
+        <div style="font-size: 78px; font-weight: bold; margin: 12px 0; color:#00ffcc;">${level}</div>
+    `;
+    document.body.appendChild(card);
+
+    setTimeout(() => { if (card.parentNode) card.remove(); }, 4500);
+};
+
+// ==================== FUNÇÕES ====================
 function updateCamera() {
     if (!player.shipModel) return;
     const offset = new THREE.Vector3(0, 15, -80);
@@ -153,31 +169,26 @@ function updateLevelHUD() {
     if (levelVal) levelVal.textContent = progressionManager.getLevel();
 }
 
-window.showLevelUp = function(level) {
-    const existing = document.getElementById('level-up-card');
-    if (existing) existing.remove();
+function setupNexusSelector() {
+    const select = document.getElementById('debugLevelSelect');
+    if (!select) return;
 
-    const card = document.createElement('div');
-    card.id = 'level-up-card';
-    card.style.cssText = `
-        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: rgba(0, 20, 40, 0.95); border: 3px solid #00ffff;
-        padding: 30px 60px; border-radius: 15px; text-align: center;
-        z-index: 10000; box-shadow: 0 0 40px #00ffff; color: white;
-    `;
-    card.innerHTML = `
-        <h2 style="color:#00ffff; margin:0; font-size:28px;">NOVA ZONA ALCANÇADA</h2>
-        <div style="font-size: 72px; font-weight: bold; margin: 15px 0; color:#00ffcc;">${level}</div>
-    `;
-    document.body.appendChild(card);
+    select.addEventListener('change', (e) => {
+        const nivel = parseInt(e.target.value);
+        progressionManager.getLevel = () => nivel;
+        updateLevelHUD();
 
-    setTimeout(() => { if (card.parentNode) card.remove(); }, 4500);
-};
+        if (currentState === GAME_STATE.PLAYING && enemyManager) {
+            enemyManager.clearAllEnemies();
+            enemyManager.spawnWave(player, nivel);
+        }
+    });
+}
 
 async function initGame() {
     await enemyManager.init();
-    createVirtualJoystick();   // ← Adicionado aqui
-    setupNexusSelector();
+    createVirtualJoystick();     // Joystick Mobile
+    setupNexusSelector();        // ← Função agora definida
 }
 
 function startGame() {
@@ -199,8 +210,6 @@ function startGame() {
     updateLevelHUD();
 }
 
-// ... (o resto do animate, setupNexusSelector, event listeners permanecem iguais)
-
 function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
@@ -210,9 +219,7 @@ function animate() {
 
         player.update(input, deltaTime, enemyManager);
 
-        if (spaceEnvironment) {
-            spaceEnvironment.update(deltaTime, player.mesh.position, input);
-        }
+        if (spaceEnvironment) spaceEnvironment.update(deltaTime, player.mesh.position, input);
 
         enemyManager.update(
             laserManager,
@@ -238,7 +245,7 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// ==================== EVENTOS ====================
+// ==================== INICIALIZAÇÃO ====================
 window.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('start-btn');
     if (startBtn) {
