@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { unzipSync, strFromU8 } from 'fflate';
 import { ScorePopup } from './ScorePopup.js';
 import { SoundManager } from './SoundManager.js';
 import { InputManager } from './InputManager.js';
@@ -43,21 +42,10 @@ const progressionManager = new ProgressionManager();
 
 function updateCamera() {
     if (!player.shipModel) return;
-
-    // Aumente o valor de -50 para algo maior, como -80 ou -100
-    // O valor Y (15) controla a altura, pode manter ou ajustar se quiser.
-    const offset = new THREE.Vector3(0, 15, -80); 
-    
-    // Aplica a rotação da nave no offset
+    const offset = new THREE.Vector3(0, 15, -80);
     offset.applyQuaternion(player.shipModel.quaternion);
-
-    // Calcula a posição alvo
     const targetPosition = new THREE.Vector3().copy(player.shipModel.position).add(offset);
-
-    // O lerp mantém o movimento suave
-    camera.position.lerp(targetPosition, 0.08);    
-
-    // Olha para a nave
+    camera.position.lerp(targetPosition, 0.08);
     camera.lookAt(player.shipModel.position);
 }
 
@@ -66,147 +54,125 @@ function updateHUD() {
     if (scoreVal) scoreVal.textContent = score.toString().padStart(7, '0');
 }
 
-async function initGame() {
-    enemyManager.init(); 
-    setupNexusSelector(); // Nome mais adequado
+function updateLevelHUD() {
+    const levelVal = document.getElementById('level-val');
+    if (levelVal) levelVal.textContent = progressionManager.getLevel();
 }
 
-function startGame(level) {
+// ==================== CARD DE SUBIDA DE NÍVEL ====================
+window.showLevelUp = function(level) {
+    // Remove card anterior se existir
+    const existing = document.getElementById('level-up-card');
+    if (existing) existing.remove();
+
+    const card = document.createElement('div');
+    card.id = 'level-up-card';
+    card.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 20, 40, 0.95);
+        border: 3px solid #00ffff;
+        padding: 30px 60px;
+        border-radius: 15px;
+        text-align: center;
+        z-index: 10000;
+        box-shadow: 0 0 40px #00ffff;
+        font-family: 'Orbitron', sans-serif;
+        color: white;
+    `;
+    card.innerHTML = `
+        <h2 style="color:#00ffff; margin:0; font-size:28px;">NOVA ZONA ALCANÇADA</h2>
+        <div style="font-size: 72px; font-weight: bold; margin: 15px 0; color:#00ffcc;">${level}</div>
+        <p style="margin:0; color:#aaffff;">Prepare-se para inimigos mais fortes</p>
+    `;
+    document.body.appendChild(card);
+
+    // Remove automaticamente após 4 segundos
+    setTimeout(() => {
+        if (card && card.parentNode) card.remove();
+    }, 4500);
+};
+
+// ==================== INICIALIZAÇÃO ====================
+async function initGame() {
+    await enemyManager.init();
+    setupNexusSelector();
+}
+
+function startGame() {
     if (currentState === GAME_STATE.PLAYING) return;
 
     currentState = GAME_STATE.PLAYING;
     score = 0;
 
-   document.getElementById('overlay').style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
     document.getElementById('nexusSelector').style.display = 'none';
 
-    const nexusSelector = document.getElementById('nexusSelector');
-    if (nexusSelector) {
-        nexusSelector.style.display = 'none';
-    }
-
- player.mesh.position.set(0, -1, 8);
+    player.mesh.position.set(0, -1, 8);
     enemyManager.clearAllEnemies();
 
-    enemyManager.spawnWave(
-        player,
-        progressionManager.getLevel()
-    );
+    const currentLevel = progressionManager.getLevel();
+    enemyManager.spawnWave(player, currentLevel);
 
-    if (audioInitialized) {
-        soundManager.startShipEngine();
-    }
+    if (audioInitialized) soundManager.startShipEngine();
 
-updateHUD();
-    document.getElementById('level-val').textContent = level;
+    updateHUD();
+    updateLevelHUD();
 }
 
-function updateLevelHUD() {
-    const levelVal = document.getElementById('level-val');
-    if (levelVal) {
-        levelVal.textContent = progressionManager.getLevel();
-    }
-}
-function criarPainelDebugNivel() {
-   function criarPainelDebugNivel() {
-
-    const debugContainer = document.getElementById('nexusSelector');
-
+function setupNexusSelector() {
     const select = document.getElementById('debugLevelSelect');
-
-    if (!debugContainer || !select) {
-        console.error('Nexus Selector não encontrado.');
-        return;
-    }
+    if (!select) return;
 
     select.addEventListener('change', (e) => {
-        const nivelSelecionado = parseInt(e.target.value);
-
-        debugContainer.style.borderColor = '#00ffcc';
-
-        setTimeout(() => {
-            debugContainer.style.borderColor = '#ff3344';
-        }, 500);
-
-        progressionManager.getLevel = () => nivelSelecionado;
-
+        const nivel = parseInt(e.target.value);
+        progressionManager.getLevel = () => nivel;
         updateLevelHUD();
 
         if (currentState === GAME_STATE.PLAYING && enemyManager) {
             enemyManager.clearAllEnemies();
-            enemyManager.spawnWave(player, nivelSelecionado);
+            enemyManager.spawnWave(player, nivel);
         }
-
-        console.log(
-            `%c🚀 [NEXUS] Nível alterado para: ${nivelSelecionado}`,
-            'color: #ff3344; font-weight: bold;'
-        );
     });
 }
 
-    // Efeito Hover no Dropdown
-    const select = document.getElementById('debugLevelSelect');
-    select.onmouseover = () => { select.style.background = '#1a0a0a'; };
-    select.onmouseout = () => { select.style.background = '#050505'; };
-
-    select.addEventListener('change', (e) => {
-        const nivelSelecionado = parseInt(e.target.value);
-        
-        // Efeito de feedback visual rápido
-        debugContainer.style.borderColor = '#00ffcc';
-        setTimeout(() => debugContainer.style.borderColor = '#ff3344', 500);
-
-        progressionManager.getLevel = () => nivelSelecionado;
-        updateLevelHUD();
-        
-        if (currentState === GAME_STATE.PLAYING && enemyManager) {
-            enemyManager.clearAllEnemies();
-            enemyManager.spawnWave(player, nivelSelecionado);
-        }
-        
-        console.log(`%c🚀 [NEXUS] Nível alterado para: ${nivelSelecionado}`, 'color: #ff3344; font-weight: bold;');
-    });
-}
-
+// ==================== LOOP PRINCIPAL ====================
 function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
-    // Movimentação da câmera (cockpit)
-    if (player.shipModel && player.cockpitView) {
-        const camPos = new THREE.Vector3();
-        player.cockpitView.getWorldPosition(camPos);
-        camera.position.lerp(camPos, 0.5);
-        camera.quaternion.slerp(player.shipModel.getWorldQuaternion(new THREE.Quaternion()), 0.5);
-    }
-
     if (currentState === GAME_STATE.PLAYING) {
-        const input = inputManager.update(); // Pega o input atualizado
+        const input = inputManager.update();
 
-        // Atualiza Jogador
         player.update(input, deltaTime, enemyManager);
 
-        // Atualiza Ambiente passando o input (isso faz girar o disco)
         if (spaceEnvironment) {
             spaceEnvironment.update(deltaTime, player.mesh.position, input);
         }
 
-        // Atualiza Inimigos
         enemyManager.update(
             laserManager,
-            (pts, enemyPosition) => {
+            (pts, hitPosition) => {
                 score += pts;
-                const levelUp = progressionManager.addScore(pts);
                 updateHUD();
-                if (enemyPosition) scorePopup.show(pts, enemyPosition);
+
+                const levelUp = progressionManager.addScore(pts);
+
+                if (hitPosition) scorePopup.show(pts, hitPosition);
+
                 if (levelUp) {
+                    console.log(`🚀 SUBIU PARA O NÍVEL ${progressionManager.getLevel()}`);
+                    window.showLevelUp(progressionManager.getLevel());
                     updateLevelHUD();
-                    enemyManager.enemySpeed *= 1.10;
-                    enemyManager.maxEnemiesOnScreen += 1;
-                    enemyManager.waveCooldown *= 0.95;
                 }
             },
-            player, deltaTime, explosionManager, soundManager, progressionManager.getLevel()
+            player, 
+            deltaTime, 
+            explosionManager, 
+            soundManager, 
+            progressionManager.getLevel()
         );
 
         laserManager.update(deltaTime);
@@ -218,88 +184,22 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-function onResize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(width, height);
-}
-
-function updateOrientationUI() {
-    const isPortrait = window.innerHeight > window.innerWidth;
-
-    document.body.classList.toggle('portrait', isPortrait);
-    document.body.classList.toggle('landscape', !isPortrait);
-}
-
-// Dentro do seu src/index.js
-
+// ==================== EVENTOS ====================
 window.addEventListener('DOMContentLoaded', () => {
+    // Botão Start
     const startBtn = document.getElementById('start-btn');
-    const nexusSelector = document.getElementById('nexusSelector');
-    const debugLevelSelect = document.getElementById('debugLevelSelect');
+    if (startBtn) {
+        startBtn.addEventListener('click', () => {
+            if (!audioInitialized) {
+                soundManager.init();
+                audioInitialized = true;
+            }
+            soundManager.startShipEngine();
+            startGame();
+        });
+    }
 
-    startBtn.addEventListener('click', () => {
-        // 1. Captura o nível escolhido
-        const level = parseInt(debugLevelSelect.value);
-        
-        // 2. Esconde a UI do Nexus e o Overlay
-        nexusSelector.style.display = 'none';
-        document.getElementById('overlay').style.display = 'none';
-
-        // 3. Inicia o jogo passando o nível
-        startGame(level);
-    });
-});
-
-function setupNexusSelector() {
-    const debugContainer = document.getElementById('nexusSelector');
-    const select = document.getElementById('debugLevelSelect');
-
-    if (!debugContainer || !select) return;
-
-    select.addEventListener('change', (e) => {
-        const nivelSelecionado = parseInt(e.target.value);
-        progressionManager.getLevel = () => nivelSelecionado;
-        document.getElementById('level-val').textContent = nivelSelecionado;
-
-        if (currentState === GAME_STATE.PLAYING) {
-            enemyManager.clearAllEnemies();
-            enemyManager.spawnWave(player, nivelSelecionado);
-        }
-    });
-}
-
-window.addEventListener('resize', () => {
-    // Atualiza a proporção da câmera
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-
-    // Atualiza o tamanho do renderizador
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Melhora a nitidez
-});
-
-window.addEventListener('DOMContentLoaded', () => {
-    onResize();
-
-    // Botões
-    document.getElementById('start-btn').addEventListener('click', () => {
-        if (!audioInitialized) {
-            soundManager.init();
-            audioInitialized = true;
-        }
-        soundManager.startShipEngine();
-        
-        // Pega o nível atual do seletor
-        const level = parseInt(document.getElementById('debugLevelSelect').value);
-        startGame(level);
-    });   
-    
-
+    // Botão PDC
     const btnPDC = document.getElementById('btnPDC');
     if (btnPDC) {
         btnPDC.addEventListener('click', (e) => {
@@ -309,40 +209,18 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Botão Atirar
     const btnShoot = document.getElementById('btnShoot');
     if (btnShoot) {
         btnShoot.addEventListener('pointerdown', () => player.isFiring = true);
         btnShoot.addEventListener('pointerup', () => player.isFiring = false);
     }
 
-    const btnPause = document.getElementById('btnPause');
-    if (btnPause) {
-        btnPause.addEventListener('click', () => {
-            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
-        });
-    }
+    initGame().then(() => animate());
+});
 
-    // 3. Botão Start (Lógica do Motor e Início)
-    const startBtn = document.getElementById('start-btn');
-    if (startBtn) {
-        startBtn.addEventListener('click', () => {
-            if (!audioInitialized) {
-                soundManager.init();
-                audioInitialized = true;
-            }
-            
-            // 🚀 Liga o motor após o clique do usuário (necessário para navegadores)
-            soundManager.startShipEngine();
-            
-            startGame();
-            
-            const nexusSelector = document.getElementById('nexusSelector');
-            if (nexusSelector) {
-                nexusSelector.style.display = 'none';
-            }
-        });
-    }
-
-    // 4. Inicializa o jogo e o loop principal somente após carregar tudo
-    initGame().then(() => animate()); 
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
