@@ -49,29 +49,15 @@ function createVirtualJoystick() {
     const container = document.createElement('div');
     container.id = 'virtual-joystick';
     container.style.cssText = `
-        position: fixed;
-        bottom: 35px;
-        left: 35px;
-        width: 135px;
-        height: 135px;
-        border: 5px solid rgba(0, 255, 255, 0.5);
-        border-radius: 50%;
-        background: rgba(0, 40, 80, 0.25);
-        z-index: 10000;
-        touch-action: none;
-        display: none;
+        position: fixed; bottom: 40px; left: 40px; width: 140px; height: 140px;
+        border: 5px solid rgba(0,255,255,0.5); border-radius: 50%;
+        background: rgba(0,40,80,0.3); z-index: 10000; touch-action: none; display: none;
     `;
 
     const thumb = document.createElement('div');
     thumb.style.cssText = `
-        position: absolute;
-        width: 52px;
-        height: 52px;
-        background: #00ffff;
-        border-radius: 50%;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+        position: absolute; width: 55px; height: 55px; background: #00ffff;
+        border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
         box-shadow: 0 0 25px #00ffff;
     `;
 
@@ -87,18 +73,8 @@ function createVirtualJoystick() {
 }
 
 function setupJoystickEvents() {
-    joystickBase.addEventListener('touchstart', e => {
-        e.preventDefault();
-        joystickActive = true;
-        handleJoystickMove(e.touches[0]);
-    });
-
-    document.addEventListener('touchmove', e => {
-        if (!joystickActive) return;
-        e.preventDefault();
-        handleJoystickMove(e.touches[0]);
-    });
-
+    joystickBase.addEventListener('touchstart', e => { e.preventDefault(); joystickActive = true; handleJoystick(e.touches[0]); });
+    document.addEventListener('touchmove', e => { if (joystickActive) { e.preventDefault(); handleJoystick(e.touches[0]); }});
     document.addEventListener('touchend', () => {
         if (!joystickActive) return;
         joystickActive = false;
@@ -108,13 +84,12 @@ function setupJoystickEvents() {
     });
 }
 
-function handleJoystickMove(touch) {
+function handleJoystick(touch) {
     const rect = joystickBase.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    let dx = touch.clientX - centerX;
-    let dy = touch.clientY - centerY;
+    const cx = rect.left + rect.width/2;
+    const cy = rect.top + rect.height/2;
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
     const dist = Math.min(55, Math.hypot(dx, dy));
     const angle = Math.atan2(dy, dx);
 
@@ -122,7 +97,6 @@ function handleJoystickMove(touch) {
     dy = Math.sin(angle) * dist;
 
     joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
-
     window.moveInput.x = dx / 55;
     window.moveInput.y = dy / 55;
 }
@@ -134,16 +108,8 @@ window.showLevelUp = function(level) {
 
     const card = document.createElement('div');
     card.id = 'level-up-card';
-    card.style.cssText = `
-        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: rgba(0,20,40,0.97); border: 4px solid #00ffff;
-        padding: 30px 70px; border-radius: 16px; text-align: center;
-        z-index: 20000; box-shadow: 0 0 60px #00ffff; color: white;
-    `;
-    card.innerHTML = `
-        <h2 style="color:#00ffff; margin:0; font-size:26px;">NOVA ZONA ALCANÇADA</h2>
-        <div style="font-size: 78px; font-weight: bold; margin:12px 0; color:#00ffcc;">${level}</div>
-    `;
+    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,20,40,0.97);border:4px solid #00ffff;padding:35px 70px;border-radius:16px;text-align:center;z-index:20000;box-shadow:0 0 60px #00ffff;color:white;`;
+    card.innerHTML = `<h2 style="color:#00ffff;margin:0;font-size:26px;">NOVA ZONA ALCANÇADA</h2><div style="font-size:78px;font-weight:bold;margin:12px 0;color:#00ffcc;">${level}</div>`;
     document.body.appendChild(card);
     setTimeout(() => card.remove(), 4500);
 };
@@ -153,8 +119,7 @@ function updateCamera() {
     if (!player.shipModel) return;
     const offset = new THREE.Vector3(0, 15, -80);
     offset.applyQuaternion(player.shipModel.quaternion);
-    const targetPosition = new THREE.Vector3().copy(player.shipModel.position).add(offset);
-    camera.position.lerp(targetPosition, 0.08);
+    camera.position.lerp(player.shipModel.position.clone().add(offset), 0.1);
     camera.lookAt(player.shipModel.position);
 }
 
@@ -175,7 +140,7 @@ function setupNexusSelector() {
         const nivel = parseInt(e.target.value);
         progressionManager.getLevel = () => nivel;
         updateLevelHUD();
-        if (currentState === GAME_STATE.PLAYING && enemyManager) {
+        if (currentState === GAME_STATE.PLAYING) {
             enemyManager.clearAllEnemies();
             enemyManager.spawnWave(player, nivel);
         }
@@ -199,8 +164,7 @@ function startGame() {
     player.mesh.position.set(0, -1, 8);
     enemyManager.clearAllEnemies();
 
-    const currentLevel = progressionManager.getLevel();
-    enemyManager.spawnWave(player, currentLevel);
+    enemyManager.spawnWave(player, progressionManager.getLevel());
 
     if (audioInitialized) soundManager.startShipEngine();
     updateHUD();
@@ -235,27 +199,42 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// ==================== INICIALIZAÇÃO ====================
+// ==================== BOTÕES ====================
 window.addEventListener('DOMContentLoaded', () => {
+    // Start Button
     const startBtn = document.getElementById('start-btn');
     if (startBtn) {
         startBtn.addEventListener('click', () => {
-            if (!audioInitialized) {
-                soundManager.init();
-                audioInitialized = true;
-            }
+            if (!audioInitialized) { soundManager.init(); audioInitialized = true; }
             soundManager.startShipEngine();
             startGame();
         });
+        startBtn.addEventListener('touchstart', (e) => { e.preventDefault(); /* same action */ });
     }
 
-    // Botões de tiro e PDC
+    // Shoot Button
     const btnShoot = document.getElementById('btnShoot');
     if (btnShoot) {
+        btnShoot.addEventListener('mousedown', () => player.isFiring = true);
+        btnShoot.addEventListener('mouseup', () => player.isFiring = false);
         btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); player.isFiring = true; });
         btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); player.isFiring = false; });
     }
 
+    // Pause Button
+    const btnPause = document.getElementById('btnPause');
+    if (btnPause) {
+        btnPause.addEventListener('click', () => {
+            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
+            console.log("Pause toggled:", currentState);
+        });
+        btnPause.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
+        });
+    }
+
+    // PDC Button
     const btnPDC = document.getElementById('btnPDC');
     if (btnPDC) {
         btnPDC.addEventListener('click', (e) => {
