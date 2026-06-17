@@ -19,11 +19,22 @@ export class EnemyManager {
         this.maxEnemiesOnScreen = 10; 
         this.waveCooldown = 1.6; 
         
+<<<<<<< HEAD
         this.isLoaded = false;
         this.loadingCount = 0;
         this.totalToLoad = 7;
 
         this.naveMaeSpawnada = false;
+=======
+        this.enemyTemplate = null;    
+        this.enemyTemplate5 = null;   
+        this.enemyTemplate10 = null;  
+        this.enemyTemplate15 = null;  
+        this.droneTemplate = null;    
+        this.meteoroTemplate = null; 
+        this.naveMaeTemplate = null; 
+        this.enemyTemplate6 = null;
+>>>>>>> 450765f (Corrigindo Ateroides robo)
 
         this._loadEnemyModel();
     }
@@ -54,7 +65,10 @@ export class EnemyManager {
         group.add(clonedModel);
         return group;
     }
+_loadEnemyModel() {
+    const loader = new GLTFLoader();
 
+<<<<<<< HEAD
     _markModelLoaded() {
         this.loadingCount++;
         if (this.loadingCount >= this.totalToLoad) {
@@ -75,8 +89,26 @@ export class EnemyManager {
             });
             console.log("✅ Nave Nível 1 OK");
             this._markModelLoaded();
+=======
+    // Função auxiliar para simplificar os logs e erros
+    const loadModel = (path, targetKey, scale, rotation = 0, isTemplate = false) => {
+        loader.load(path, (gltf) => {
+            const model = isTemplate ? gltf.scene : this._createOrientedTemplate(gltf.scene, rotation);
+            model.scale.set(...scale);
+            
+            if (isTemplate) {
+                this.templates[targetKey] = model;
+            } else {
+                this[targetKey] = model;
+            }
+            console.log(`✅ ${targetKey} carregado com sucesso.`);
+        }, undefined, (error) => {
+            console.error(`❌ Erro ao carregar ${path}:`, error);
+>>>>>>> 450765f (Corrigindo Ateroides robo)
         });
+    };
 
+<<<<<<< HEAD
         loader.load('/assets/models/nave_inim_5.glb', (gltf) => {
             this.enemyTemplate5 = this._createOrientedTemplate(gltf.scene, Math.PI / 2);
             this.enemyTemplate5.scale.set(40, 40, 40);
@@ -120,6 +152,19 @@ export class EnemyManager {
             this._markModelLoaded();
         });
     }
+=======
+    // Chamadas organizadas
+    loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [40, 40, 40], 0);
+    loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [40, 40, 40], Math.PI / 2);
+    loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [30, 30, 30], 0);
+    loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [10, 10, 10], 0);
+    loadModel('/assets/models/nave_mae.glb', 'naveMaeTemplate', [100, 100, 100], 0);
+    loadModel('/assets/models/drone.glb', 'droneTemplate', [80, 80, 80], Math.PI);
+    loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [15, 15, 15], 0);
+    loadModel('/assets/models/asteroid_ball.glb', 'asteroide', [8, 8, 8], 0, true);
+    loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [35, 35, 35], 0);
+}
+>>>>>>> 450765f (Corrigindo Ateroides robo)
 
     spawnNaveMae() {
         if (this.naveMaeSpawnada || !this.naveMaeTemplate) return;
@@ -200,6 +245,7 @@ export class EnemyManager {
             passSound = 'meteoro';
             laserSound = null;
             hp = 3;
+<<<<<<< HEAD
         } else {
             if (currentLevel >= 1 && currentLevel <= 20) {
                 selectedTemplate = this.enemyTemplate;
@@ -230,6 +276,74 @@ export class EnemyManager {
                 hp = 5;
             }
         }
+=======
+        } 
+        else if (rand < 0.45) {
+            selectedTemplate = this.droneTemplate || this.enemyTemplate;
+            type = 'drone';
+            speed = 410; 
+            passSound = 'drone'; 
+            laserSound = 'enemyLaser'; 
+            hp = 1;
+        } 
+        else if (rand < 0.60) {
+            selectedTemplate = this.meteoroTemplate || this.enemyTemplate;
+            type = 'meteoro';
+            speed = 110; 
+            passSound = 'meteoro'; 
+            laserSound = null; 
+            hp = 3;
+        } 
+      else {
+    // Naves normais: sistema de probabilidade
+    const r = Math.random();
+
+    if (currentLevel >= 51 && r < 0.6) {
+        // Nível 51+: Alta chance da Nave 15
+        selectedTemplate = this.enemyTemplate15 || this.enemyTemplate;
+        type = 'nave_inim_15';
+        speed += 150;
+        passSound = 'nave_pass_15';
+        laserSound = 'laser_inim_15';
+        hp = 5;
+    } 
+    else if (currentLevel >= 31 && r < 0.5) {
+        // Nível 31+: Chance da Nave 10
+        selectedTemplate = this.enemyTemplate10 || this.enemyTemplate;
+        type = 'nave_inim_10';
+        speed += 80;
+        passSound = 'nave_pss_10';
+        laserSound = 'laser_inim_10';
+        hp = 3;
+    } 
+    else if (currentLevel >= 21 && r < 0.4) {
+        // Nível 21+: Chance da Nave 5
+        selectedTemplate = this.enemyTemplate5 || this.enemyTemplate;
+        type = 'nave_inim_5';
+        speed += 40;
+        passSound = 'nave_pass_5';
+        laserSound = 'laser_inimi_5';
+        hp = 2;
+    } 
+    else if (currentLevel >= 6 && r < 0.3) {
+        // Nível 6+: Chance da Nave Roblox (30% de chance)
+        selectedTemplate = this.enemyTemplate6 || this.enemyTemplate;
+        type = 'roblox';
+        speed += 20;
+        passSound = 'nave_pass_6';
+        laserSound = 'laser_inim_6';
+        hp = 2;
+    } 
+    else {
+        // Nave Comum (sempre uma chance de aparecer)
+        selectedTemplate = this.enemyTemplate;
+        type = 'comum';
+        passSound = 'inimiga_passando';
+        laserSound = 'laser_inimigo';
+        hp = 1;
+    }
+}
+>>>>>>> 450765f (Corrigindo Ateroides robo)
 
         if (!selectedTemplate) {
             console.warn(`Template não encontrado para tipo: ${type}`);
@@ -337,12 +451,48 @@ export class EnemyManager {
                     data.shootTimer = 1.5 + Math.random() * 1.5;
                 }
 
+<<<<<<< HEAD
                 if (data.burstCount > 0) {
                     data.burstTimer -= deltaTime;
                     if (data.burstTimer <= 0) {
                         this.enemyShoot(enemy, player, soundManager);
                         data.burstCount--;
                         data.burstTimer = 0.2;
+=======
+            enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
+
+            if (data.type === 'drone' || data.type === 'meteoro' || data.type === 'asteroide') {
+                enemy.rotation.x += 0.015;
+                enemy.rotation.y += 0.015;
+            }
+
+            // Colisão com laser do jogador (mantido igual)
+            let foiAtingidoPorLaser = false;
+            let pontoDoImpactoReal = null;
+
+            if (playerLasers.length > 0) {
+                for (let j = playerLasers.length - 1; j >= 0; j--) {
+                    const laser = playerLasers[j];
+                    if (!laser || laser.userData?.destroyed) continue;
+
+                    const distLaser = enemy.position.distanceTo(laser.position);
+                    const hitbox = (data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 35;
+
+                    if (distLaser < hitbox) { 
+                        pontoDoImpactoReal = laser.position.clone();
+                        this.scene.remove(laser);
+                        laser.userData = { destroyed: true };
+                        playerLasers.splice(j, 1); 
+                        data.hp--; 
+
+                        if (data.hp <= 0) {
+                            let pontos = data.type === 'meteoro' || data.type === 'asteroide' ? 500 : (data.type === 'drone' ? 250 : 100);
+                            if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
+                            (data.type === 'nave_inim_6' ? 150 : 100);
+                            foiAtingidoPorLaser = true; 
+                        }
+                        break; 
+>>>>>>> 450765f (Corrigindo Ateroides robo)
                     }
                 }
             }
@@ -405,8 +555,23 @@ export class EnemyManager {
         }
     }
 
+<<<<<<< HEAD
     // Método init() para evitar o erro
     async init() {
         return Promise.resolve();
+=======
+    damageEnemy(enemy, damage = 22, hitPoint = null) {
+        if (!enemy?.userData) return false;
+        enemy.userData.hp = (enemy.userData.hp || 1) - damage;
+
+        if (enemy.userData.hp <= 0) {
+            const pontos = (enemy.userData.type === 'meteoro' || enemy.userData.type === 'asteroide') ? 500 : 
+                          (enemy.userData.type === 'drone' ? 250 : 100);
+                          (enemy.userData.type === 'roblox' ? 150 : 100);
+            if (this.scorePopup && hitPoint) this.scorePopup.show(pontos, hitPoint);
+            return true;
+        }
+        return false;
+>>>>>>> 450765f (Corrigindo Ateroides robo)
     }
 }
