@@ -26,6 +26,7 @@ export class EnemyManager {
         this.droneTemplate = null;    
         this.meteoroTemplate = null; 
         this.naveMaeTemplate = null; 
+        this.enemyTemplate6 = null;
 
         this._loadEnemyModel();
     }
@@ -55,58 +56,37 @@ export class EnemyManager {
         group.add(clonedModel);
         return group;
     }
+_loadEnemyModel() {
+    const loader = new GLTFLoader();
 
-    _loadEnemyModel() {
-        const loader = new GLTFLoader();
-        
-        loader.load('/assets/models/nave_inimiga.glb', (gltf) => {
-            this.enemyTemplate = gltf.scene;
-            this.enemyTemplate.rotation.y = Math.PI;
-            this.enemyTemplate.scale.set(40,40,40);
-            console.log("✅ Nave Nível 1 OK");
+    // Função auxiliar para simplificar os logs e erros
+    const loadModel = (path, targetKey, scale, rotation = 0, isTemplate = false) => {
+        loader.load(path, (gltf) => {
+            const model = isTemplate ? gltf.scene : this._createOrientedTemplate(gltf.scene, rotation);
+            model.scale.set(...scale);
+            
+            if (isTemplate) {
+                this.templates[targetKey] = model;
+            } else {
+                this[targetKey] = model;
+            }
+            console.log(`✅ ${targetKey} carregado com sucesso.`);
+        }, undefined, (error) => {
+            console.error(`❌ Erro ao carregar ${path}:`, error);
         });
+    };
 
-        loader.load('/assets/models/nave_inim_5.glb', (gltf) => {
-            this.enemyTemplate5 = this._createOrientedTemplate(gltf.scene, Math.PI / 2);
-            this.enemyTemplate5.scale.set(40,40,40);
-            console.log("✅ Nave Nível 5 alinhada");
-        });
-
-        loader.load('/assets/models/nave_inim_10.glb', (gltf) => {
-            this.enemyTemplate10 = this._createOrientedTemplate(gltf.scene, 0);
-            this.enemyTemplate10.scale.set(30,30,30);
-            console.log("✅ Nave 10 corrigida");
-        });
-
-        loader.load('/assets/models/nave_inim_15.glb', (gltf) => {
-            this.enemyTemplate15 = this._createOrientedTemplate(gltf.scene, 0);
-            this.enemyTemplate15.scale.set(10,10,10);
-            console.log("✅ Nave 15 corrigida");
-        });
-
-        loader.load('/assets/models/nave_mae.glb', (gltf) => {
-            this.naveMaeTemplate = this._createOrientedTemplate(gltf.scene, 0);
-            this.naveMaeTemplate.scale.set(100, 100, 100);
-            console.log("✅ Nave Mãe carregada");
-        });
-
-        loader.load('/assets/models/drone.glb', (gltf) => {
-            this.droneTemplate = gltf.scene;
-            this.droneTemplate.rotation.y = Math.PI;
-            this.droneTemplate.scale.set(80,80,80);
-        });
-
-        loader.load('/assets/models/meteoro.glb', (gltf) => {
-            this.meteoroTemplate = gltf.scene;
-            this.meteoroTemplate.scale.set(15, 15, 15);
-        });
-
-        loader.load('/assets/models/asteroid_ball.glb', (gltf) => {
-            this.templates.asteroide = gltf.scene;
-            this.templates.asteroide.scale.set(8,8,8);
-            console.log("✅ Asteroide carregado");
-        });
-    }
+    // Chamadas organizadas
+    loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [40, 40, 40], 0);
+    loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [40, 40, 40], Math.PI / 2);
+    loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [30, 30, 30], 0);
+    loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [10, 10, 10], 0);
+    loadModel('/assets/models/nave_mae.glb', 'naveMaeTemplate', [100, 100, 100], 0);
+    loadModel('/assets/models/drone.glb', 'droneTemplate', [80, 80, 80], Math.PI);
+    loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [15, 15, 15], 0);
+    loadModel('/assets/models/asteroid_ball.glb', 'asteroide', [8, 8, 8], 0, true);
+    loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [35, 35, 35], 0);
+}
 
     spawnWave(player, currentLevel = 1) {
         if (!this.enemyTemplate || !player?.mesh || this.enemies.length >= this.maxEnemiesOnScreen) return;
@@ -144,37 +124,55 @@ export class EnemyManager {
             laserSound = null; 
             hp = 3;
         } 
-        else {
-            // Naves normais
-            if (currentLevel >= 51) {
-                selectedTemplate = this.enemyTemplate15 || this.enemyTemplate;
-                type = 'nave_inim_15';
-                speed += 150;
-                passSound = 'nave_pass_15';
-                laserSound = 'laser_inim_15';
-                hp = 5;
-            } else if (currentLevel >= 31) {
-                selectedTemplate = this.enemyTemplate10 || this.enemyTemplate;
-                type = 'nave_inim_10';
-                speed += 80;
-                passSound = 'nave_pss_10';
-                laserSound = 'laser_inim_10';
-                hp = 3;
-            } else if (currentLevel >= 21) {
-                selectedTemplate = this.enemyTemplate5 || this.enemyTemplate;
-                type = 'nave_inim_5';
-                speed += 40;
-                passSound = 'nave_pass_5';
-                laserSound = 'laser_inimi_5';
-                hp = 2;
-            } else {
-                selectedTemplate = this.enemyTemplate;
-                type = 'comum';
-                passSound = 'inimiga_passando';
-                laserSound = 'laser_inimigo';
-                hp = 1;
-            }
-        }
+      else {
+    // Naves normais: sistema de probabilidade
+    const r = Math.random();
+
+    if (currentLevel >= 51 && r < 0.6) {
+        // Nível 51+: Alta chance da Nave 15
+        selectedTemplate = this.enemyTemplate15 || this.enemyTemplate;
+        type = 'nave_inim_15';
+        speed += 150;
+        passSound = 'nave_pass_15';
+        laserSound = 'laser_inim_15';
+        hp = 5;
+    } 
+    else if (currentLevel >= 31 && r < 0.5) {
+        // Nível 31+: Chance da Nave 10
+        selectedTemplate = this.enemyTemplate10 || this.enemyTemplate;
+        type = 'nave_inim_10';
+        speed += 80;
+        passSound = 'nave_pss_10';
+        laserSound = 'laser_inim_10';
+        hp = 3;
+    } 
+    else if (currentLevel >= 21 && r < 0.4) {
+        // Nível 21+: Chance da Nave 5
+        selectedTemplate = this.enemyTemplate5 || this.enemyTemplate;
+        type = 'nave_inim_5';
+        speed += 40;
+        passSound = 'nave_pass_5';
+        laserSound = 'laser_inimi_5';
+        hp = 2;
+    } 
+    else if (currentLevel >= 6 && r < 0.3) {
+        // Nível 6+: Chance da Nave Roblox (30% de chance)
+        selectedTemplate = this.enemyTemplate6 || this.enemyTemplate;
+        type = 'roblox';
+        speed += 20;
+        passSound = 'nave_pass_6';
+        laserSound = 'laser_inim_6';
+        hp = 2;
+    } 
+    else {
+        // Nave Comum (sempre uma chance de aparecer)
+        selectedTemplate = this.enemyTemplate;
+        type = 'comum';
+        passSound = 'inimiga_passando';
+        laserSound = 'laser_inimigo';
+        hp = 1;
+    }
+}
 
         const enemy = selectedTemplate.clone();
 
@@ -221,7 +219,6 @@ export class EnemyManager {
         this.enemies.push(enemy);
     }
 
-    // ... (mantive o resto do seu código igual - update, _enemyShoot, damageEnemy, etc)
     update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
         if (!player?.mesh || !deltaTime) return;
 
@@ -290,6 +287,7 @@ export class EnemyManager {
                         if (data.hp <= 0) {
                             let pontos = data.type === 'meteoro' || data.type === 'asteroide' ? 500 : (data.type === 'drone' ? 250 : 100);
                             if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
+                            (data.type === 'nave_inim_6' ? 150 : 100);
                             foiAtingidoPorLaser = true; 
                         }
                         break; 
@@ -339,6 +337,7 @@ export class EnemyManager {
         if (enemy.userData.hp <= 0) {
             const pontos = (enemy.userData.type === 'meteoro' || enemy.userData.type === 'asteroide') ? 500 : 
                           (enemy.userData.type === 'drone' ? 250 : 100);
+                          (enemy.userData.type === 'roblox' ? 150 : 100);
             if (this.scorePopup && hitPoint) this.scorePopup.show(pontos, hitPoint);
             return true;
         }
