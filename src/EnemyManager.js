@@ -27,6 +27,7 @@ export class EnemyManager {
         this.meteoroTemplate = null; 
         this.naveMaeTemplate = null; 
         this.enemyTemplate6 = null;
+        this.enemyTemplate6 = null;
 
         this._loadEnemyModel();
     }
@@ -73,7 +74,37 @@ _loadEnemyModel() {
             console.log(`✅ ${targetKey} carregado com sucesso.`);
         }, undefined, (error) => {
             console.error(`❌ Erro ao carregar ${path}:`, error);
+_loadEnemyModel() {
+    const loader = new GLTFLoader();
+
+    // Função auxiliar para simplificar os logs e erros
+    const loadModel = (path, targetKey, scale, rotation = 0, isTemplate = false) => {
+        loader.load(path, (gltf) => {
+            const model = isTemplate ? gltf.scene : this._createOrientedTemplate(gltf.scene, rotation);
+            model.scale.set(...scale);
+            
+            if (isTemplate) {
+                this.templates[targetKey] = model;
+            } else {
+                this[targetKey] = model;
+            }
+            console.log(`✅ ${targetKey} carregado com sucesso.`);
+        }, undefined, (error) => {
+            console.error(`❌ Erro ao carregar ${path}:`, error);
         });
+    };
+
+    // Chamadas organizadas
+    loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [40, 40, 40], 0);
+    loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [40, 40, 40], Math.PI / 2);
+    loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [30, 30, 30], 0);
+    loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [10, 10, 10], 0);
+    loadModel('/assets/models/nave_mae.glb', 'naveMaeTemplate', [100, 100, 100], 0);
+    loadModel('/assets/models/drone.glb', 'droneTemplate', [80, 80, 80], Math.PI);
+    loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [15, 15, 15], 0);
+    loadModel('/assets/models/asteroid_ball.glb', 'asteroide', [8, 8, 8], 0, true);
+    loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [35, 35, 35], 0);
+}
     };
 
     // Chamadas organizadas
@@ -124,6 +155,55 @@ _loadEnemyModel() {
             laserSound = null; 
             hp = 3;
         } 
+      else {
+    // Naves normais: sistema de probabilidade
+    const r = Math.random();
+
+    if (currentLevel >= 51 && r < 0.6) {
+        // Nível 51+: Alta chance da Nave 15
+        selectedTemplate = this.enemyTemplate15 || this.enemyTemplate;
+        type = 'nave_inim_15';
+        speed += 150;
+        passSound = 'nave_pass_15';
+        laserSound = 'laser_inim_15';
+        hp = 5;
+    } 
+    else if (currentLevel >= 31 && r < 0.5) {
+        // Nível 31+: Chance da Nave 10
+        selectedTemplate = this.enemyTemplate10 || this.enemyTemplate;
+        type = 'nave_inim_10';
+        speed += 80;
+        passSound = 'nave_pss_10';
+        laserSound = 'laser_inim_10';
+        hp = 3;
+    } 
+    else if (currentLevel >= 21 && r < 0.4) {
+        // Nível 21+: Chance da Nave 5
+        selectedTemplate = this.enemyTemplate5 || this.enemyTemplate;
+        type = 'nave_inim_5';
+        speed += 40;
+        passSound = 'nave_pass_5';
+        laserSound = 'laser_inimi_5';
+        hp = 2;
+    } 
+    else if (currentLevel >= 6 && r < 0.3) {
+        // Nível 6+: Chance da Nave Roblox (30% de chance)
+        selectedTemplate = this.enemyTemplate6 || this.enemyTemplate;
+        type = 'roblox';
+        speed += 20;
+        passSound = 'nave_pass_6';
+        laserSound = 'laser_inim_6';
+        hp = 2;
+    } 
+    else {
+        // Nave Comum (sempre uma chance de aparecer)
+        selectedTemplate = this.enemyTemplate;
+        type = 'comum';
+        passSound = 'inimiga_passando';
+        laserSound = 'laser_inimigo';
+        hp = 1;
+    }
+}
       else {
     // Naves normais: sistema de probabilidade
     const r = Math.random();
@@ -287,6 +367,7 @@ _loadEnemyModel() {
                         if (data.hp <= 0) {
                             let pontos = data.type === 'meteoro' || data.type === 'asteroide' ? 500 : (data.type === 'drone' ? 250 : 100);
                             if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
+                            (data.type === 'nave_inim_6' ? 150 : 100);
                             (data.type === 'nave_inim_6' ? 150 : 100);
                             foiAtingidoPorLaser = true; 
                         }
