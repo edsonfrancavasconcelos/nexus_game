@@ -36,28 +36,48 @@ export class LaserManager {
     }
 
     createMissile(position, quaternion) {
-        const geometry = new THREE.CylinderGeometry(0.3, 0.3, 4, 8);
-   const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        
-        const missile = new THREE.Mesh(geometry, material);
-        
+        const bodyGeometry = new THREE.CylinderGeometry(0.55, 0.55, 5.6, 10);
+        bodyGeometry.rotateX(Math.PI / 2);
+        const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x0f3d1f, toneMapped: false });
+
+        const missile = new THREE.Mesh(bodyGeometry, bodyMaterial);
+
         const band = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.32, 0.32, 0.5, 8),
-            new THREE.MeshBasicMaterial({ color: 0x000000 })
+            new THREE.CylinderGeometry(0.58, 0.58, 0.7, 10),
+            new THREE.MeshBasicMaterial({ color: 0x39ff14, toneMapped: false })
         );
         missile.add(band);
+
+        const tip = new THREE.Mesh(
+            new THREE.ConeGeometry(0.65, 1.7, 10),
+            new THREE.MeshBasicMaterial({ color: 0x9dff57, toneMapped: false })
+        );
+        tip.rotation.x = Math.PI / 2;
+        tip.position.set(0, 0, 3.15);
+        missile.add(tip);
+
+        const rearGlow = new THREE.Mesh(
+            new THREE.SphereGeometry(0.22, 10, 10),
+            new THREE.MeshBasicMaterial({ color: 0x00ffa8, toneMapped: false })
+        );
+        rearGlow.position.set(0, 0, -2.8);
+        missile.add(rearGlow);
+
+        const missileLight = new THREE.PointLight(0x66ff33, 3.5, 30);
+        missileLight.position.set(0, 0, 0);
+        missile.add(missileLight);
 
         missile.position.copy(position);
         missile.quaternion.copy(quaternion);       
         missile.scale.set(1, 1, 1); // Garanta escala 1        
+        missile.userData = {
+            direction: new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize()
+        };
         this.scene.add(missile);
-
-        console.log("DEBUG [LM]: Míssil adicionado à cena na posição:", position.x, position.y, position.z);
-    console.log("DEBUG [LM]: Total de mísseis no array:", this.missiles.length)
-        this.missiles.push({ mesh: missile, speed: 600.0, life: 5.0 });
+        this.missiles.push({ mesh: missile, speed: 620.0, life: 5.0 });
     }
 
-    update(deltaTime) {
+    update(deltaTime, enemyManager = null, onEnemyDestroyed = null, explosionManager = null) {
     if (!deltaTime) return;
 
     // Atualizar Lasers
@@ -76,15 +96,47 @@ export class LaserManager {
     // Atualizar Mísseis
    for (let i = this.missiles.length - 1; i >= 0; i--) {
     const m = this.missiles[i];  
-    const forward = new THREE.Vector3(0, 0, -1); 
-    forward.applyQuaternion(m.mesh.quaternion);
-    
-    // Move o míssil
+    const forward = m.mesh.userData?.direction || new THREE.Vector3(0, 0, 1).applyQuaternion(m.mesh.quaternion).normalize();
+
     m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
-        
+
+    let hitEnemy = false;
+    if (enemyManager?.enemies?.length) {
+        for (let j = enemyManager.enemies.length - 1; j >= 0; j--) {
+            const enemy = enemyManager.enemies[j];
+            if (!enemy) continue;
+
+            const enemyType = enemy.userData?.type;
+            const hitRadius = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 90 : 55;
+            if (m.mesh.position.distanceTo(enemy.position) <= hitRadius) {
+                const hitPoint = m.mesh.position.clone();
+                const destroyed = enemyManager.damageEnemy
+                    ? enemyManager.damageEnemy(enemy, 35, hitPoint)
+                    : true;
+
+                if (destroyed) {
+                    const points = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 500 : (enemyType === 'drone' ? 250 : (enemyType === 'roblox' ? 150 : 100));
+                    if (explosionManager) explosionManager.create(hitPoint, {
+                        kind: 'missile',
+                        flashColor: 0xd8ffb8,
+                        lightColor: 0x66ff33,
+                        lightIntensity: 2600,
+                        smokeColor: 0x254b20
+                    });
+                    if (onEnemyDestroyed) onEnemyDestroyed(points, hitPoint);
+                    enemyManager.scene.remove(enemy);
+                    enemyManager.enemies.splice(j, 1);
+                }
+
+                hitEnemy = true;
+                break;
+            }
+        }
+    }
+
         m.life -= deltaTime;
 
-        if (m.life <= 0) {
+        if (hitEnemy || m.life <= 0) {
             this.disposeMissile(m.mesh);
             this.missiles.splice(i, 1);
         }

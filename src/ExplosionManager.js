@@ -8,13 +8,21 @@ const GEO = {
 };
 
 export class ExplosionManager {
-    constructor(scene, soundManager) {
+    constructor(scene, soundManager, isMobile = false) {
         this.scene = scene;
         this.soundManager = soundManager;
         this.explosions = [];
+        this.isMobile = isMobile;
+        this.performanceScale = isMobile ? 0.45 : 1;
     }
 
-    create(position) {
+    create(position, options = {}) {
+        const isMissileExplosion = options.kind === 'missile';
+        const flashColor = options.flashColor || (isMissileExplosion ? 0xd8ffb8 : 0xfff0dd);
+        const lightColor = options.lightColor || (isMissileExplosion ? 0x66ff33 : 0xffaa33);
+        const lightIntensity = options.lightIntensity || (isMissileExplosion ? 2200 : 1500);
+        const smokeColor = options.smokeColor || (isMissileExplosion ? 0x1f3f1a : 0x222222);
+
         if (this.soundManager) {
             this.soundManager.play('explosion');
         }
@@ -32,7 +40,7 @@ export class ExplosionManager {
         const flash = new THREE.Mesh(
             flashGeo,
             new THREE.MeshBasicMaterial({
-                color: 0xfff0dd,
+                color: flashColor,
                 transparent: true,
                 opacity: proximoAoJogador ? 0.4 : 0.9,
                 blending: THREE.AdditiveBlending,
@@ -45,7 +53,8 @@ export class ExplosionManager {
 
         const addPart = (geo, color, isSmoke, count, isMetallicDebris = false) => {
             // Se estiver colado na cara do jogador, diminui a contagem de fumaça e detritos para não cegar
-            const contagemFinal = proximoAoJogador ? Math.ceil(count * 0.4) : count;
+            const contagemBase = proximoAoJogador ? Math.ceil(count * 0.4) : count;
+            const contagemFinal = Math.max(1, Math.ceil(contagemBase * this.performanceScale));
 
             for (let i = 0; i < contagemFinal; i++) {
                 // Destroços metálicos usam NormalBlending para parecerem pedaços sólidos e não luz brilhante
@@ -116,11 +125,11 @@ export class ExplosionManager {
         addPart(GEO.shard, 0x555555, false, 25, true); // Pedaços de fuselagem cinza metálica
         addPart(GEO.shard, 0x888888, false, 15, true);  // Placas de metal claro da estrutura interna
 
-        addPart(GEO.smoke, 0x222222, true, proximoAoJogador ? 4 : 10);
+        addPart(GEO.smoke, smokeColor, true, proximoAoJogador ? 4 : 10);
 
         const mainLight = new THREE.PointLight(
-            0xffaa33,
-            proximoAoJogador ? 300 : 1500,
+            lightColor,
+            proximoAoJogador ? 300 : lightIntensity,
             150
         );
         group.add(mainLight);

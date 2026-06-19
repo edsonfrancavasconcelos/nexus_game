@@ -6,10 +6,12 @@ export class Player {
         this.scene = scene;
         this.laserManager = laserManager;
         this.pdcActive = false; // Estado do PDC
-        this.missileCount = 3;  // Munição inicial de mísseis        
+        this.missileCount = 10;  // Munição inicial de mísseis        
+        this.pdcBurstCount = 30;
         this.pdcDurability = 100;
         this.isFiring = false;
         this.isPaused = false;
+        this.collisionCooldown = 0;
 
         this.mesh = new THREE.Group();
         this.mesh.name = "playerShip";
@@ -79,12 +81,28 @@ export class Player {
 
     repairPDC() {
         this.pdcDurability = 100;
-        console.log("PDC em 100%");
+    }
+
+    setLevelLoadout(loadout = {}) {
+        this.missileCount = loadout.missiles ?? 10;
+        this.pdcBurstCount = loadout.pdcBursts ?? 30;
+    }
+
+    getAmmoStatus() {
+        return {
+            missiles: this.missileCount,
+            pdcBursts: this.pdcBurstCount
+        };
     }
 
 _updatePDC(enemyManager, dt) {
         // 1. SE O PDC ESTIVER DESLIGADO, NÃO FAZ NADA (além de limpar projéteis antigos)
         if (!this.pdcActive) {
+            this._updatePDCProjectiles(enemyManager, dt);
+            return;
+        }
+
+        if (this.pdcBurstCount <= 0) {
             this._updatePDCProjectiles(enemyManager, dt);
             return;
         }
@@ -111,6 +129,7 @@ _updatePDC(enemyManager, dt) {
             this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
 
             if (this.pdcTimer >= this.pdcCooldown) {
+                this.pdcBurstCount = Math.max(0, this.pdcBurstCount - 1);
                 this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
                 this.pdcTimer = 0; // Reseta o timer
             }
@@ -144,46 +163,38 @@ _updatePDC(enemyManager, dt) {
 
     togglePDC() {
         this.pdcActive = !this.pdcActive;
-        console.log("PDC está agora:", this.pdcActive ? "ATIVO" : "DESATIVADO");
         return this.pdcActive;
     }
 
 fireMissile() {
-    console.log("DEBUG [Player]: Função fireMissile iniciada.");
-    
-    if (this.missileCount <= 0) {
-        console.log("DEBUG [Player]: Sem mísseis disponíveis! Count:", this.missileCount);
-        return;
-    }
-
+    if (this.missileCount <= 0) return false;
     this.missileCount--;
-    console.log("DEBUG [Player]: Míssil lançado! Restam:", this.missileCount);
 
     // 1. Referência do objeto
     const ship = this.shipModel || this.mesh; 
-    console.log("DEBUG [Player]: Usando ship mesh/model:", ship ? "OK" : "ERRO (null)");
 
-    // 2. Cálculo do offset
-    const side = (this.missileCount % 2 === 0) ? 2.5 : -2.5;
-    const wingOffset = new THREE.Vector3(side, 0, 0); 
-    
-    // 3. Aplica rotação e calcula posição
-    wingOffset.applyQuaternion(ship.quaternion);
-    const spawnPos = ship.position.clone().add(wingOffset);
-    console.log("DEBUG [Player]: Posição de spawn calculada:", spawnPos);
+    // 2. Spawn na proa da nave, evitando nascer por baixo do casco
+    ship.updateMatrixWorld();
+    const spawnPos = new THREE.Vector3();
+    const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
+    spawnPos.copy(noseLocal).applyMatrix4(ship.matrixWorld);
 
-    // 4. Captura rotação
     const missileQuat = new THREE.Quaternion();
     ship.getWorldQuaternion(missileQuat);
-    console.log("DEBUG [Player]: Quaternion gerado:", missileQuat);
+
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
+    spawnPos.addScaledVector(forward, 6);
+
+    // 3. Captura rotação
     
-    // 5. Disparo
+    // 4. Disparo
     if (this.laserManager && typeof this.laserManager.createMissile === 'function') {
-        console.log("DEBUG [Player]: Chamando laserManager.createMissile...");
         this.laserManager.createMissile(spawnPos, missileQuat);
     } else {
-        console.error("DEBUG [Player]: ERRO! laserManager ou createMissile não encontrado.");
+        console.error("ERRO: laserManager ou createMissile não encontrado.");
     }
+
+    return true;
 }
 
     _updatePDCProjectiles(enemyManager, dt) {
@@ -277,7 +288,10 @@ fireMissile() {
     }
 
     _initKeyboard() {
-        const handleKey = (e, val) => { if (e.code === 'KeyF' || e.code === 'Space') this.isFiring = val; };
+        const handleKey = (e, val) => {
+            if (e.code === 'KeyF' || e.code === 'Space') this.isFiring = val;
+            if (val && !e.repeat && (e.code === 'KeyM' || e.code === 'KeyA')) this.fireMissile();
+        };
         window.addEventListener('keydown', (e) => handleKey(e, true));
         window.addEventListener('keyup', (e) => handleKey(e, false));
     }
@@ -321,8 +335,10 @@ fireMissile() {
             this.particles.push({ mesh: particleMesh, life: 1.0, speedZ: 180, driftX: (Math.random() - 0.5) * 4, driftY: (Math.random() - 0.5) * 4 });
         }
     }
-update(moveInput, deltaTime, enemyManager) { 
+update(moveInput, deltaTime, enemyManager, onPlayerHit = null) { 
     if (!this.shipModel || this.isPaused) return;
+    const previousPosition = this.mesh.position.clone();
+    if (this.collisionCooldown > 0) this.collisionCooldown = Math.max(0, this.collisionCooldown - deltaTime);
     
     const inputX = -moveInput.x;
     const inputY = moveInput.y; 
@@ -352,6 +368,18 @@ update(moveInput, deltaTime, enemyManager) {
     else if (this.mesh.position.x < -limiteX) this.mesh.position.x = limiteX;
     if (this.mesh.position.y > limiteY) this.mesh.position.y = -limiteY;
     else if (this.mesh.position.y < -limiteY) this.mesh.position.y = limiteY;
+
+    if (enemyManager?.enemies?.length && this._isCollidingWithAsteroid(enemyManager)) {
+        this.mesh.position.copy(previousPosition);
+        this.velocity.multiplyScalar(0.2);
+        this.mesh.updateMatrixWorld();
+
+        if (this.collisionCooldown <= 0 && typeof onPlayerHit === 'function') {
+            onPlayerHit();
+            this.collisionCooldown = 1.1;
+        }
+    }
+
 const suavidade = 0.01; // Quanto menor este número, mais "pesada" a nave parece girar
 
 this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.5, suavidade);
@@ -401,4 +429,24 @@ this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
             t.core.scale.set(0.8, 1 + Math.sin(time * 10) * 0.1, 0.8); 
             t.light.intensity = 100 + Math.sin(time * 50) * 30; 
         });
-    }}
+    }
+
+    _isCollidingWithAsteroid(enemyManager) {
+        this.mesh.updateMatrixWorld(true);
+        const playerBox = new THREE.Box3().setFromObject(this.mesh);
+
+        for (const enemy of enemyManager.enemies) {
+            const type = enemy?.userData?.type;
+            if (type !== 'asteroide' && type !== 'meteoro') continue;
+
+            enemy.updateMatrixWorld(true);
+            const asteroidBox = new THREE.Box3().setFromObject(enemy);
+
+            if (playerBox.intersectsBox(asteroidBox)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

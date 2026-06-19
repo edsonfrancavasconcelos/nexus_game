@@ -16,6 +16,7 @@ let audioInitialized = false;
 let currentState = 'menu';
 let score = 0;
 const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
+const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
 // Scene, Camera, Renderer
 const scene = new THREE.Scene();
@@ -25,20 +26,26 @@ camera.position.set(0, 5, 55);
 const clock = new THREE.Clock();
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(isMobileDevice ? 1 : Math.min(window.devicePixelRatio, 1.5));
 document.body.appendChild(renderer.domElement);
 
 // --- Instâncias ---
 const soundManager = new SoundManager();
 window.soundManager = soundManager;
 const laserManager = new LaserManager(scene, soundManager); 
-const explosionManager = new ExplosionManager(scene, soundManager);
+const explosionManager = new ExplosionManager(scene, soundManager, isMobileDevice);
 window.explosionManager = explosionManager;
 const inputManager = new InputManager();
 const scorePopup = new ScorePopup(scene, camera);
 const player = new Player(scene, laserManager, explosionManager);
-const enemyManager = new EnemyManager(scene, camera, scorePopup);
-const spaceEnvironment = new SpaceEnvironment(scene);
+const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice);
+const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 800 : 2000, isMobileDevice ? 120 : 400);
 const progressionManager = new ProgressionManager();
+
+function syncLevelResources() {
+    player.setLevelLoadout(progressionManager.getLevelLoadout());
+    updateResourceHUD();
+}
 
 // ==================== JOYSTICK VIRTUAL ====================
 let joystickActive = false;
@@ -108,7 +115,7 @@ window.showLevelUp = function(level) {
 
     const card = document.createElement('div');
     card.id = 'level-up-card';
-    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,20,40,0.97);border:4px solid #00ffff;padding:35px 70px;border-radius:16px;text-align:center;z-index:20000;box-shadow:0 0 60px #00ffff;color:white;`;
+    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,20,40,0.14);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(0,255,255,0.14);padding:28px 56px;border-radius:16px;text-align:center;z-index:20000;box-shadow:0 0 16px rgba(0,255,255,0.12);color:rgba(255,255,255,0.82);opacity:0.42;pointer-events:none;`;
     card.innerHTML = `<h2 style="color:#00ffff;margin:0;font-size:26px;">NOVA ZONA ALCANÇADA</h2><div style="font-size:78px;font-weight:bold;margin:12px 0;color:#00ffcc;">${level}</div>`;
     document.body.appendChild(card);
     setTimeout(() => card.remove(), 4500);
@@ -133,6 +140,22 @@ function updateLevelHUD() {
     if (levelVal) levelVal.textContent = progressionManager.getLevel();
 }
 
+function updateResourceHUD() {
+    const missileVal = document.getElementById('missile-val');
+    const pdcVal = document.getElementById('pdc-val');
+    const chanceVal = document.getElementById('chance-val');
+
+    if (missileVal) missileVal.textContent = player.getAmmoStatus().missiles;
+    if (pdcVal) pdcVal.textContent = player.getAmmoStatus().pdcBursts;
+    if (chanceVal) chanceVal.textContent = progressionManager.getChancesLeft();
+}
+
+function updateEnvironmentTheme(level = progressionManager.getLevel()) {
+    if (spaceEnvironment?.setLevelTheme) {
+        spaceEnvironment.setLevelTheme(level);
+    }
+}
+
 function setupNexusSelector() {
     const select = document.getElementById('debugLevelSelect');
     if (!select) return;
@@ -140,6 +163,7 @@ function setupNexusSelector() {
         const nivel = parseInt(e.target.value);
         progressionManager.getLevel = () => nivel;
         updateLevelHUD();
+        updateEnvironmentTheme(nivel);
         if (currentState === GAME_STATE.PLAYING) {
             enemyManager.clearAllEnemies();
             enemyManager.spawnWave(player, nivel);
@@ -165,6 +189,9 @@ function startGame() {
     enemyManager.clearAllEnemies();
 
     enemyManager.spawnWave(player, progressionManager.getLevel());
+    updateEnvironmentTheme();
+    progressionManager.resetLevelResources();
+    syncLevelResources();
 
     if (audioInitialized) soundManager.startShipEngine();
     updateHUD();
@@ -176,6 +203,37 @@ function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
+    const handleEnemyScore = (pts, hitPosition) => {
+        score += pts;
+        updateHUD();
+
+        const levelUp = progressionManager.addScore(pts);
+
+        if (hitPosition) scorePopup.show(pts, hitPosition);
+        if (levelUp) {
+            updateLevelHUD();
+            updateEnvironmentTheme();
+            progressionManager.resetLevelResources();
+            syncLevelResources();
+            window.showLevelUp(progressionManager.getLevel());
+        }
+    };
+
+    const handlePlayerHit = () => {
+        const result = progressionManager.loseChance();
+        updateResourceHUD();
+
+        if (result.failed) {
+            const failedLevel = progressionManager.failLevel();
+            enemyManager.clearAllEnemies();
+            progressionManager.resetLevelResources();
+            syncLevelResources();
+            updateLevelHUD();
+            updateEnvironmentTheme(failedLevel);
+            enemyManager.spawnWave(player, failedLevel);
+        }
+    };
+
     if (currentState === GAME_STATE.PLAYING) {
         const keyboardInput = inputManager.update();
         const input = {
@@ -183,24 +241,13 @@ function animate() {
             y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
         };
 
-        player.update(input, deltaTime, enemyManager);
+        player.update(input, deltaTime, enemyManager, handlePlayerHit);
         if (spaceEnvironment) spaceEnvironment.update(deltaTime, player.mesh.position, input);
 
         // --- ATUALIZAÇÃO DE SCORE E NÍVEL ---
-        enemyManager.update(laserManager, (pts, hitPosition) => {
-            score += pts;
-            updateHUD();
-            
-            const levelUp = progressionManager.addScore(pts);
-            
-            if (hitPosition) scorePopup.show(pts, hitPosition);
-            if (levelUp) {
-                updateLevelHUD();
-                window.showLevelUp(progressionManager.getLevel());
-            }
-        }, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
+        enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
 
-        laserManager.update(deltaTime);
+        laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
         explosionManager.update(deltaTime);
         scorePopup.update(deltaTime);
         updateCamera();
@@ -239,6 +286,22 @@ window.addEventListener('DOMContentLoaded', () => {
         btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); player.isFiring = false; });
     }
 
+    const btnMissile = document.getElementById('btnMissile');
+    if (btnMissile) {
+        btnMissile.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (player.fireMissile()) updateResourceHUD();
+        });
+        btnMissile.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (player.fireMissile()) updateResourceHUD();
+        });
+        btnMissile.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (player.fireMissile()) updateResourceHUD();
+        }, { passive: false });
+    }
+
     // Pause Button
     const btnPause = document.getElementById('btnPause');
     if (btnPause) {
@@ -262,6 +325,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    syncLevelResources();
     initGame().then(() => animate());
 });
 

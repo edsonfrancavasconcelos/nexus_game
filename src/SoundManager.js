@@ -26,6 +26,11 @@ export class SoundManager {
             meteoroPass: new Audio('/assets/sounds/meteoro.mp3')
         };
 
+        // Aliases para manter compatibilidade com nomes usados em outras partes do jogo.
+        this.sounds.laser_inimigo = this.sounds.enemyLaser;
+        this.sounds.laser_inim_6 = this.sounds.enemyLaser;
+        this.sounds.nave_pass_6 = this.sounds.enemyPass;
+
         Object.values(this.sounds).forEach(sound => {
             sound.preload = 'auto';
         });

@@ -20,6 +20,16 @@ export class SpaceEnvironment {
         this.scene = scene;
         this.loader = new GLTFLoader();
         this.globe = null;
+        this.ambientLight = null;
+        this.currentThemeIndex = 0;
+        this.themes = [
+            { background: 0x002244, cloud: 0x446688, ambient: 0xffffff },
+            { background: 0x10182f, cloud: 0x6b7cff, ambient: 0xb8c7ff },
+            { background: 0x1a0828, cloud: 0xb05cff, ambient: 0xf1c2ff },
+            { background: 0x2a1207, cloud: 0xff8a3d, ambient: 0xffd1a3 },
+            { background: 0x06251a, cloud: 0x42d6a4, ambient: 0xc2ffe7 },
+            { background: 0x24060a, cloud: 0xff4f7b, ambient: 0xffc0cf }
+        ];
      
         this.starCount = starCount;
         this.starPositions = new Float32Array(starCount * 3);
@@ -126,9 +136,38 @@ export class SpaceEnvironment {
     }
 
     initEnvironment() {
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-        this.scene.add(ambientLight);
-        this.scene.background = new THREE.Color(0x002244);
+        this.ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        this.scene.add(this.ambientLight);
+        this.applyTheme(this.themes[0]);
+    }
+
+    applyTheme(theme) {
+        this.scene.background = new THREE.Color(theme.background);
+
+        if (this.ambientLight) {
+            this.ambientLight.color.setHex(theme.ambient);
+            this.ambientLight.intensity = 0.75 + Math.random() * 0.15;
+        }
+
+        if (this.clouds?.material) {
+            this.clouds.material.color.setHex(theme.cloud);
+        }
+    }
+
+    setLevelTheme(level) {
+        if (level <= 1) {
+            this.currentThemeIndex = 0;
+            this.applyTheme(this.themes[0]);
+            return;
+        }
+
+        let nextIndex = 1 + Math.floor(Math.random() * (this.themes.length - 1));
+        if (nextIndex === this.currentThemeIndex) {
+            nextIndex = 1 + ((nextIndex + 1) % (this.themes.length - 1));
+        }
+
+        this.currentThemeIndex = nextIndex;
+        this.applyTheme(this.themes[nextIndex]);
     }
 
     update(deltaTime, playerPosition, moveInput) {

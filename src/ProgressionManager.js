@@ -4,6 +4,10 @@ export class ProgressionManager {
         this.totalScore = 0;
         this.enemiesDestroyed = 0;
         this.upgradePoints = 0;
+        this.maxChancesPerLevel = 5;
+        this.maxMissilesPerLevel = 10;
+        this.maxPdcBurstsPerLevel = 30;
+        this.chancesLeft = this.maxChancesPerLevel;
         
         // Configuração de Progressão
         this.baseEnemiesPerLevel = 10; // Nível 1 precisa de 10
@@ -33,8 +37,39 @@ export class ProgressionManager {
         this.level++;
         this.upgradePoints++;
         this.enemiesDestroyed = 0; // Reseta o contador para o próximo degrau de dificuldade
+        this.resetLevelResources();
         
         console.log(`🚀 Nível UP! Agora no nível ${this.level}. Pontos de Upgrade: ${this.upgradePoints}`);
+    }
+
+    resetLevelResources() {
+        this.chancesLeft = this.maxChancesPerLevel;
+    }
+
+    loseChance() {
+        this.chancesLeft = Math.max(0, this.chancesLeft - 1);
+        return {
+            chancesLeft: this.chancesLeft,
+            failed: this.chancesLeft === 0
+        };
+    }
+
+    failLevel() {
+        this.enemiesDestroyed = 0;
+        this.resetLevelResources();
+        return this.level;
+    }
+
+    getChancesLeft() {
+        return this.chancesLeft;
+    }
+
+    getLevelLoadout() {
+        return {
+            missiles: this.maxMissilesPerLevel,
+            pdcBursts: this.maxPdcBurstsPerLevel,
+            chancesLeft: this.chancesLeft
+        };
     }
 
     getLevel() {

@@ -6,18 +6,21 @@ ENEMY_LASER_GEO.rotateX(Math.PI / 2);
 const ENEMY_LASER_MAT = new THREE.MeshBasicMaterial({ color: 0xff2233, toneMapped: false });
 
 export class EnemyManager {
-    constructor(scene, camera, scorePopup) {
+    constructor(scene, camera, scorePopup, isMobile = false) {
         this.scorePopup = scorePopup;
         this.scene = scene;
         this.camera = camera;
         this.enemies = [];
         this.enemyProjectiles = [];
         this.templates = {};
+        this.isMobile = isMobile;
+        this.enemyCollisionBox = new THREE.Box3();
+        this.obstacleCollisionBox = new THREE.Box3();
 
         this.waveTimer = 0;
         this.enemySpeed = 220;
-        this.maxEnemiesOnScreen = 10;
-        this.waveCooldown = 1.6;
+        this.maxEnemiesOnScreen = isMobile ? 6 : 10;
+        this.waveCooldown = isMobile ? 2.0 : 1.6;
 
         this.enemyTemplate = null;
         this.enemyTemplate5 = null;
@@ -57,6 +60,77 @@ export class EnemyManager {
         return group;
     }
 
+    _addLocalGlow(model, color = 0xffaa66, intensity = 1.2, distance = 240, emissiveIntensity = 0.45) {
+        model.traverse((child) => {
+            if (!child.isMesh || !child.material) return;
+
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            const enhancedMaterials = materials.map((material) => {
+                const nextMaterial = material.clone();
+                if (nextMaterial.emissive) {
+                    nextMaterial.emissive = new THREE.Color(color);
+                    nextMaterial.emissiveIntensity = emissiveIntensity;
+                }
+                nextMaterial.needsUpdate = true;
+                return nextMaterial;
+            });
+
+            child.material = Array.isArray(child.material) ? enhancedMaterials : enhancedMaterials[0];
+        });
+
+        const glow = new THREE.PointLight(color, intensity, distance);
+        glow.position.set(0, 0, 0);
+        model.add(glow);
+        return glow;
+    }
+
+    _styleRockModel(model, baseColor = 0x6f6a63) {
+        model.traverse((child) => {
+            if (!child.isMesh || !child.material) return;
+
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            const styledMaterials = materials.map((material) => {
+                const nextMaterial = material.clone();
+                if (nextMaterial.color) nextMaterial.color.setHex(baseColor);
+                if (nextMaterial.map) nextMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                if ('roughness' in nextMaterial) nextMaterial.roughness = 1.0;
+                if ('metalness' in nextMaterial) nextMaterial.metalness = 0.02;
+                if ('emissive' in nextMaterial) {
+                    nextMaterial.emissive.setHex(0x050505);
+                    nextMaterial.emissiveIntensity = 0.08;
+                }
+                nextMaterial.needsUpdate = true;
+                return nextMaterial;
+            });
+
+            child.material = Array.isArray(child.material) ? styledMaterials : styledMaterials[0];
+        });
+    }
+
+    _styleAsteroidModel(model) {
+        model.traverse((child) => {
+            if (!child.isMesh || !child.material) return;
+
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            const styledMaterials = materials.map((material) => {
+                const nextMaterial = material.clone();
+                if (nextMaterial.color) nextMaterial.color.setHex(0x161616);
+                if (nextMaterial.map) nextMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                if ('roughness' in nextMaterial) nextMaterial.roughness = 1.0;
+                if ('metalness' in nextMaterial) nextMaterial.metalness = 0.0;
+                if ('emissive' in nextMaterial) {
+                    nextMaterial.emissive.setHex(0x000000);
+                    nextMaterial.emissiveIntensity = 0;
+                }
+                if ('envMapIntensity' in nextMaterial) nextMaterial.envMapIntensity = 0.15;
+                nextMaterial.needsUpdate = true;
+                return nextMaterial;
+            });
+
+            child.material = Array.isArray(child.material) ? styledMaterials : styledMaterials[0];
+        });
+    }
+
     _loadEnemyModel() {
         const loader = new GLTFLoader();
 
@@ -70,7 +144,6 @@ export class EnemyManager {
                 } else {
                     this[targetKey] = model;
                 }
-                console.log(`✅ ${targetKey} carregado com sucesso.`);
             }, undefined, (error) => {
                 console.error(`❌ Erro ao carregar ${path}:`, error);
             });
@@ -83,7 +156,14 @@ export class EnemyManager {
         loadModel('/assets/models/nave_mae.glb', 'naveMaeTemplate', [100, 100, 100], 0);
         loadModel('/assets/models/drone.glb', 'droneTemplate', [80, 80, 80], Math.PI);
         loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [15, 15, 15], 0);
-        loadModel('/assets/models/asteroid_ball.glb', 'asteroide', [8, 8, 8], 0, true);
+        loader.load('/assets/models/asteroid_ball.glb', (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(8, 8, 8);
+            this._styleAsteroidModel(model);
+            this.templates.asteroide = model;
+        }, undefined, (error) => {
+            console.error('❌ Erro ao carregar /assets/models/asteroid_ball.glb:', error);
+        });
         loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [35, 35, 35], 0);
     }
 
@@ -159,6 +239,11 @@ export class EnemyManager {
         }
 
         const enemy = selectedTemplate.clone();
+        if (type === 'asteroide') {
+        } else if (type === 'meteoro') {
+            this._addLocalGlow(enemy, 0xff8a3d);
+        }
+
         const camPos = new THREE.Vector3();
         this.camera.getWorldPosition(camPos);
         const camDirection = new THREE.Vector3();
@@ -213,6 +298,7 @@ export class EnemyManager {
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
             const data = enemy.userData;
+            const previousPosition = enemy.position.clone();
 
             if (data.type !== 'meteoro' && data.type !== 'asteroide') {
                 data.shootTimer -= deltaTime;
@@ -227,6 +313,10 @@ export class EnemyManager {
             if (data.type === 'drone' || data.type === 'meteoro' || data.type === 'asteroide') {
                 enemy.rotation.x += 0.015;
                 enemy.rotation.y += 0.015;
+            }
+
+            if (data.type !== 'meteoro' && data.type !== 'asteroide' && this._hitsAsteroid(enemy, i, previousPosition)) {
+                continue;
             }
 
             let foiAtingidoPorLaser = false;
@@ -271,6 +361,33 @@ export class EnemyManager {
                 this.enemies.splice(i, 1);
             }
         }
+    }
+
+    _hitsAsteroid(enemy, enemyIndex, previousPosition) {
+        const enemyType = enemy?.userData?.type;
+        if (!enemyType || enemyType === 'meteoro' || enemyType === 'asteroide') return false;
+
+        enemy.updateMatrixWorld(true);
+        const enemyBox = this.enemyCollisionBox.setFromObject(enemy);
+
+        for (let j = 0; j < this.enemies.length; j++) {
+            if (j === enemyIndex) continue;
+
+            const obstacle = this.enemies[j];
+            const obstacleType = obstacle?.userData?.type;
+            if (obstacleType !== 'asteroide' && obstacleType !== 'meteoro') continue;
+
+            obstacle.updateMatrixWorld(true);
+            const obstacleBox = this.obstacleCollisionBox.setFromObject(obstacle);
+
+            if (enemyBox.intersectsBox(obstacleBox)) {
+                enemy.position.copy(previousPosition);
+                enemy.userData.moveDir = enemy.userData.moveDir.clone().multiplyScalar(-0.15).normalize();
+                return true;
+            }
+        }
+
+        return false;
     }
 
     _enemyShoot(enemy, player, soundManager) {
