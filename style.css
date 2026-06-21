@@ -797,75 +797,71 @@ canvas {
 }
 
 
+/* ==================== AJUSTES MOBILE UNIFICADOS ==================== */
 @media (max-width: 768px) {
 
+    /* 1. UI (Score) */
     #ui {
-        top: 10px;
-
-        padding: 8px 15px;
-
-        gap: 12px;
-
-        font-size: 12px;
+        top: 10px !important;
+        left: 10px !important;
+        padding: 8px 15px !important;
+        gap: 5px !important; /* Reduzi o gap para economizar espaço */
+        width: 160px !important;
+        font-size: 10px !important;
     }
 
-    #score-val,
-    #level-val {
-        font-size: 16px;
+    #ui span {
+        font-size: 16px !important;
     }
-}
 
-
-/* MOBILE */
-@media (max-width: 768px) {
-
-   #nexusSelector {
-        top: 200px !important; /* Ajuste para telas pequenas */
-    }
+    /* 2. NEXUS SELECTOR */
+    #nexusSelector {
+        top: 120px !important; /* Desci para 120px para não bater no #ui */
+        left: 10px !important;
+        width: 160px !important;
+        padding: 8px !important;
     }
 
     .nexus-title {
-        font-size: 10px;
+        font-size: 10px !important;
     }
 
     #debugLevelSelect {
-        font-size: 10px;
-        padding: 8px;
+        font-size: 10px !important;
+        padding: 6px !important;
     }
 
     .nexus-status {
-        font-size: 8px;
+        font-size: 8px !important;
     }
 
-
-/* ==================== MOBILE ==================== */
-
-@media (max-width: 768px) {
-
+    /* 3. BOTÕES DE COMBATE */
     #btnShoot {
-        width: 90px;
-        height: 90px;
-        font-size: 34px;
-        bottom: 25px;
-        right: 20px;
+        width: 80px !important;
+        height: 80px !important;
+        font-size: 28px !important;
+        bottom: 20px !important;
+        right: 20px !important;
     }
 
     #btnMissile {
-        width: 68px;
-        height: 68px;
-        bottom: 130px;
-        right: 30px;
+        width: 60px !important;
+        height: 60px !important;
+        bottom: 110px !important;
+        right: 25px !important;
     }
 
     #btnPDC {
-        width: 68px;
-        height: 68px;
-        bottom: 210px;
-        right: 30px;
+        width: 60px !important;
+        height: 60px !important;
+        bottom: 180px !important;
+        right: 25px !important;
     }
 
     #btnPause {
-        width: 50px;
-        height: 50px;
+        width: 45px !important;
+        height: 45px !important;
+        top: 10px !important;
+        right: 10px !important;
     }
 }
