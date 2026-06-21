@@ -272,28 +272,41 @@ export class EnemyManager {
         this.enemies.push(enemy);
     }
 
-    update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
-        if (!player?.mesh || !deltaTime) return;
+  update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
+    if (!player?.mesh || !deltaTime) return;
 
-        const adjustedCooldown = Math.max(0.45, this.waveCooldown - (currentLevel * 0.012));
-        this.waveTimer += deltaTime;
-        if (this.waveTimer > adjustedCooldown) {
-            this.spawnWave(player, currentLevel);
-            this.waveTimer = 0;
+    // 1. Lógica de detecção de mudança de nível (Para disparar o Card)
+    if (this.lastLevel !== currentLevel) {
+        this.lastLevel = currentLevel;
+        // Dispara evento global que seu UI pode escutar para mostrar o card
+        window.dispatchEvent(new CustomEvent('levelChanged', { 
+            detail: { level: currentLevel } 
+        }));
+    }
+
+    // 2. Lógica de Spawning
+    const adjustedCooldown = Math.max(0.45, this.waveCooldown - (currentLevel * 0.012));
+    this.waveTimer += deltaTime;
+    if (this.waveTimer > adjustedCooldown) {
+        this.spawnWave(player, currentLevel);
+        this.waveTimer = 0;
+    }
+
+    // 3. Gerenciamento de Projéteis Inimigos
+    const pPos = new THREE.Vector3();
+    player.mesh.getWorldPosition(pPos);
+    const playerLasers = laserManager.lasers || [];
+
+    for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+        const p = this.enemyProjectiles[i];
+        p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
+        
+        // Verificação de distância otimizada
+        if (p.mesh.position.distanceTo(pPos) > 1500) {
+            this.scene.remove(p.mesh);
+            this.enemyProjectiles.splice(i, 1);
         }
-
-        const pPos = new THREE.Vector3();
-        player.mesh.getWorldPosition(pPos);
-        const playerLasers = laserManager.lasers || [];
-
-        for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
-            const p = this.enemyProjectiles[i];
-            p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
-            if (p.mesh.position.distanceTo(pPos) > 1500) {
-                this.scene.remove(p.mesh);
-                this.enemyProjectiles.splice(i, 1);
-            }
-        }
+    }
 
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];

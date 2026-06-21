@@ -8,6 +8,7 @@ import { EnemyManager } from './EnemyManager.js';
 import { ExplosionManager } from './ExplosionManager.js';
 import { SpaceEnvironment } from './SpaceEnvironment.js';
 import { ProgressionManager } from './ProgressionManager.js';
+import { getLevelData } from './getLevelData.js';
 
 window.moveInput = { x: 0, y: 0 };
 
@@ -79,6 +80,17 @@ function createVirtualJoystick() {
     setupJoystickEvents();
 }
 
+function updateLevelUI(currentLevel) {
+    const data = getLevelData(currentLevel);
+    
+    // Supondo que você tenha elementos HTML para isso
+    const titleElement = document.getElementById('zone-title');
+    const taskElement = document.getElementById('zone-task');
+    
+    titleElement.innerText = `NÍVEL ${currentLevel} - ${data.title}`;
+    taskElement.innerText = data.task;
+}
+
 function setupJoystickEvents() {
     joystickBase.addEventListener('touchstart', e => { e.preventDefault(); joystickActive = true; handleJoystick(e.touches[0]); });
     document.addEventListener('touchmove', e => { if (joystickActive) { e.preventDefault(); handleJoystick(e.touches[0]); }});
@@ -108,18 +120,31 @@ function handleJoystick(touch) {
     window.moveInput.y = dy / 55;
 }
 
-// ==================== LEVEL UP CARD ====================
-window.showLevelUp = function(level) {
+window.showLevelUp = function(level, message) {
     const existing = document.getElementById('level-up-card');
     if (existing) existing.remove();
 
     const card = document.createElement('div');
     card.id = 'level-up-card';
-    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:26px 50px;border-radius:18px;text-align:center;z-index:20000;color:rgba(255,255,255,0.96);pointer-events:none;background:transparent;`;
-    card.innerHTML = `<h2 style="color:#00ffff;margin:0;font-size:26px;">NOVA ZONA ALCANÇADA</h2><div style="font-size:78px;font-weight:bold;margin:12px 0;color:#00ffcc;">${level}</div>`;
+    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:30px;border-radius:18px;text-align:center;z-index:20000;color:white;pointer-events:none;background:rgba(0,0,0,0.7);border:1px solid #00ffff;backdrop-filter:blur(10px);`;
+    
+    card.innerHTML = `
+        <h2 style="color:#00ffff;margin:0;font-size:20px;text-transform:uppercase;letter-spacing:2px;">Zona Alcançada</h2>
+        <div style="font-size:60px;font-weight:bold;margin:10px 0;color:#fff;">${level}</div>
+        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message}</p>
+    `;
     document.body.appendChild(card);
-    setTimeout(() => card.remove(), 4500);
+    setTimeout(() => card.remove(), 5000); // Aumentei para 5s para dar tempo de ler
 };
+
+function getMissionText(level) {
+    if (level <= 5) return "Treinamento: Destrua dróides básicos para calibrar seus sistemas.";
+    if (level <= 20) return "Zona de Asteróides: Evite colisões e destrua as rochas instáveis.";
+    if (level <= 33) return "Bloqueio Hostil: Naves de combate interceptando. Priorize alvos pesados!";
+    if (level <= 50) return "Setor Alfa: Zona de conflito total. Mantenha fogo contínuo!";
+    if (level <= 100) return "Fronteira Final: Destrua a Nave-Mãe e encerre esta guerra!";
+    return "Sobreviva ao ataque e limpe o perímetro.";
+}
 
 // ==================== OUTRAS FUNÇÕES ====================
 function updateCamera() {
@@ -198,7 +223,6 @@ function startGame() {
     updateLevelHUD();
 }
 
-// Substitua sua função animate inteira
 function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
@@ -210,13 +234,19 @@ function animate() {
         const levelUp = progressionManager.addScore(pts);
 
         if (hitPosition) scorePopup.show(pts, hitPosition);
-        if (levelUp) {
-            updateLevelHUD();
-            updateEnvironmentTheme();
-            progressionManager.resetLevelResources();
-            syncLevelResources();
-            window.showLevelUp(progressionManager.getLevel());
-        }
+if (levelUp) {
+    updateLevelHUD();
+    updateEnvironmentTheme();
+    progressionManager.resetLevelResources();
+    syncLevelResources();
+
+    // Busca os dados configurados no seu arquivo getLevelData.js
+    const nivelAtual = progressionManager.getLevel();
+    const info = getLevelData(nivelAtual); 
+
+    // Agora passamos o Título e a Tarefa para a função de UI
+    window.showLevelUp(nivelAtual, info.title, info.task);
+}
     };
 
     const handlePlayerHit = () => {
