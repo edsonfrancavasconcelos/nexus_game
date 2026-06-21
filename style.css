@@ -822,7 +822,7 @@ canvas {
 
     /* 2. NEXUS SELECTOR - Reposicionado abaixo do HUD horizontal */
     #nexusSelector {
-        top: 60px !important; /* Bem mais próximo agora, já que o HUD é fino */
+        top:30px !important; /* Bem mais próximo agora, já que o HUD é fino */
         left: 10px !important;
         width: 160px !important;
         padding: 6px !important;
