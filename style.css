@@ -595,7 +595,7 @@ canvas {
 /* --- DEFINIÇÃO PADRÃO (DESKTOP) --- */
 #nexusSelector {
     position: fixed !important;
-    top: 350px !important; /* Padrão Desktop */
+    top: 100px !important; /* Padrão Desktop */
     left: 20px !important;
     width: 220px;
     padding: 12px;
