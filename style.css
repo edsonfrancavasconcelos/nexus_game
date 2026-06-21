@@ -816,10 +816,10 @@ canvas {
 
     /* 2. NEXUS SELECTOR */
     #nexusSelector {
-        top: 120px !important; /* Desci para 120px para não bater no #ui */
-        left: 10px !important;
-        width: 160px !important;
-        padding: 8px !important;
+        top: 100px !important; /* Desci para 120px para não bater no #ui */
+        left: 5px !important;
+        width: 100px !important;
+        padding: 4px !important;
     }
 
     .nexus-title {
