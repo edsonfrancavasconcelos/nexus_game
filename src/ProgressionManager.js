@@ -76,6 +76,14 @@ export class ProgressionManager {
         return this.level;
     }
 
+    setLevel(level) {
+        const nextLevel = Math.max(1, Math.floor(level || 1));
+        this.level = nextLevel;
+        this.enemiesDestroyed = 0;
+        this.resetLevelResources();
+        return this.level;
+    }
+
     getUpgradePoints() {
         return this.upgradePoints;
     }

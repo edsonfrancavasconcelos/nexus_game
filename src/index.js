@@ -115,7 +115,7 @@ window.showLevelUp = function(level) {
 
     const card = document.createElement('div');
     card.id = 'level-up-card';
-    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,20,40,0.14);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(0,255,255,0.14);padding:28px 56px;border-radius:16px;text-align:center;z-index:20000;box-shadow:0 0 16px rgba(0,255,255,0.12);color:rgba(255,255,255,0.82);opacity:0.42;pointer-events:none;`;
+    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:26px 50px;border-radius:18px;text-align:center;z-index:20000;color:rgba(255,255,255,0.96);pointer-events:none;background:transparent;`;
     card.innerHTML = `<h2 style="color:#00ffff;margin:0;font-size:26px;">NOVA ZONA ALCANÇADA</h2><div style="font-size:78px;font-weight:bold;margin:12px 0;color:#00ffcc;">${level}</div>`;
     document.body.appendChild(card);
     setTimeout(() => card.remove(), 4500);
@@ -161,7 +161,7 @@ function setupNexusSelector() {
     if (!select) return;
     select.addEventListener('change', (e) => {
         const nivel = parseInt(e.target.value);
-        progressionManager.getLevel = () => nivel;
+        progressionManager.setLevel(nivel);
         updateLevelHUD();
         updateEnvironmentTheme(nivel);
         if (currentState === GAME_STATE.PLAYING) {

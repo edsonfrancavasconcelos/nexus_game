@@ -31,30 +31,23 @@ canvas {
 
 /* ==================== INTERFACE DO JOGO (HUD VERTICAL) ==================== */
 #ui {
-    position: fixed;
-    top: 20px;
-    left: 20px;
+    position: fixed !important;
+    top: 20px !important;
+    left: 20px !important;
+    z-index: 900 !important; /* Camada inferior ao seletor */
     
     display: flex;
     flex-direction: column;
     gap: 8px;
-    
     padding: 15px 20px;
     width: 220px;
     
-    background: rgba(5, 10, 25, 0.75);
+    background: rgba(5, 10, 25, 0) !important;
     backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    
     border: 1px solid rgba(0, 255, 255, 0.3);
     border-radius: 12px;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.15);
-    
     color: white;
     font-family: 'Orbitron', Arial, sans-serif;
-    font-weight: 700;
-    letter-spacing: 1px;
-    z-index: 999;
     pointer-events: none;
 }
 
@@ -595,92 +588,68 @@ canvas {
 }
 
 #nexusSelector {
-    position: fixed;
+    position: fixed !important;
 
-    top: 90px;
-    left: 20px; /* era right */
-
-    width: 240px;
-
+    /* Aumentado para 280px para descer bem o seletor */
+    top: 350px !important; 
+    left: 20px !important;
+    
+    width: 220px;
     padding: 12px;
 
-    background: rgba(5,10,20,.85);
+    /* Mantendo transparente e sem fundo */
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-
-    border: 1px solid rgba(255,51,68,.35);
-
+    border: 1px solid rgba(255, 51, 68, 0.35);
     border-radius: 14px;
 
-    box-shadow:
-        0 0 20px rgba(255,51,68,.25),
-        inset 0 0 15px rgba(255,51,68,.08);
+    box-shadow: none !important;
 
-    z-index: 999;
-
+    z-index: 999 !important;
     transition: all .25s ease;
+    pointer-events: auto !important;
 }
 
 .nexus-title {
     color: #ff3344;
-
     font-weight: 800;
-
     font-size: 12px;
-
     letter-spacing: 1px;
-
     text-transform: uppercase;
-
     margin-bottom: 10px;
-
     padding-bottom: 6px;
-
-    border-bottom: 1px solid rgba(255,51,68,.4);
-
+    border-bottom: 1px solid rgba(255, 51, 68, 0.4);
     text-shadow: 0 0 8px #ff3344;
 }
 
 #debugLevelSelect {
     width: 100%;
-
     padding: 10px;
-
     border-radius: 8px;
-
-    background: rgba(0,0,0,.6);
-
+    
+    /* Fundo escuro leve apenas no select para manter leitura */
+    background: rgba(0, 0, 0, 0.4) !important;
     color: #ffffff;
-
-    border: 1px solid rgba(255,51,68,.4);
-
+    border: 1px solid rgba(255, 51, 68, 0.4);
     outline: none;
-
     cursor: pointer;
-
     font-size: 12px;
     font-weight: 700;
-
     transition: .25s;
 }
 
 #debugLevelSelect:hover {
     border-color: #ff3344;
-
-    box-shadow:
-        0 0 10px rgba(255,51,68,.4);
+    box-shadow: 0 0 10px rgba(255, 51, 68, 0.4);
 }
 
 .nexus-status {
     margin-top: 8px;
-
     font-size: 9px;
-
     color: #999;
-
     text-align: center;
-
     letter-spacing: 1px;
 }
 #ui {
@@ -697,13 +666,13 @@ canvas {
     padding: 15px 20px;
     width: 220px; /* Largura definida para o painel não ficar gigante */
 
-    background: rgba(5, 10, 20, 0.75);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 
     border: 1px solid rgba(0, 255, 255, 0.3);
     border-radius: 16px;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.15), inset 0 0 15px rgba(255, 255, 255, 0.04);
+    box-shadow: 0 0 14px rgba(0, 255, 255, 0.10);
 
     z-index: 999;
     color: white;
@@ -720,16 +689,30 @@ canvas {
     display: block; /* Garante que o número fique abaixo do texto */
 }
 #nexusSelector{
-    background: var(--glass-bg);
+    background: transparent;
 
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 
-    border: 1px solid rgba(255,51,68,.25);
+    border: 1px solid rgba(255,51,68,.35);
 
     box-shadow:
-        0 0 25px rgba(255,51,68,.18),
-        inset 0 0 15px rgba(255,255,255,.03);
+        0 0 18px rgba(255,51,68,.18);
+}
+
+/* Ajuste conforme o nome das suas classes */
+.score-card {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 100; /* Garante que o score fique por cima */
+}
+
+.seletor-card {
+    position: absolute;
+    top: 100px; /* Ajuste a posição para não ficar em cima do score */
+    left: 20px;
+    z-index: 50; 
 }
 #level-up-card {
     position: fixed;
@@ -740,10 +723,10 @@ canvas {
     /* Prioridade máxima de camada */
     z-index: 999999 !important; 
     
-    background: rgba(7, 12, 24, 0.16);
-    backdrop-filter: blur(10px) saturate(130%);
-    -webkit-backdrop-filter: blur(10px) saturate(130%);
-    border: 1px solid rgba(0, 255, 255, 0.12);
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid rgba(0, 255, 255, 0.22);
     padding: 30px 38px;
     border-radius: 18px;
     color: white;
@@ -753,9 +736,20 @@ canvas {
     pointer-events: none; 
     
     box-shadow:
-        0 0 16px rgba(0, 255, 255, 0.10),
-        inset 0 0 10px rgba(255, 255, 255, 0.03);
+        0 0 18px rgba(0, 255, 255, 0.20),
+        0 0 40px rgba(0, 255, 255, 0.08);
+    text-shadow:
+        0 0 10px rgba(0, 255, 255, 0.45),
+        0 0 22px rgba(0, 255, 204, 0.35);
     animation: fadeInOut 4s forwards;
+}
+
+.level-transition-card {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 #virtual-joystick {
     pointer-events: auto !important;
@@ -767,6 +761,39 @@ canvas {
     20% { opacity: 1; transform: translate(-50%, -50%); }
     80% { opacity: 1; transform: translate(-50%, -50%); }
     100% { opacity: 0; transform: translate(-50%, -40%); }
+}
+
+/* Garante que o card de transição fique no topo de tudo e sem fundo */
+#level-up-card {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    
+    z-index: 999999 !important; /* Prioridade máxima */
+    
+    background: transparent !important; /* Sem fundo */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important; /* Sem borda */
+    box-shadow: none !important; /* Sem sombra */
+    
+    color: white !important; /* Cor do texto */
+    text-align: center !important;
+    pointer-events: none !important; /* Para não bloquear cliques no jogo */
+    
+    /* Adicione estas linhas para garantir visibilidade */
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Limpeza extra para qualquer classe de transição */
+.level-transition-card {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 
@@ -792,13 +819,9 @@ canvas {
 /* MOBILE */
 @media (max-width: 768px) {
 
-    #nexusSelector {
-        top: 75px;
-        left: 10px;
-
-        width: 180px;
-
-        padding: 10px;
+   #nexusSelector {
+        top: 200px !important; /* Ajuste para telas pequenas */
+    }
     }
 
     .nexus-title {
@@ -813,7 +836,7 @@ canvas {
     .nexus-status {
         font-size: 8px;
     }
-}
+
 
 /* ==================== MOBILE ==================== */
 
