@@ -802,17 +802,18 @@ canvas {
 }
 
 
-/* ==================== AJUSTES MOBILE (HUD HORIZONTAL) ==================== */
+/* ==================== AJUSTES MOBILE UNIFICADOS ==================== */
 @media (max-width: 768px) {
 
-    /* 1. UI (Score) - Agora horizontal no mobile também */
+    /* 1. UI (Score) - Horizontal */
     #ui {
-        flex-direction: row !important; /* Mantém horizontal */
+        flex-direction: row !important;
         top: 10px !important;
         left: 10px !important;
-        padding: 5px 10px !important;
-        gap: 15px !important; 
-        width: auto !important; /* Ajusta ao conteúdo */
+        padding: 5px 12px !important;
+        gap: 15px !important;
+        width: auto !important;
+        min-width: 160px !important;
         font-size: 9px !important;
     }
 
@@ -820,54 +821,34 @@ canvas {
         font-size: 14px !important;
     }
 
-    /* 2. NEXUS SELECTOR - Reposicionado abaixo do HUD horizontal */
+    /* 2. NEXUS SELECTOR - Ajuste dinâmico */
     #nexusSelector {
-        top:30px !important; /* Bem mais próximo agora, já que o HUD é fino */
+        top: 60px !important; /* Padrão retrato */
         left: 10px !important;
-        width: 160px !important;
+        width: 150px !important;
         padding: 6px !important;
     }
 
-    .nexus-title {
-        font-size: 9px !important;
-    }
-
-    #debugLevelSelect {
-        font-size: 9px !important;
-        padding: 4px !important;
-    }
-
-    .nexus-status {
-        font-size: 7px !important;
-    }
+    .nexus-title { font-size: 9px !important; }
+    #debugLevelSelect { font-size: 9px !important; padding: 4px !important; }
+    .nexus-status { font-size: 7px !important; }
 
     /* 3. BOTÕES DE COMBATE */
-    #btnShoot {
-        width: 70px !important;
-        height: 70px !important;
-        font-size: 24px !important;
-        bottom: 15px !important;
-        right: 15px !important;
-    }
+    #btnShoot { width: 70px !important; height: 70px !important; font-size: 24px !important; bottom: 15px !important; right: 15px !important; }
+    #btnMissile { width: 55px !important; height: 55px !important; bottom: 95px !important; right: 20px !important; }
+    #btnPDC { width: 55px !important; height: 55px !important; bottom: 160px !important; right: 20px !important; }
+    #btnPause { width: 40px !important; height: 40px !important; top: 10px !important; right: 10px !important; }
+}
 
-    #btnMissile {
-        width: 55px !important;
-        height: 55px !important;
-        bottom: 95px !important;
-        right: 20px !important;
+/* 4. AJUSTE EXTRA PARA MODO PAISAGEM (LANDSCAPE) */
+@media (max-width: 768px) and (orientation: landscape) {
+    #nexusSelector {
+        top: 55px !important; /* Sobe um pouco mais para dar espaço */
+        width: 130px !important;
     }
-
-    #btnPDC {
-        width: 55px !important;
-        height: 55px !important;
-        bottom: 160px !important;
-        right: 20px !important;
-    }
-
-    #btnPause {
-        width: 40px !important;
-        height: 40px !important;
-        top: 10px !important;
-        right: 10px !important;
+    
+    /* Esconde status para ganhar espaço precioso em tela deitada */
+    .nexus-status {
+        display: none !important;
     }
 }
