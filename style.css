@@ -592,26 +592,18 @@ canvas {
     }
 }
 
+/* --- DEFINIÇÃO PADRÃO (DESKTOP) --- */
 #nexusSelector {
     position: fixed !important;
-
-    /* Aumentado para 280px para descer bem o seletor */
-    top: 350px !important; 
+    top: 350px !important; /* Padrão Desktop */
     left: 20px !important;
-    
     width: 220px;
     padding: 12px;
-
-    /* Mantendo transparente e sem fundo */
     background: transparent !important;
     backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-
     border: 1px solid rgba(255, 51, 68, 0.35);
     border-radius: 14px;
-
     box-shadow: none !important;
-
     z-index: 999 !important;
     transition: all .25s ease;
     pointer-events: auto !important;
@@ -801,33 +793,24 @@ canvas {
     box-shadow: none !important;
 }
 
-
-/* ==================== AJUSTES MOBILE UNIFICADOS ==================== */
+/* --- AJUSTES MOBILE UNIFICADOS --- */
 @media (max-width: 768px) {
-
-    /* 1. UI (Score) - Horizontal */
-    #ui {
-        flex-direction: row !important;
-        top: 10px !important;
-        left: 10px !important;
-        padding: 5px 12px !important;
-        gap: 15px !important;
-        width: auto !important;
-        min-width: 160px !important;
-        font-size: 9px !important;
-    }
-
-    #ui span {
-        font-size: 14px !important;
-    }
-
-    /* 2. NEXUS SELECTOR - Ajuste dinâmico */
+    
+    /* Força o seletor a subir no mobile */
     #nexusSelector {
-        top: 60px !important; /* Padrão retrato */
-        left: 10px !important;
+        top: 60px !important; 
         width: 150px !important;
         padding: 6px !important;
     }
+}
+
+/* --- AJUSTE PARA LANDSCAPE (DEITADO) --- */
+@media (max-width: 768px) and (orientation: landscape) {
+    #nexusSelector {
+        top: 55px !important;
+        width: 130px !important;
+    }
+}
 
     .nexus-title { font-size: 9px !important; }
     #debugLevelSelect { font-size: 9px !important; padding: 4px !important; }
@@ -838,7 +821,7 @@ canvas {
     #btnMissile { width: 55px !important; height: 55px !important; bottom: 95px !important; right: 20px !important; }
     #btnPDC { width: 55px !important; height: 55px !important; bottom: 160px !important; right: 20px !important; }
     #btnPause { width: 40px !important; height: 40px !important; top: 10px !important; right: 10px !important; }
-}
+
 
 /* 4. AJUSTE EXTRA PARA MODO PAISAGEM (LANDSCAPE) */
 @media (max-width: 768px) and (orientation: landscape) {
