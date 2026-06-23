@@ -612,48 +612,62 @@ canvas {
         font-size: 13px;                                   
     }
 }
-
-/* --- DEFINIÇÃO PADRÃO (DESKTOP CORRIGIDA) --- */
+/* --- PAINEL PRINCIPAL (SELETOR DE ZONA) --- */
 #nexusSelector {
-    position: fixed !important;
-    top: 100px !important; 
-    left: 20px !important;
-    width: 350px;             /* Aumentado de 220px para 350px */
-    padding: 20px;            /* Aumentado de 12px para 20px */
-    background: transparent !important;
-    backdrop-filter: none !important;
-    border: 1px solid rgba(255, 51, 68, 0.35);
-    border-radius: 14px;
-    box-shadow: none !important;
-    z-index: 999 !important;
-    transition: all .25s ease;
-    pointer-events: auto !important;
+    position: fixed;
+    top: 100px;
+    left: 20px;
+    width: 250px; /* Largura um pouco maior para evitar cortes */
+    padding: 20px;
+    box-sizing: border-box; /* Essencial: padding não aumenta o tamanho da div */
+    
+    background: rgba(0, 0, 0, 0.85); /* Fundo escuro com leve transparência */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    
+    border: 1px solid rgb(255, 75, 51);
+    border-radius: 16px;
+    box-shadow: 0 0 25px rgba(255, 51, 68, 0.25);
+    
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centraliza tudo horizontalmente */
+    gap: 10px;
 }
 
+/* Garante que textos internos não quebrem o layout */
+#nexusSelector > * {
+    width: 100%;
+    text-align: center;
+}
+
+/* Estilo do Título */
 .nexus-title {
-    color: #33ff47;
+    color: #fe0415;
     font-weight: 800;
-    font-size: 16px;          /* Aumentado de 10px para 16px */
-    letter-spacing: 1px;
+    font-size: 16px;
     text-transform: uppercase;
-    margin-bottom: 15px;      /* Aumentado de 10px para 15px */
-    padding-bottom: 8px;      /* Aumentado de 6px para 8px */
+    letter-spacing: 1.5px;
+    margin-bottom: 5px;
+    padding-bottom: 10px;
     border-bottom: 2px solid rgb(133, 51, 255);
-    text-shadow: 0 0 8px hsl(153, 94%, 49%);
+    text-shadow: 0 0 8px rgba(51, 255, 84, 0.6);
 }
 
+/* Select de Nível */
 #debugLevelSelect {
     width: 100%;
-    padding: 15px;            /* Aumentado de 10px para 15px */
-    border-radius: 8px;   
-    background: rgba(0, 0, 0, 0.198) !important;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.4);
     color: #ffffff;
     border: 2px solid rgba(54, 255, 51, 0.4);
     outline: none;
     cursor: pointer;
-    font-size: 24px;          /* Aumentado de 20px para 24px */
+    font-size: 20px;
     font-weight: 700;
-    transition: .25s;
+    transition: 0.3s;
 }
 
 #debugLevelSelect:hover {
@@ -661,35 +675,28 @@ canvas {
     box-shadow: 0 0 10px rgba(255, 51, 68, 0.4);
 }
 
+/* Texto de status */
 .nexus-status {
-    margin-top: 8px;
-    font-size: 15px;
+    font-size: 13px;
     color: #999;
-    text-align: center;
     letter-spacing: 1px;
 }
+
+/* --- PAINEL DE HUD (SUPERIOR ESQUERDO) --- */
 #ui {
     position: fixed;
     top: 20px;
-    left: 20px; /* Alinha na esquerda */
-    transform: none; /* Remove a centralização */
-    
+    left: 20px;
     display: flex;
-    flex-direction: column; /* Vertical */
-    align-items: flex-start; /* Alinha o texto à esquerda */
+    flex-direction: column;
+    align-items: flex-start;
     gap: 5px;
-
     padding: 15px 20px;
-    width: 220px; /* Largura definida para o painel não ficar gigante */
-
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-
+    width: 220px;
+    background: rgba(0, 0, 0, 0.5); /* Fundo ligeiro para legibilidade */
     border: 1px solid rgba(0, 255, 255, 0.3);
     border-radius: 16px;
-    box-shadow: 0 0 14px rgba(0, 255, 255, 0.10);
-
+    box-shadow: 0 0 14px rgba(0, 255, 255, 0.1);
     z-index: 999;
     color: white;
     font-family: 'Orbitron', Arial, sans-serif;
@@ -700,9 +707,9 @@ canvas {
 
 #ui span {
     color: #00ffff;
-    text-shadow: 0 0 8px #00ffff, 0 0 15px #00ffff;
-    font-size: 22px;
-    display: block; /* Garante que o número fique abaixo do texto */
+    text-shadow: 0 0 8px #00ffff;
+    font-size: 20px;
+    display: block;
 }
 #nexusSelector{
     background: transparent;
@@ -846,6 +853,24 @@ canvas {
     }
 }
 
+/* --- AJUSTES APENAS PARA MOBILE --- */
+@media (max-width: 1024px) {
+    /* Opção 1: Esconder completamente o botão se ele não for essencial */
+    .botao-que-atrapalha {
+        display: none !important;
+    }
+
+    /* Opção 2: Se precisar dele, mova-o para longe do joystick */
+    /* Exemplo: Se o joystick está na esquerda, jogue o botão para o canto superior direito */
+    .botao-que-atrapalha {
+        position: fixed;
+        bottom: auto;
+        top: 20px;
+        right: 20px;
+        left: auto;
+    }
+}
+
 /* --- AJUSTE PARA LANDSCAPE (DEITADO) --- */
 @media (max-width: 768px) and (orientation: landscape) {
     #nexusSelector {
@@ -854,8 +879,8 @@ canvas {
     }
 }
 
-    .nexus-title { font-size: 18px !important; }
-    #debugLevelSelect { font-size: 15px !important; padding: 4px !important; }
+    .nexus-title { font-size: 15px !important; }
+    #debugLevelSelect { font-size: 10px !important; padding: 8px !important; }
     .nexus-status { font-size: 10px !important; }
 
     /* 3. BOTÕES DE COMBATE */
