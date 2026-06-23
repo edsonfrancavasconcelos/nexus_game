@@ -777,8 +777,14 @@ canvas {
     box-shadow: none !important;
 }
 #virtual-joystick {
+    position: fixed !important;
+    bottom: 30px !important;
+    left: 30px !important;
+    width: 150px;
+    height: 150px;
+    z-index: 999999 !important;
     pointer-events: auto !important;
-    z-index: 999999 !important; /* Deve ser maior que o do canvas */
+    touch-action: none; /* Impede scroll da tela ao tocar */
 }
 
 @keyframes fadeInOut {
@@ -820,15 +826,16 @@ canvas {
     border: none !important;
     box-shadow: none !important;
 }
+
 #roll-controls {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%); /* Centraliza exatamente no meio */
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%);
     display: flex;
-    gap: 20px; /* Espaço entre os botões */
-    z-index: 9999;
-    pointer-events: auto; /* Garante que funcione o toque */
+    gap: 20px;
+    z-index: 9999 !important;
+    pointer-events: auto !important;
 }
 
 .game-btn {
