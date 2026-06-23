@@ -159,9 +159,9 @@ canvas {
 /* 1. O contêiner de controle precisa ter tamanho real e aceitar toque */
 #mobile-controls {
     position: fixed;
-    bottom: 20px; /* Sai do topo e vem para baixo */
+    bottom: 20px; 
     left: 20px;
-    width: 150px; /* Tamanho do joystick */
+    width: 150px;
     height: 150px;
     z-index: 1000;
     pointer-events: auto; /* IMPORTANTE: Agora ele aceita o clique */
@@ -187,12 +187,12 @@ canvas {
     top: 50%;   /* Move para o meio */
     left: 50%;  /* Move para o meio */
     transform: translate(-50%, -50%); /* Centraliza exatamente o centro do círculo */
-    box-shadow: 0 0 15px rgba(255, 69, 0, 0.6);
+    box-shadow: 0 0 15px rgba(0, 255, 47, 0.6);
 }
 
 /* ==================== ANIMAÇÕES VIA CSS ==================== */
 @keyframes logoGlow {
-    0% { filter: drop-shadow(0 0 10px #ff6a00) drop-shadow(0 0 20px #00f3ff); }
+  
     100% { filter: drop-shadow(0 0 20px #00ffff) drop-shadow(0 0 40px #00f3ff); }
 }
 
@@ -228,7 +228,7 @@ canvas {
     .game-lore { display: none; } /* Oculta a lore em telas deitadas curtas para dar espaço */
     #overlay button { padding: 10px 30px; font-size: 14px; }
     #shootBtn { width: 75px; height: 75px; bottom: 15px; right: 15px; }
-    #joystick-area { width: 95px; height: 95px; bottom: 15px; left: 15px; }
+  
 }
 /* ==================== BOTÕES DE COMBATE ==================== */
 
@@ -862,8 +862,7 @@ canvas {
         display: none !important;
     }
 
-    /* Opção 2: Se precisar dele, mova-o para longe do joystick */
-    /* Exemplo: Se o joystick está na esquerda, jogue o botão para o canto superior direito */
+  
     .botao-que-atrapalha {
         position: fixed;
         bottom: auto;
