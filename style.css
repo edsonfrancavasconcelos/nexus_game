@@ -871,6 +871,18 @@ canvas {
     }
 }
 
+/* --- AJUSTE RESPONSIVO PARA O SELETOR DE ZONA --- */
+@media (max-width: 850px) {
+    #nexusSelector {
+        /* Move o seletor para o topo, longe do joystick */
+        top: 80px !important; 
+        left: 50% !important;
+        transform: translateX(-50%); /* Centraliza no topo */
+        width: 90% !important;      /* Ajusta a largura para caber na tela */
+        max-width: 300px;
+    }
+}
+
 /* --- AJUSTE PARA LANDSCAPE (DEITADO) --- */
 @media (max-width: 768px) and (orientation: landscape) {
     #nexusSelector {
