@@ -5,24 +5,27 @@ export class Player {
     constructor(scene, laserManager) {
         this.scene = scene;
         this.laserManager = laserManager;
-        this.pdcActive = false; // Estado do PDC
-        this.missileCount = 10;  // Munição inicial de mísseis        
+        this.pdcActive = false;
+        this.missileCount = 10;
         this.pdcBurstCount = 30;
         this.pdcDurability = 100;
         this.isFiring = false;
         this.isPaused = false;
         this.collisionCooldown = 0;
+        
+        this.isRolling = false;
+        this.rollTimer = 0;
+        this.rollDuration = 4.0;
+        this.rollDirection = 1;
 
         this.mesh = new THREE.Group();
         this.mesh.name = "playerShip";
 
         this.shipModel = null;
         this.speed = 0.90;
-        
         this.pitch = 0;
         this.roll = 0;
         this.rotationSpeed = 8.0;
-
         this.velocity = new THREE.Vector2(0, 0);
 
         this.thrusters = [];
@@ -32,22 +35,19 @@ export class Player {
         this.particles = [];
         this.particleGeometry = new THREE.SphereGeometry(1.2, 5, 5); 
         this.particleMaterial = new THREE.MeshBasicMaterial({
-            color: 0xdddddd,          
+            color: 0xdddddd,
             transparent: true,
-            opacity: 0.18,            
-            blending: THREE.NormalBlending, 
+            opacity: 0.18,
+            blending: THREE.NormalBlending,
             depthWrite: false
         });
 
-        // 🛰️ CONFIGURAÇÃO PDC
         this.pdcRange = 650;
         this.pdcCooldown = 0.08;
         this.pdcTimer = 0;
         this.pdcProjectiles = [];
         this.pdcBulletGeo = new THREE.CylinderGeometry(0.35, 0.15, 6.0, 8);
         this.pdcBulletGeo.rotateX(Math.PI / 2);
-        
-        // CORREÇÃO: Usando MeshStandardMaterial para evitar erros de console
         this.pdcBulletMat = new THREE.MeshStandardMaterial({ 
             color: 0xffff00, 
             emissive: 0xff4400, 
@@ -79,39 +79,34 @@ export class Player {
         this._initTouchControls();
     }
 
-    repairPDC() {
-        this.pdcDurability = 100;
-    }
+    repairPDC() { this.pdcDurability = 100; }
 
     setLevelLoadout(loadout = {}) {
         this.missileCount = loadout.missiles ?? 10;
         this.pdcBurstCount = loadout.pdcBursts ?? 30;
     }
 
-    getAmmoStatus() {
-        return {
-            missiles: this.missileCount,
-            pdcBursts: this.pdcBurstCount
-        };
+    startBarrelRoll(dir) {
+        if (!this.isRolling) {
+            this.isRolling = true;
+            this.rollTimer = 0;
+            this.rollDirection = dir || 1;
+            console.log("Direção do Roll definida como:", this.rollDirection);
+        }
     }
 
-_updatePDC(enemyManager, dt) {
-        // 1. SE O PDC ESTIVER DESLIGADO, NÃO FAZ NADA (além de limpar projéteis antigos)
-        if (!this.pdcActive) {
+    getAmmoStatus() {
+        return { missiles: this.missileCount, pdcBursts: this.pdcBurstCount };
+    }
+
+    _updatePDC(enemyManager, dt) {
+        if (!this.pdcActive || this.pdcBurstCount <= 0) {
             this._updatePDCProjectiles(enemyManager, dt);
             return;
         }
-
-        if (this.pdcBurstCount <= 0) {
-            this._updatePDCProjectiles(enemyManager, dt);
-            return;
-        }
-
-        // 2. Lógica de busca de alvo
         this.pdcTimer += dt;
         let closestEnemy = null;
         let closestDist = Infinity;
-
         if (enemyManager?.enemies) {
             enemyManager.enemies.forEach((enemy) => {
                 const dist = this.mesh.position.distanceTo(enemy.position);
@@ -121,20 +116,16 @@ _updatePDC(enemyManager, dt) {
                 }
             });
         }
-
-        // 3. Só dispara se encontrar um inimigo E o timer permitir
         if (closestEnemy) {
             const targetPos = new THREE.Vector3();
             closestEnemy.getWorldPosition(targetPos);
             this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
-
             if (this.pdcTimer >= this.pdcCooldown) {
                 this.pdcBurstCount = Math.max(0, this.pdcBurstCount - 1);
                 this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
-                this.pdcTimer = 0; // Reseta o timer
+                this.pdcTimer = 0;
             }
         }
-
         this._updatePDCProjectiles(enemyManager, dt);
     }
 
@@ -144,75 +135,45 @@ _updatePDC(enemyManager, dt) {
             const spawnPos = new THREE.Vector3();
             cannon.container.getWorldPosition(spawnPos);
             bullet.position.copy(spawnPos);
-            
-            const spread = 0.4; 
+            const spread = 0.4;
             bullet.rotation.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
             this.scene.add(bullet);
-            
             if (i === 0 && window.soundManager) window.soundManager.play('pdc');
-
             const dir = new THREE.Vector3().subVectors(targetPos, spawnPos).normalize();
-            this.pdcProjectiles.push({ 
-                mesh: bullet, 
-                dir: dir, 
-                startTime: Date.now(),
-                offset: Math.random() * Math.PI * 2 
-            });
+            this.pdcProjectiles.push({ mesh: bullet, dir: dir, startTime: Date.now(), offset: Math.random() * Math.PI * 2 });
         }
     }
 
-    togglePDC() {
-        this.pdcActive = !this.pdcActive;
-        return this.pdcActive;
+    togglePDC() { this.pdcActive = !this.pdcActive; return this.pdcActive; }
+
+    fireMissile() {
+        if (this.missileCount <= 0) return false;
+        this.missileCount--;
+        const ship = this.shipModel || this.mesh;
+        ship.updateMatrixWorld();
+        const spawnPos = new THREE.Vector3();
+        const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
+        spawnPos.copy(noseLocal).applyMatrix4(ship.matrixWorld);
+        const missileQuat = new THREE.Quaternion();
+        ship.getWorldQuaternion(missileQuat);
+        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
+        spawnPos.addScaledVector(forward, 6);
+        if (this.laserManager && typeof this.laserManager.createMissile === 'function') {
+            this.laserManager.createMissile(spawnPos, missileQuat);
+        }
+        return true;
     }
-
-fireMissile() {
-    if (this.missileCount <= 0) return false;
-    this.missileCount--;
-
-    // 1. Referência do objeto
-    const ship = this.shipModel || this.mesh; 
-
-    // 2. Spawn na proa da nave, evitando nascer por baixo do casco
-    ship.updateMatrixWorld();
-    const spawnPos = new THREE.Vector3();
-    const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
-    spawnPos.copy(noseLocal).applyMatrix4(ship.matrixWorld);
-
-    const missileQuat = new THREE.Quaternion();
-    ship.getWorldQuaternion(missileQuat);
-
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
-    spawnPos.addScaledVector(forward, 6);
-
-    // 3. Captura rotação
-    
-    // 4. Disparo
-    if (this.laserManager && typeof this.laserManager.createMissile === 'function') {
-        this.laserManager.createMissile(spawnPos, missileQuat);
-    } else {
-        console.error("ERRO: laserManager ou createMissile não encontrado.");
-    }
-
-    return true;
-}
 
     _updatePDCProjectiles(enemyManager, dt) {
         const now = Date.now();
         for (let i = this.pdcProjectiles.length - 1; i >= 0; i--) {
             const b = this.pdcProjectiles[i];
             const elapsed = (now - b.startTime) * 0.04;
-            const waveX = Math.sin(elapsed * 8 + b.offset) * 3.0; 
-            const waveY = Math.cos(elapsed * 8 + b.offset) * 3.0;
-            
             const moveDir = b.dir.clone().multiplyScalar(2000 * dt);
             b.mesh.position.add(moveDir);
-            b.mesh.position.x += waveX * dt * 5;
-            b.mesh.position.y += waveY * dt * 5;
-            
+            b.mesh.position.x += Math.sin(elapsed * 8 + b.offset) * 3.0 * dt * 5;
+            b.mesh.position.y += Math.cos(elapsed * 8 + b.offset) * 3.0 * dt * 5;
             b.mesh.lookAt(b.mesh.position.clone().add(b.dir));
-            b.mesh.scale.set(1.5, 1.5, 1.5);
-
             let hit = false;
             if (enemyManager?.enemies) {
                 for (let j = enemyManager.enemies.length - 1; j >= 0; j--) {
@@ -229,7 +190,6 @@ fireMissile() {
                     }
                 }
             }
-
             if (hit || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
                 this.scene.remove(b.mesh);
                 this.pdcProjectiles.splice(i, 1);
@@ -242,12 +202,11 @@ fireMissile() {
         loader.load('/assets/models/nave_game.glb', (gltf) => {
             this.shipModel = gltf.scene;
             this.shipModel.scale.set(2, 2, 2);
-         this.shipModel.rotation.set(0, Math.PI, 0);          
             this.shipModel.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
-                    if(child.material) child.material.precision = "mediump";
+                    if (child.material) child.material.precision = "mediump";
                 }
             });
             this.mesh.add(this.shipModel);
@@ -261,9 +220,6 @@ fireMissile() {
         const bottomLight = new THREE.PointLight(0xaaffff, 120, 60);
         bottomLight.position.set(0, -2.5, -4);
         this.shipModel.add(bottomLight);
-        const topLight = new THREE.PointLight(0xffffff, 100, 50);
-        topLight.position.set(0, 4.5, -4);
-        this.shipModel.add(topLight);
         this.fuselageLight = bottomLight;
     }
 
@@ -288,12 +244,14 @@ fireMissile() {
     }
 
     _initKeyboard() {
-        const handleKey = (e, val) => {
-            if (e.code === 'KeyF' || e.code === 'Space') this.isFiring = val;
-            if (val && !e.repeat && (e.code === 'KeyM' || e.code === 'KeyA')) this.fireMissile();
-        };
-        window.addEventListener('keydown', (e) => handleKey(e, true));
-        window.addEventListener('keyup', (e) => handleKey(e, false));
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyF' || e.code === 'Space') this.isFiring = true;
+            if (!e.repeat && (e.code === 'KeyM' || e.code === 'KeyA')) this.fireMissile();
+            if (e.code === 'KeyR') this.startBarrelRoll();
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyF' || e.code === 'Space') this.isFiring = false;
+        });
     }
 
     _initTouchControls() {
@@ -301,7 +259,6 @@ fireMissile() {
         if (shootBtn) {
             shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.isFiring = true; });
             shootBtn.addEventListener('pointerup', (e) => { e.preventDefault(); this.isFiring = false; });
-            shootBtn.addEventListener('pointerleave', (e) => { this.isFiring = false; });
         }
     }
 
@@ -317,136 +274,78 @@ fireMissile() {
         this.shipModel.getWorldQuaternion(modelQuaternion);
         direction.applyQuaternion(modelQuaternion).normalize();
         [this.gunLeft, this.gunRight, this.gunNose].forEach(localPos => {
-            const worldPos = new THREE.Vector3();
-            worldPos.setFromMatrixPosition(new THREE.Matrix4().multiplyMatrices(this.shipModel.matrixWorld, new THREE.Matrix4().setPosition(localPos)));
-            this.laserManager.fire(worldPos, direction); 
+            const worldPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().multiplyMatrices(this.shipModel.matrixWorld, new THREE.Matrix4().setPosition(localPos)));
+            this.laserManager.fire(worldPos, direction);
         });
     }
 
     _emitHeatWash() {
         if (!this.mesh || !this.shipModel || !this.thrusterLocalPos) return;
         this.mesh.updateMatrixWorld();
-        const worldPos = new THREE.Vector3();
-        worldPos.copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
-        for(let k = 0; k < 2; k++) {
-            const particleMesh = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
-            particleMesh.position.set(worldPos.x + (Math.random() - 0.5) * 1.5, worldPos.y + (Math.random() - 0.5) * 1.5, worldPos.z);
-            this.scene.add(particleMesh);
-            this.particles.push({ mesh: particleMesh, life: 1.0, speedZ: 180, driftX: (Math.random() - 0.5) * 4, driftY: (Math.random() - 0.5) * 4 });
+        const worldPos = new THREE.Vector3().copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
+        for (let k = 0; k < 2; k++) {
+            const p = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
+            p.position.set(worldPos.x + (Math.random() - 0.5) * 1.5, worldPos.y + (Math.random() - 0.5) * 1.5, worldPos.z);
+            this.scene.add(p);
+            this.particles.push({ mesh: p, life: 1.0, speedZ: 180, driftX: (Math.random() - 0.5) * 4, driftY: (Math.random() - 0.5) * 4 });
         }
     }
-update(moveInput, deltaTime, enemyManager, onPlayerHit = null) { 
-    if (!this.shipModel || this.isPaused) return;
-    const previousPosition = this.mesh.position.clone();
-    if (this.collisionCooldown > 0) this.collisionCooldown = Math.max(0, this.collisionCooldown - deltaTime);
-    
-    const inputX = -moveInput.x;
-    const inputY = moveInput.y; 
-    const dt = Math.min(deltaTime, 0.1);
-    
-    // Diminua o acel para a nave demorar mais a ganhar velocidade
-    const acel = 20.0; 
-    
-    this.velocity.x += inputX * acel * dt;
-    this.velocity.y += inputY * acel * dt;
-    
-    // Atrito: quanto menor, mais a nave "escorrega". 
-    // Mantenha próximo de 0.88 - 0.92 para um bom equilíbrio
-    this.velocity.multiplyScalar(0.90); 
 
-    // AQUI ESTÁ O SEGREDO: Diminua esse '10' para um valor menor (ex: 4 ou 5)
-    // Isso reduz o deslocamento por frame, deixando a nave mais lenta.
-    const movimentoSuave = 2.0; 
-    this.mesh.position.x += this.velocity.x * dt * 2;
-    this.mesh.position.y += this.velocity.y * dt * 2;
+    update(moveInput, deltaTime, enemyManager, onPlayerHit = null) {
+        if (!this.shipModel || this.isPaused) return;
+        const dt = Math.min(deltaTime, 0.1);
 
-    // ... o restante do seu código ...
-    
-    const limiteX = 350;
-    const limiteY = 250;
-    if (this.mesh.position.x > limiteX) this.mesh.position.x = -limiteX;
-    else if (this.mesh.position.x < -limiteX) this.mesh.position.x = limiteX;
-    if (this.mesh.position.y > limiteY) this.mesh.position.y = -limiteY;
-    else if (this.mesh.position.y < -limiteY) this.mesh.position.y = limiteY;
+        // 1. MOVIMENTO
+        const acel = 50.0;
+        this.velocity.x += (-moveInput.x) * acel * dt;
+        this.velocity.y += (moveInput.y) * acel * dt;
+        this.velocity.multiplyScalar(0.90);
+        this.mesh.position.x += this.velocity.x * dt * 4;
+        this.mesh.position.y += this.velocity.y * dt * 4;
 
-    if (enemyManager?.enemies?.length && this._isCollidingWithAsteroid(enemyManager)) {
-        this.mesh.position.copy(previousPosition);
-        this.velocity.multiplyScalar(0.2);
+        // 2. LÓGICA DE ROTAÇÃO (Centralizada no Pivot)
+        if (this.isRolling) {
+            this.rollTimer += dt;
+            let progress = Math.min(this.rollTimer / this.rollDuration, 1.0);
+            const smoothProgress = progress * progress * (3 - 2 * progress);
+            const angle = smoothProgress * (Math.PI * 2) * this.rollDirection;
+            this.shipModel.rotation.set(0, Math.PI, angle);
+
+            if (this.rollTimer >= this.rollDuration) {
+                this.isRolling = false;
+                this.rollTimer = 0;
+                this.shipModel.rotation.set(0, Math.PI, 0);
+            }
+        } else {
+            // Controle normal
+            this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.5, 0.1);
+            this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.7, 0.1);
+            this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
+        }
+
+        // 3. RESTO DA LÓGICA
         this.mesh.updateMatrixWorld();
+        if (this.isFiring) this._shoot();
+        this._updatePDC(enemyManager, dt);
+        this._emitHeatWash();
 
-        if (this.collisionCooldown <= 0 && typeof onPlayerHit === 'function') {
-            onPlayerHit();
-            this.collisionCooldown = 1.1;
-        }
-    }
-
-const suavidade = 0.01; // Quanto menor este número, mais "pesada" a nave parece girar
-
-this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.5, suavidade);
-this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.7, suavidade);
-this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
-    this.mesh.updateMatrixWorld();
-    
-    if (this.isFiring) this._shoot();
-    this._updatePDC(enemyManager, dt);
-    this._emitHeatWash();
-
-        
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
-            p.mesh.position.z += p.speedZ * dt; 
-            p.mesh.position.x += p.driftX * dt;
-            p.mesh.position.y += p.driftY * dt;
-            p.life -= dt * 4.0; 
-            const currentScale = (1.0 - p.life) * 4.0 + 1.0; 
-            p.mesh.scale.set(currentScale, currentScale, currentScale);
-            p.mesh.material.opacity = p.life * 0.18;
-            if (p.life <= 0) { 
-                this.scene.remove(p.mesh); 
-                p.mesh.geometry.dispose(); 
-                p.mesh.material.dispose(); 
-                this.particles.splice(i, 1); 
-            }
+            p.mesh.position.z += p.speedZ * dt;
+            p.life -= dt * 4.0;
+            if (p.life <= 0) { this.scene.remove(p.mesh); this.particles.splice(i, 1); }
         }
-
-        const debugPanel = document.getElementById('debugPanel');
-    const shootBtn = document.getElementById('shootBtn');
-    
-    const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputY) > 0.05;
-
-    if (debugPanel) {
-        if (isMoving) {
-            debugPanel.style.opacity = '0';
-            debugPanel.style.pointerEvents = 'none';
-        } else {
-            debugPanel.style.opacity = '1';
-            debugPanel.style.pointerEvents = 'auto';
-        }
-    }        
-        const time = Date.now() * 0.003;
-        if (this.fuselageLight) this.fuselageLight.intensity = 110 + Math.sin(time * 2) * 20;
-        this.thrusters.forEach((t) => { 
-            t.core.scale.set(0.8, 1 + Math.sin(time * 10) * 0.1, 0.8); 
-            t.light.intensity = 100 + Math.sin(time * 50) * 30; 
-        });
     }
 
     _isCollidingWithAsteroid(enemyManager) {
         this.mesh.updateMatrixWorld(true);
         const playerBox = new THREE.Box3().setFromObject(this.mesh);
-
         for (const enemy of enemyManager.enemies) {
-            const type = enemy?.userData?.type;
-            if (type !== 'asteroide' && type !== 'meteoro') continue;
-
-            enemy.updateMatrixWorld(true);
-            const asteroidBox = new THREE.Box3().setFromObject(enemy);
-
-            if (playerBox.intersectsBox(asteroidBox)) {
-                return true;
+            if (enemy?.userData?.type === 'asteroide' || enemy?.userData?.type === 'meteoro') {
+                enemy.updateMatrixWorld(true);
+                if (playerBox.intersectsBox(new THREE.Box3().setFromObject(enemy))) return true;
             }
         }
-
         return false;
     }
 }

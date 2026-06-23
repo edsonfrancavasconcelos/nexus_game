@@ -34,7 +34,6 @@
             <button id="start-btn">LIGAR MOTORES DA NAVE</button>
         </div>
     </div>
-
     <div id="mobile-controls">
         <div id="joystick-area">
             <div id="stick"></div>
@@ -42,23 +41,29 @@
     </div>
 
     <div id="nexusSelector">
-    <div class="nexus-title">
-        🛸 NEXUS: SELETOR DE ZONA
-    </div>
+        <div class="nexus-title">
+            🛸 NEXUS: SELETOR DE ZONA
+        </div>
 
-    <select id="debugLevelSelect">
-        <option value="1">ZONA 01: SETOR ALPHA</option>
-        <option value="21">ZONA 21: GIGANTES TIPO 05</option>
-        <option value="31">ZONA 31: GIGANTES TIPO 10</option>
-        <option value="51">ZONA 51: GIGANTES TIPO 15</option>
-    </select>
+        <select id="debugLevelSelect">
+            <option value="1">ZONA 01: SETOR ALPHA</option>
+            <option value="21">ZONA 21: GIGANTES TIPO 05</option>
+            <option value="31">ZONA 31: GIGANTES TIPO 10</option>
+            <option value="51">ZONA 51: GIGANTES TIPO 15</option>
+        </select>
 
-    <div class="nexus-status">
-        SISTEMA DE TESTE DE NÍVEIS ATIVO
+        <div class="nexus-status">
+            SISTEMA DE TESTE DE NÍVEIS ATIVO
+        </div>
     </div>
-</div>
 
     <div id="cockpit-ui">
+        <!-- BOTÕES DE PARAFUSO (ROLL) AGORA AQUI DENTRO, TODOS JUNTOS -->
+        <div id="roll-controls">
+            <button id="btnRollLeft" class="game-btn">ROLL ◄</button>
+            <button id="btnRollRight" class="game-btn">ROLL ►</button>
+        </div>
+
         <button id="btnMissile" class="control-btn">
             <img src="/assets/img/missel.png" alt="Míssil" style="width: 55%; height: 55%; pointer-events: none;">
         </button>
@@ -73,10 +78,10 @@
         
         <button id="btnPause" class="control-btn">
             <img src="/assets/img/pause.png" alt="Pausar" style="width: 50%; height: 50%; pointer-events: none;">
-        </button>
+        </button> 
     </div>
+ 
 
     <script type="module" src="/src/index.js"></script>
-    s
 </body>
 </html>

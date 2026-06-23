@@ -170,8 +170,14 @@ export class SpaceEnvironment {
         this.applyTheme(this.themes[nextIndex]);
     }
 
-    update(deltaTime, playerPosition, moveInput) {
-        if (this.globe) {
+   update(deltaTime, playerPosition, moveInput, currentLevel = 1) { // Adicione currentLevel aqui
+    if (this.globe) {
+        // --- LÓGICA DE VISIBILIDADE ---
+        // Se for maior que 20, escondemos o planeta
+        this.globe.visible = (currentLevel <= 20);
+
+        // Se o planeta estiver invisível, talvez você queira parar a animação dele também
+        if (this.globe.visible) {
             this.globe.position.z += 28 * deltaTime;
             this.globe.position.x *= 0.993;
             this.globe.position.y = -620 + Math.sin(Date.now() * 0.00035) * 90;
@@ -184,6 +190,7 @@ export class SpaceEnvironment {
                 this.scene.remove(this.globe);
                 this.globe = null;
             }
+        }
         }
 
         const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;

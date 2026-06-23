@@ -149,16 +149,16 @@ export class EnemyManager {
             });
         };
 
-        loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [40, 40, 40], 0);
-        loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [40, 40, 40], Math.PI / 2);
+        loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [30, 30, 30], 0);
+        loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [30, 30, 30], Math.PI / 2);
         loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [30, 30, 30], 0);
-        loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [10, 10, 10], 0);
+        loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [30, 30, 30], 0);
         loadModel('/assets/models/nave_mae.glb', 'naveMaeTemplate', [100, 100, 100], 0);
         loadModel('/assets/models/drone.glb', 'droneTemplate', [80, 80, 80], Math.PI);
         loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [15, 15, 15], 0);
         loader.load('/assets/models/asteroid_ball.glb', (gltf) => {
             const model = gltf.scene;
-            model.scale.set(8, 8, 8);
+            model.scale.set(6, 6, 6);
             this._styleAsteroidModel(model);
             this.templates.asteroide = model;
         }, undefined, (error) => {
@@ -351,7 +351,7 @@ export class EnemyManager {
                         data.hp--;
 
                         if (data.hp <= 0) {
-                            let pontos = (data.type === 'meteoro' || data.type === 'asteroide') ? 500 : (data.type === 'drone' ? 250 : (data.type === 'roblox' ? 150 : 100));
+                            let pontos = (data.type === 'meteoro' || data.type === 'asteroide') ? 500 : (data.type === 'drone' ? 300 : (data.type === 'roblox' ? 250 : 1000));
                             if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
                             foiAtingidoPorLaser = true;
                         }

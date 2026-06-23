@@ -82,13 +82,20 @@ function createVirtualJoystick() {
 
 function updateLevelUI(currentLevel) {
     const data = getLevelData(currentLevel);
-    
-    // Supondo que você tenha elementos HTML para isso
-    const titleElement = document.getElementById('zone-title');
-    const taskElement = document.getElementById('zone-task');
-    
-    titleElement.innerText = `NÍVEL ${currentLevel} - ${data.title}`;
-    taskElement.innerText = data.task;
+    const titleElement = document.querySelector('.nexus-title');
+    const taskElement = document.querySelector('.nexus-status');
+
+    if (titleElement && taskElement) {
+        titleElement.innerText = `NÍVEL ${currentLevel} - ${data.title}`;
+        taskElement.innerText = data.task;
+
+        // DEBUG VISUAL: Força o estilo se estiver escondido
+        titleElement.style.display = 'block'; 
+        titleElement.style.color = '#00ffff'; // Cor neon visível
+        console.log("UI atualizada e estilo forçado.");
+    } else {
+        console.warn("Elementos não encontrados!");
+    }
 }
 
 function setupJoystickEvents() {
@@ -201,19 +208,23 @@ async function initGame() {
     createVirtualJoystick();
     setupNexusSelector();
 }
-
 function startGame() {
     if (currentState === GAME_STATE.PLAYING) return;
     currentState = GAME_STATE.PLAYING;
     score = 0;
 
     document.getElementById('overlay').style.display = 'none';
-    document.getElementById('nexusSelector').style.display = 'none';
+    document.getElementById('nexusSelector').style.display = 'none'; 
 
     player.mesh.position.set(0, -1, 8);
     enemyManager.clearAllEnemies();
 
-    enemyManager.spawnWave(player, progressionManager.getLevel());
+    const nivelInicial = progressionManager.getLevel();
+    enemyManager.spawnWave(player, nivelInicial);
+    
+    // ATUALIZAÇÃO DA UI AO INICIAR
+    updateLevelUI(nivelInicial); 
+    
     updateEnvironmentTheme();
     progressionManager.resetLevelResources();
     syncLevelResources();
@@ -241,7 +252,8 @@ if (levelUp) {
     syncLevelResources();
 
     // Busca os dados configurados no seu arquivo getLevelData.js
-    const nivelAtual = progressionManager.getLevel();
+const nivelAtual = progressionManager.getLevel(); // Obtenha o nível aqui
+player.update(input, deltaTime, enemyManager, handlePlayerHit);
     const info = getLevelData(nivelAtual); 
 
     // Agora passamos o Título e a Tarefa para a função de UI
@@ -272,8 +284,14 @@ if (levelUp) {
         };
 
         player.update(input, deltaTime, enemyManager, handlePlayerHit);
-        if (spaceEnvironment) spaceEnvironment.update(deltaTime, player.mesh.position, input);
-
+       if (spaceEnvironment) {
+        spaceEnvironment.update(
+            deltaTime, 
+            player.mesh.position, 
+            input, 
+            progressionManager.getLevel() // Passando o nível aqui!
+        );
+    }
         // --- ATUALIZAÇÃO DE SCORE E NÍVEL ---
         enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
 
@@ -287,8 +305,50 @@ if (levelUp) {
 
 window.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('start-btn');
+
+
+window.addEventListener('keydown', (e) => {
+    // Q para Esquerda (-1)
+    if (e.code === 'KeyQ') {
+        player.startBarrelRoll(-1);
+    }
+    // E para Direita (1)
+    if (e.code === 'KeyE') {
+        player.startBarrelRoll(1);
+    }
+});
+
+const btnLeft = document.getElementById('btnRollLeft');
+const btnRight = document.getElementById('btnRollRight');
+
+
+btnLeft.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation(); 
+    player.startBarrelRoll(-1); 
+});
+
+window.addEventListener('levelChanged', (e) => {
+    const level = e.detail.level;
+    const data = getLevelData(level); // Aqui chamamos a função que você mostrou!
     
-    // Função unificada de início
+    // Agora, atualize os elementos HTML na tela
+    const titleElement = document.getElementById('nexus-title'); // Ajuste o ID conforme seu HTML
+    const taskElement = document.getElementById('nexus-status');
+    
+    if (titleElement) titleElement.innerText = data.title;
+    if (taskElement) taskElement.innerText = data.task;
+    
+    console.log(`Nível mudou para ${level}: ${data.title}`);
+});
+
+btnRight.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    player.startBarrelRoll(1);
+});
+    
+  
     const handleStart = async (e) => {
         if (e) e.preventDefault();
         

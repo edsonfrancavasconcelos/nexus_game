@@ -156,15 +156,36 @@ canvas {
     box-shadow: 0 0 30px #00ffff;
 }
 
-/* Mobile Controls (Corrigido o nome do botão para shootBtn) */
+/* 1. O contêiner de controle precisa ter tamanho real e aceitar toque */
 #mobile-controls {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 50;
-    pointer-events: none;
+    bottom: 20px; /* Sai do topo e vem para baixo */
+    left: 20px;
+    width: 150px; /* Tamanho do joystick */
+    height: 150px;
+    z-index: 1000;
+    pointer-events: auto; /* IMPORTANTE: Agora ele aceita o clique */
+}
+
+/* 2. Garanta que a área do joystick seja visível */
+#joystick-area {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    position: relative;
+    pointer-events: auto;
+}
+
+#stick {
+    width: 50px;
+    height: 50px;
+    background: rgba(0, 255, 255, 0.8);
+    border-radius: 50%;
+    position: absolute;
+    top: 50px; /* Centralizado no meio da area */
+    left: 50px;
 }
 
 /* ==================== ANIMAÇÕES VIA CSS ==================== */
@@ -592,13 +613,13 @@ canvas {
     }
 }
 
-/* --- DEFINIÇÃO PADRÃO (DESKTOP) --- */
+/* --- DEFINIÇÃO PADRÃO (DESKTOP CORRIGIDA) --- */
 #nexusSelector {
     position: fixed !important;
-    top: 100px !important; /* Padrão Desktop */
+    top: 100px !important; 
     left: 20px !important;
-    width: 220px;
-    padding: 12px;
+    width: 350px;             /* Aumentado de 220px para 350px */
+    padding: 20px;            /* Aumentado de 12px para 20px */
     background: transparent !important;
     backdrop-filter: none !important;
     border: 1px solid rgba(255, 51, 68, 0.35);
@@ -610,41 +631,39 @@ canvas {
 }
 
 .nexus-title {
-    color: #ff3344;
+    color: #33ff47;
     font-weight: 800;
-    font-size: 12px;
+    font-size: 16px;          /* Aumentado de 10px para 16px */
     letter-spacing: 1px;
     text-transform: uppercase;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid rgba(255, 51, 68, 0.4);
-    text-shadow: 0 0 8px #ff3344;
+    margin-bottom: 15px;      /* Aumentado de 10px para 15px */
+    padding-bottom: 8px;      /* Aumentado de 6px para 8px */
+    border-bottom: 2px solid rgb(133, 51, 255);
+    text-shadow: 0 0 8px hsl(153, 94%, 49%);
 }
 
 #debugLevelSelect {
     width: 100%;
-    padding: 10px;
-    border-radius: 8px;
-    
-    /* Fundo escuro leve apenas no select para manter leitura */
-    background: rgba(0, 0, 0, 0.4) !important;
+    padding: 15px;            /* Aumentado de 10px para 15px */
+    border-radius: 8px;   
+    background: rgba(0, 0, 0, 0.198) !important;
     color: #ffffff;
-    border: 1px solid rgba(255, 51, 68, 0.4);
+    border: 2px solid rgba(54, 255, 51, 0.4);
     outline: none;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 24px;          /* Aumentado de 20px para 24px */
     font-weight: 700;
     transition: .25s;
 }
 
 #debugLevelSelect:hover {
-    border-color: #ff3344;
+    border-color: #33ffcc;
     box-shadow: 0 0 10px rgba(255, 51, 68, 0.4);
 }
 
 .nexus-status {
     margin-top: 8px;
-    font-size: 9px;
+    font-size: 15px;
     color: #999;
     text-align: center;
     letter-spacing: 1px;
@@ -691,10 +710,10 @@ canvas {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 
-    border: 1px solid rgba(255,51,68,.35);
+    border: 1px solid rgb(255, 75, 51);
 
     box-shadow:
-        0 0 18px rgba(255,51,68,.18);
+        0 0 25px rgba(255,51,68,.18);
 }
 
 /* Ajuste conforme o nome das suas classes */
@@ -792,6 +811,29 @@ canvas {
     border: none !important;
     box-shadow: none !important;
 }
+#roll-controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%); /* Centraliza exatamente no meio */
+    display: flex;
+    gap: 20px; /* Espaço entre os botões */
+    z-index: 9999;
+    pointer-events: auto; /* Garante que funcione o toque */
+}
+
+.game-btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: rgba(0, 255, 255, 0.3);
+    border: 2px solid #00ffff;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    touch-action: manipulation; /* Melhora a resposta no touch */
+}
 
 /* --- AJUSTES MOBILE UNIFICADOS --- */
 @media (max-width: 768px) {
@@ -812,9 +854,9 @@ canvas {
     }
 }
 
-    .nexus-title { font-size: 9px !important; }
-    #debugLevelSelect { font-size: 9px !important; padding: 4px !important; }
-    .nexus-status { font-size: 7px !important; }
+    .nexus-title { font-size: 18px !important; }
+    #debugLevelSelect { font-size: 15px !important; padding: 4px !important; }
+    .nexus-status { font-size: 10px !important; }
 
     /* 3. BOTÕES DE COMBATE */
     #btnShoot { width: 70px !important; height: 70px !important; font-size: 24px !important; bottom: 15px !important; right: 15px !important; }
