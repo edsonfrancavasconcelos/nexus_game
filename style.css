@@ -167,30 +167,32 @@ canvas {
     pointer-events: auto; /* IMPORTANTE: Agora ele aceita o clique */
 }
 
-/* 2. Garanta que a área do joystick seja visível */
 #joystick-area {
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.1);
+    width: 150px; /* Defina um tamanho fixo para a área */
+    height: 150px;
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.3);
     position: relative;
     pointer-events: auto;
+    touch-action: none; /* ESSENCIAL para o mobile não rolar a tela */
 }
 
 #stick {
-    width: 50px;
-    height: 50px;
-    background: rgba(0, 255, 255, 0.8);
+    width: 60px;
+    height: 60px;
+    background: radial-gradient(circle, #ff8933, #ff4500); /* Visual mais "tech" */
     border-radius: 50%;
     position: absolute;
-    top: 50px; /* Centralizado no meio da area */
-    left: 50px;
+    top: 50%;   /* Move para o meio */
+    left: 50%;  /* Move para o meio */
+    transform: translate(-50%, -50%); /* Centraliza exatamente o centro do círculo */
+    box-shadow: 0 0 15px rgba(255, 69, 0, 0.6);
 }
 
 /* ==================== ANIMAÇÕES VIA CSS ==================== */
 @keyframes logoGlow {
-    0% { filter: drop-shadow(0 0 10px #00ffff) drop-shadow(0 0 20px #00f3ff); }
+    0% { filter: drop-shadow(0 0 10px #ff6a00) drop-shadow(0 0 20px #00f3ff); }
     100% { filter: drop-shadow(0 0 20px #00ffff) drop-shadow(0 0 40px #00f3ff); }
 }
 
@@ -871,17 +873,7 @@ canvas {
     }
 }
 
-/* --- AJUSTE RESPONSIVO PARA O SELETOR DE ZONA --- */
-@media (max-width: 850px) {
-    #nexusSelector {
-        /* Move o seletor para o topo, longe do joystick */
-        top: 80px !important; 
-        left: 50% !important;
-        transform: translateX(-50%); /* Centraliza no topo */
-        width: 90% !important;      /* Ajusta a largura para caber na tela */
-        max-width: 300px;
-    }
-}
+
 
 /* --- AJUSTE PARA LANDSCAPE (DEITADO) --- */
 @media (max-width: 768px) and (orientation: landscape) {
