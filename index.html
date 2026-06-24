@@ -83,5 +83,29 @@
  
 
     <script type="module" src="/src/index.js"></script>
+
+    <style>
+        .nexus-title, .nexus-status {
+    /* Força o elemento a ficar acima de tudo */
+    z-index: 9999 !important; 
+    
+    /* Garante que o texto seja visível */
+    position: absolute !important;
+    top: 50px !important;
+    left: 20px !important;
+    
+    /* Garante visibilidade absoluta */
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    
+    /* Adiciona um fundo para garantir que não esteja transparente ou escondido */
+    background: rgba(0, 0, 0, 0.5) !important;
+    padding: 10px !important;
+    color: #00ffff !important;
+    font-family: sans-serif !important;
+    pointer-events: none; /* Para não atrapalhar cliques */
+}
+    </style>
 </body>
 </html>

@@ -296,12 +296,12 @@ export class Player {
         const dt = Math.min(deltaTime, 0.1);
 
         // 1. MOVIMENTO
-        const acel = 50.0;
+        const acel = 80.0;
         this.velocity.x += (-moveInput.x) * acel * dt;
         this.velocity.y += (moveInput.y) * acel * dt;
         this.velocity.multiplyScalar(0.90);
-        this.mesh.position.x += this.velocity.x * dt * 4;
-        this.mesh.position.y += this.velocity.y * dt * 4;
+        this.mesh.position.x += this.velocity.x * dt * 1;
+        this.mesh.position.y += this.velocity.y * dt * 1;
 
         // 2. LÓGICA DE ROTAÇÃO (Centralizada no Pivot)
         if (this.isRolling) {
@@ -318,8 +318,10 @@ export class Player {
             }
         } else {
             // Controle normal
-            this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.5, 0.1);
-            this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.7, 0.1);
+
+            const suavizacao = 0.01;
+            this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.3,suavizacao);
+            this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.9, suavizacao);
             this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
         }
 

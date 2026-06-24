@@ -89,12 +89,17 @@ function updateLevelUI(currentLevel) {
         titleElement.innerText = `NÍVEL ${currentLevel} - ${data.title}`;
         taskElement.innerText = data.task;
 
-        // DEBUG VISUAL: Força o estilo se estiver escondido
+        // Força a visibilidade ignorando o CSS !important que pode estar escondendo
         titleElement.style.display = 'block'; 
-        titleElement.style.color = '#00ffff'; // Cor neon visível
-        console.log("UI atualizada e estilo forçado.");
+        taskElement.style.display = 'block'; // Adicione isso aqui!
+        
+        titleElement.style.color = '#00ffff';
+        taskElement.style.color = '#ffffff';
+        
+        console.log("UI atualizada para:", data.title);
     } else {
-        console.warn("Elementos não encontrados!");
+        // Se cair aqui, o seu HTML não tem as classes .nexus-title ou .nexus-status
+        console.warn("Elementos não encontrados! Verifique se as classes no HTML são exatamente essas.");
     }
 }
 
@@ -251,12 +256,11 @@ if (levelUp) {
     progressionManager.resetLevelResources();
     syncLevelResources();
 
-    // Busca os dados configurados no seu arquivo getLevelData.js
-const nivelAtual = progressionManager.getLevel(); // Obtenha o nível aqui
+   
+    const input = window.moveInput || { x: 0, y: 0 };
+const nivelAtual = progressionManager.getLevel();
 player.update(input, deltaTime, enemyManager, handlePlayerHit);
-    const info = getLevelData(nivelAtual); 
-
-    // Agora passamos o Título e a Tarefa para a função de UI
+    const info = getLevelData(nivelAtual);  
     window.showLevelUp(nivelAtual, info.title, info.task);
 }
     };
