@@ -28,19 +28,22 @@ canvas {
     z-index: 0; 
 }
 
-/* ==================== INTERFACE DO JOGO ==================== */
+/* ==================== INTERFACE DO JOGO (HUD HORIZONTAL) ==================== */
 #ui {
     position: fixed !important;
     top: 20px !important;
     left: 20px !important;
     z-index: 900 !important;
+    
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     gap: 25px !important;
+    
     padding: 10px 20px !important;
     width: auto !important;
     min-width: 200px;
+    
     background: transparent !important;
     backdrop-filter: blur(12px);
     border: 1px solid rgba(0, 255, 255, 0.3);
@@ -65,7 +68,7 @@ canvas {
     display: block;
 }
 
-/* ==================== TELA DE INÍCIO ==================== */
+/* ==================== TELA DE INÍCIO PREMIUM ==================== */
 #overlay {
     position: absolute;
     top: 0;
@@ -107,6 +110,7 @@ canvas {
     animation: pulseGlow 2s infinite alternate;
 }
 
+/* ==================== LOGO SCI-FI ==================== */
 .logo-container {
     display: inline-block;
     margin: 10px 0 25px 0;
@@ -134,6 +138,7 @@ canvas {
     animation: logoGlow 1.5s infinite alternate;
 }
 
+/* Ajuste nos botões e controles para evitar sobreposição */
 #overlay button {
     padding: 18px 50px;
     font-size: 20px;
@@ -150,7 +155,7 @@ canvas {
     box-shadow: 0 0 30px #00ffff;
 }
 
-/* ==================== CONTROLES MOBILE (JOYSTICK) ==================== */
+/* ==================== CONTROLES MOBILE ==================== */
 #mobile-controls {
     position: fixed;
     bottom: 20px; 
@@ -184,11 +189,15 @@ canvas {
     box-shadow: 0 0 15px rgba(0, 255, 47, 0.6);
 }
 
-#virtual-joystick {
+/* ==================== CORREÇÃO DO JOYSTICK DUPLICADO (AZUL/VERMELHO) ==================== */
+#virtual-joystick,
+.virtual-joystick,
+#joystick:not(#joystick-area),
+.joystick-container:not(#mobile-controls) {
     display: none !important;
 }
 
-/* ==================== ANIMAÇÕES ==================== */
+/* ==================== ANIMAÇÕES VIA CSS ==================== */
 @keyframes logoGlow {
     100% { filter: drop-shadow(0 0 20px #00ffff) drop-shadow(0 0 40px #00f3ff); }
 }
@@ -196,6 +205,35 @@ canvas {
 @keyframes pulseGlow {
     0% { opacity: 0.7; text-shadow: 0 0 6px #ff0055; }
     100% { opacity: 1; text-shadow: 0 0 15px #ff0055, 0 0 20px #ff0055; }
+}
+
+/* ==================== RESPONSIVIDADE MOBILE ==================== */
+@media (pointer: coarse) {
+    #mobile-controls { display: block; }
+}
+
+@media (max-width: 480px) {
+    #overlay h1 { font-size: 38px; }
+    .logo-container { padding: 8px 20px; }
+    .logo-text { font-size: 46px; letter-spacing: 4px; }
+    .logo-text.highlight { font-size: 40px; letter-spacing: 8px; }
+    .brand-sub { font-size: 11px; letter-spacing: 3px; }
+    .game-lore { font-size: 11px; margin-bottom: 30px; }
+    #overlay button { padding: 14px 35px; font-size: 16px; }
+    
+    #shootBtn { width: 80px; height: 80px; bottom: 25px; right: 25px; font-size: 18px; }
+    #joystick-area { width: 110px; height: 110px; bottom: 25px; left: 25px; }
+    #pauseBtn { width: 45px; height: 45px; font-size: 18px; }
+    #ui { font-size: 18px; top: 15px; left: 15px; }
+}
+
+@media (max-height: 450px) {
+    .logo-container { padding: 5px 15px; margin: 5px 0 15px 0; }
+    .logo-text { font-size: 36px; }
+    .logo-text.highlight { font-size: 30px; }
+    .game-lore { display: none; }
+    #overlay button { padding: 10px 30px; font-size: 14px; }
+    #shootBtn { width: 75px; height: 75px; bottom: 15px; right: 15px; }
 }
 
 /* ==================== BOTÕES DE COMBATE ==================== */
@@ -276,27 +314,122 @@ canvas {
     transform: scale(.92);
 }
 
-/* ==================== RESPONSIVIDADE MOBILE ==================== */
-@media (pointer: coarse) {
-    #mobile-controls { display: block; }
-    #virtual-joystick { display: none !important; }
+/* ==================== TELA DE INÍCIO CINEMATOGRÁFICA ==================== */
+#overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(2,2,8,.75) 70%, rgba(2,2,8,.95) 100%), url('/assets/img/capa_game.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    z-index: 100;
+    animation: menuZoom 12s ease-in-out infinite alternate;
 }
 
-@media (max-width: 480px) {
-    #overlay h1 { font-size: 38px; }
-    .logo-container { padding: 8px 20px; }
-    .logo-text { font-size: 46px; letter-spacing: 4px; }
-    .logo-text.highlight { font-size: 40px; letter-spacing: 8px; }
-    .brand-sub { font-size: 11px; letter-spacing: 3px; }
-    .game-lore { font-size: 11px; margin-bottom: 30px; }
-    #overlay button { padding: 14px 35px; font-size: 16px; }
-    
-    #shootBtn { width: 80px; height: 80px; bottom: 25px; right: 25px; font-size: 18px; }
-    #joystick-area { width: 110px; height: 110px; bottom: 25px; left: 25px; }
-    #pauseBtn { width: 45px; height: 45px; font-size: 18px; }
-    #ui { font-size: 18px; top: 15px; left: 15px; }
+.overlay-blur-effect {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(0,255,255,.06), transparent 60%);
+    pointer-events: none;
 }
 
+.menu-content {
+    position: relative;
+    z-index: 101;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 500px;
+    padding: 15px;
+}
+
+.brand-sub {
+    color: #ff0055;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    text-shadow: 0 0 8px #ff0055, 0 0 15px #ff0055;
+    animation: pulseGlow 2s infinite alternate;
+}
+
+.logo-container {
+    background: rgba(0,0,0,.35);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0,255,255,.15);
+    border-radius: 14px;
+    padding: 10px 25px;
+    margin-bottom: 15px;
+    box-shadow: 0 0 20px rgba(0,255,255,.12), inset 0 0 15px rgba(0,255,255,.08);
+}
+
+.logo-text {
+    display: block;
+    font-family: Impact, sans-serif;
+    font-size: 62px;
+    line-height: .92;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, #ffffff 0%, #d8d8d8 50%, #ffffff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 15px rgba(255,255,255,.15);
+}
+
+.logo-text.highlight {
+    font-size: 54px;
+    letter-spacing: 6px;
+    background: linear-gradient(180deg, #00ffff, #008cff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 6px #00ffff) drop-shadow(0 0 15px #00ffff) drop-shadow(0 0 25px #00aaff);
+}
+
+.game-lore {
+    color: rgba(255,255,255,.85);
+    font-size: 12px;
+    line-height: 1.5;
+    letter-spacing: 1px;
+    max-width: 420px;
+    margin-bottom: 20px;
+}
+
+#start-btn {
+    min-width: 250px;
+    padding: 14px 28px;
+    border-radius: 10px;
+    border: 2px solid #00ffff;
+    background: linear-gradient(180deg, rgba(0,255,255,.18), rgba(0,120,255,.08));
+    color: white;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0,255,255,.3), inset 0 0 12px rgba(0,255,255,.12);
+    transition: all .25s ease;
+}
+
+#start-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(0,255,255,.5), 0 0 50px rgba(0,255,255,.2);
+}
+
+#start-btn:active {
+    transform: scale(.96);
+}
+
+@keyframes menuZoom {
+    from { background-size: 100%; }
+    to { background-size: 105%; }
+}
+
+/* ==================== MOBILE ==================== */
 @media (max-width: 768px) {
     .logo-text { font-size: 42px; }
     .logo-text.highlight { font-size: 36px; }
@@ -308,7 +441,7 @@ canvas {
     #virtual-joystick { display: none !important; }
 }
 
-/* O resto do seu CSS (nexusSelector, level-up-card, etc.) continua igual */
+/* --- PAINEL PRINCIPAL (SELETOR DE ZONA) --- */
 #nexusSelector {
     position: fixed;
     top: 100px;
@@ -318,6 +451,7 @@ canvas {
     box-sizing: border-box;
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgb(255, 75, 51);
     border-radius: 16px;
     box-shadow: 0 0 25px rgba(255, 51, 68, 0.25);
@@ -358,24 +492,123 @@ canvas {
     font-weight: 700;
     transition: 0.3s;
 }
-    .nexus-status { font-size: 10px !important; }
 
-    /* 3. BOTÕES DE COMBATE */
+#debugLevelSelect:hover {
+    border-color: #33ffcc;
+    box-shadow: 0 0 10px rgba(255, 51, 68, 0.4);
+}
+
+.nexus-status {
+    font-size: 13px;
+    color: #999;
+    letter-spacing: 1px;
+}
+
+/* HUD alternativo */
+#ui {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 15px 20px;
+    width: 220px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 16px;
+    box-shadow: 0 0 14px rgba(0, 255, 255, 0.1);
+    z-index: 999;
+    color: white;
+    font-family: 'Orbitron', Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;
+    pointer-events: none;
+}
+
+#nexusSelector {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid rgb(255, 75, 51);
+    box-shadow: 0 0 25px rgba(255,51,68,.18);
+}
+
+#virtual-joystick {
+    position: fixed !important;
+    bottom: 30px !important;
+    left: 30px !important;
+    width: 150px;
+    height: 150px;
+    z-index: 999999 !important;
+    pointer-events: auto !important;
+    touch-action: none;
+    display: none !important; /* CORREÇÃO PRINCIPAL */
+}
+
+#level-up-card,
+.level-transition-card {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Roll controls */
+#roll-controls {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    z-index: 9999 !important;
+    pointer-events: auto !important;
+}
+
+.game-btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: rgba(0, 255, 255, 0.3);
+    border: 2px solid #00ffff;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+/* Ajustes mobile */
+@media (max-width: 768px) {
+    #nexusSelector {
+        top: 60px !important;
+        width: 150px !important;
+        padding: 6px !important;
+    }
+}
+
+@media (max-width: 1024px) {
+    .botao-que-atrapalha {
+        display: none !important;
+    }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+    #nexusSelector {
+        top: 55px !important;
+        width: 130px !important;
+    }
+    .nexus-status {
+        display: none !important;
+    }
+}
+
+/* Ajustes finais de botões */
+@media (max-width: 768px) {
     #btnShoot { width: 70px !important; height: 70px !important; font-size: 24px !important; bottom: 15px !important; right: 15px !important; }
     #btnMissile { width: 55px !important; height: 55px !important; bottom: 95px !important; right: 20px !important; }
     #btnPDC { width: 55px !important; height: 55px !important; bottom: 160px !important; right: 20px !important; }
     #btnPause { width: 40px !important; height: 40px !important; top: 10px !important; right: 10px !important; }
-
-
-/* 4. AJUSTE EXTRA PARA MODO PAISAGEM (LANDSCAPE) */
-@media (max-width: 768px) and (orientation: landscape) {
-    #nexusSelector {
-        top: 55px !important; /* Sobe um pouco mais para dar espaço */
-        width: 130px !important;
-    }
-    
-    /* Esconde status para ganhar espaço precioso em tela deitada */
-    .nexus-status {
-        display: none !important;
-    }
 }
