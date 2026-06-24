@@ -156,37 +156,43 @@ canvas {
 }
 
 /* ==================== CONTROLES MOBILE ==================== */
+/* ==================== CONTROLES MOBILE - JOYSTICK ==================== */
 #mobile-controls {
     position: fixed;
-    bottom: 20px; 
-    left: 20px;
-    width: 150px;
-    height: 150px;
+    bottom: 30px; 
+    left: 30px;
+    width: 160px;
+    height: 160px;
     z-index: 1000;
-    pointer-events: auto;
-}
-
-#joystick-area {
-    width: 150px;
-    height: 150px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    position: relative;
     pointer-events: auto;
     touch-action: none;
 }
 
+#joystick-area {
+    width: 160px;
+    height: 160px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.4);
+    position: relative;
+    pointer-events: auto;
+    touch-action: none;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+}
+
 #stick {
-    width: 60px;
-    height: 60px;
+    width: 65px;
+    height: 65px;
     background: radial-gradient(circle, #ff8933, #ff4500);
     border-radius: 50%;
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    box-shadow: 0 0 15px rgba(0, 255, 47, 0.6);
+    box-shadow: 0 0 20px rgba(0, 255, 47, 0.7),
+                inset 0 0 15px rgba(255,255,255,0.3);
+    transition: transform 0.05s ease-out; /* suaviza o movimento */
+    pointer-events: none; /* importante: o stick não deve bloquear o toque */
 }
 
 /* ==================== CORREÇÃO DO JOYSTICK DUPLICADO (AZUL/VERMELHO) ==================== */
