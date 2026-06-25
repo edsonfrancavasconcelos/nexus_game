@@ -238,7 +238,6 @@ function startGame() {
     updateHUD();
     updateLevelHUD();
 }
-
 function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
@@ -287,15 +286,18 @@ player.update(input, deltaTime, enemyManager, handlePlayerHit);
             y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
         };
 
-        player.update(input, deltaTime, enemyManager, handlePlayerHit);
-       if (spaceEnvironment) {
-        spaceEnvironment.update(
-            deltaTime, 
-            player.mesh.position, 
-            input, 
-            progressionManager.getLevel() // Passando o nível aqui!
-        );
-    }
+player.update(input, deltaTime, enemyManager, handlePlayerHit);
+
+if (spaceEnvironment) {
+    spaceEnvironment.update(
+        deltaTime, 
+        player.mesh.position, 
+        input, 
+        progressionManager.getLevel(),
+        player.mesh,           // playerMesh
+        soundManager           // ← adicione o soundManager aqui
+    );
+}
         // --- ATUALIZAÇÃO DE SCORE E NÍVEL ---
         enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
 
@@ -303,6 +305,8 @@ player.update(input, deltaTime, enemyManager, handlePlayerHit);
         explosionManager.update(deltaTime);
         scorePopup.update(deltaTime);
         updateCamera();
+
+        
     }
     renderer.render(scene, camera);
 }

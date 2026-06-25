@@ -4,44 +4,66 @@ export class SoundManager {
             // --- JOGADOR ---
             laser: new Audio('/assets/sounds/laser.mp3'),
             nave: new Audio('/assets/sounds/nave.mp3'),
-            pdc: new Audio('/assets/sounds/pdc_shot.mp3'), // ADICIONADO: Som do PDC
+            pdc: new Audio('/assets/sounds/pdc_shot.mp3'),
 
-            // --- INIMIGOS COMUNS / GERAIS ---
+            // --- INIMIGOS GERAIS ---
             enemyLaser: new Audio('/assets/sounds/laser_inimigo.mp3'),
             explosion: new Audio('/assets/sounds/explosao_inimiga.mp3'),
             enemyPass: new Audio('/assets/sounds/inimiga_passando.mp3'),
 
-            // --- LASERS DOS INIMIGOS DE NÍVEL ---
-            laserInimi5: new Audio('/assets/sounds/laser_inimi_5.mp3'),
-            laserInim10: new Audio('/assets/sounds/laser_inim_10.mp3'),
-            laserInim15: new Audio('/assets/sounds/laser_inim_15.mp3'), 
+            // --- LASERS DOS INIMIGOS ---
+            laser_inim_15: new Audio('/assets/sounds/laser_inim_15.mp3'),
+            laser_inim_10: new Audio('/assets/sounds/laser_inim_10.mp3'),
+            laser_inimi_5: new Audio('/assets/sounds/laser_inimi_5.mp3'),
+            laser_inim_6: new Audio('/assets/sounds/laser_inimigo.mp3'), // fallback
+            laser_inimigo: new Audio('/assets/sounds/laser_inimigo.mp3'),
 
-            // --- SONS DE NAVE PASSANDO RASPANDO ---
-            navePass5: new Audio('/assets/sounds/nave_pass_5.mp3'),
-            navePss10: new Audio('/assets/sounds/nave_pass_10.mp3'),
-            navePass15: new Audio('/assets/sounds/nave_pass_15.mp3'),
+            // --- SONS DE PASSAGEM ---
+            nave_pass_15: new Audio('/assets/sounds/nave_pass_15.mp3'),
+            nave_pss_10: new Audio('/assets/sounds/nave_pass_10.mp3'),  // nome exato do arquivo
+            nave_pass_5: new Audio('/assets/sounds/nave_pass_5.mp3'),
+            nave_pass_6: new Audio('/assets/sounds/inimiga_passando.mp3'), // fallback
 
-            // --- DRONE E METEORO ---
-            dronePass: new Audio('/assets/sounds/drone.mp3'), 
-            meteoroPass: new Audio('/assets/sounds/meteoro.mp3')
+            drone: new Audio('/assets/sounds/drone.mp3'),
+            dronePass: new Audio('/assets/sounds/drone.mp3'),
+
+            meteoro: new Audio('/assets/sounds/meteoro.mp3'),
+            meteoroPass: new Audio('/assets/sounds/meteoro.mp3'),
+
+            inimiga_passando: new Audio('/assets/sounds/inimiga_passando.mp3'),
         };
 
-        // Aliases para manter compatibilidade com nomes usados em outras partes do jogo.
-        this.sounds.laser_inimigo = this.sounds.enemyLaser;
-        this.sounds.laser_inim_6 = this.sounds.enemyLaser;
-        this.sounds.nave_pass_6 = this.sounds.enemyPass;
+        // ==================== ALIASES PARA COMPATIBILIDADE ====================
+        this.sounds.laserInimi5 = this.sounds.laser_inimi_5;
+        this.sounds.laserInim10 = this.sounds.laser_inim_10;
+        this.sounds.laserInim15 = this.sounds.laser_inim_15;
+        this.sounds.navePass5 = this.sounds.nave_pass_5;
+        this.sounds.navePss10 = this.sounds.nave_pss_10;
+        this.sounds.navePass15 = this.sounds.nave_pass_15;
+        this.sounds.nave_pass_10 = this.sounds.nave_pss_10;
+
+        // Aliases extras usados no EnemyManager
+        this.sounds['laser_inim_15'] = this.sounds.laser_inim_15;
+        this.sounds['laser_inim_10'] = this.sounds.laser_inim_10;
+        this.sounds['laser_inimi_5'] = this.sounds.laser_inimi_5;
+        this.sounds['nave_pass_15'] = this.sounds.nave_pass_15;
+        this.sounds['nave_pss_10'] = this.sounds.nave_pss_10;
+        this.sounds['nave_pass_5'] = this.sounds.nave_pass_5;
+        this.sounds['nave_pass_6'] = this.sounds.nave_pass_6;
 
         Object.values(this.sounds).forEach(sound => {
-            sound.preload = 'auto';
+            if (sound) sound.preload = 'auto';
         });
 
         this.lastLaserTime = 0;
-        this.lastPdcTime = 0; // Trava de spam para o PDC
+        this.lastPdcTime = 0;
     }
 
     init() {
         console.log('🔊 Inicializando todos os sons do jogo...');
-        Object.values(this.sounds).forEach(sound => sound.load());
+        Object.values(this.sounds).forEach(sound => {
+            if (sound) sound.load();
+        });
     }
 
     startShipEngine() {
@@ -58,51 +80,70 @@ export class SoundManager {
         if (engine) engine.pause();
     }
 
-play(name) {
+    play(name) {
+        if (!name) return;
+
         if (name === 'nave') {
             this.startShipEngine();
             return;
         }
 
-        const soundKey = name === 'explosaoInimiga' ? 'explosion' : name;
+        // Mapeamento de nomes (normalização)
+        let soundKey = name;
+
+        const nameMap = {
+            'explosao_inimiga': 'explosion',
+            'explosaoInimiga': 'explosion',
+            'enemyLaser': 'enemyLaser',
+            'laser_inimigo': 'enemyLaser',
+            'drone': 'drone',
+            'meteoro': 'meteoro',
+            'inimiga_passando': 'enemyPass',
+            'nave_pass_15': 'nave_pass_15',
+            'nave_pss_10': 'nave_pss_10',
+            'nave_pass_5': 'nave_pass_5',
+            'nave_pass_6': 'nave_pass_6',
+            'laser_inim_15': 'laser_inim_15',
+            'laser_inim_10': 'laser_inim_10',
+            'laser_inimi_5': 'laser_inimi_5',
+            'laser_inim_6': 'laser_inim_6'
+        };
+
+        if (nameMap[name]) soundKey = nameMap[name];
+
         const baseSound = this.sounds[soundKey];
-        
+
         if (!baseSound) {
-            console.warn(`Som não encontrado no SoundManager: ${name}`);
+            console.warn(`Som não encontrado: ${name} (tentou chave: ${soundKey})`);
             return;
         }
 
         // --- TRAVAS DE SPAM ---
         const now = Date.now();
-        if (soundKey === 'laser' && now - this.lastLaserTime < 60) return;
-        // Aumentei o tempo de 40ms para 200ms para o PDC não sobrecarregar o processador
-        if (soundKey === 'pdc' && now - this.lastPdcTime < 200) return; 
-        
-        if (soundKey === 'laser') this.lastLaserTime = now;
+        if (soundKey.includes('laser') && now - this.lastLaserTime < 60) return;
+        if (soundKey === 'pdc' && now - this.lastPdcTime < 200) return;
+
+        if (soundKey.includes('laser')) this.lastLaserTime = now;
         if (soundKey === 'pdc') this.lastPdcTime = now;
 
-        // --- OTIMIZAÇÃO: REUTILIZAÇÃO PARA PDC ---
-        if (soundKey === 'pdc') {
-            baseSound.currentTime = 0; // Reinicia o som existente sem criar um novo objeto
-            baseSound.volume = 0.10;
-            baseSound.play().catch(e => console.warn("Áudio bloqueado:", e));
-            return; // Sai da função aqui, não cria clone
-        }
-
-        // --- SISTEMA DE CANAIS PARA OUTROS SONS (Explosão/Laser) ---
+        // Clone para a maioria dos sons (permite overlap)
         const soundClone = baseSound.cloneNode(true);
 
-        // --- CONTROLE DE VOLUMES ---
-        if (soundKey.toLowerCase().includes('laser')) {
-            soundClone.volume = 0.20;
+        // Volumes específicos
+        if (soundKey.includes('laser')) {
+            soundClone.volume = 0.22;
         } else if (soundKey === 'explosion') {
             soundClone.volume = 0.55;
-        } else if (soundKey === 'dronePass' || soundKey === 'meteoroPass') {
+        } else if (soundKey === 'drone' || soundKey === 'meteoro') {
             soundClone.volume = 0.45;
         } else {
             soundClone.volume = 0.35;
         }
 
-        soundClone.play().catch(e => console.warn("Áudio bloqueado:", e));
+        soundClone.play().catch(e => {
+            // console.warn("Áudio bloqueado:", e); // descomente se precisar debug
+        });
+
         soundClone.onended = () => soundClone.remove();
-    }}
+    }
+}

@@ -272,41 +272,45 @@ export class EnemyManager {
         this.enemies.push(enemy);
     }
 
-  update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
-    if (!player?.mesh || !deltaTime) return;
+    update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
+        if (!player?.mesh || !deltaTime) return;
 
-    // 1. Lógica de detecção de mudança de nível (Para disparar o Card)
-    if (this.lastLevel !== currentLevel) {
-        this.lastLevel = currentLevel;
-        // Dispara evento global que seu UI pode escutar para mostrar o card
-        window.dispatchEvent(new CustomEvent('levelChanged', { 
-            detail: { level: currentLevel } 
-        }));
-    }
+        // Definição da posição atual da câmera (corrigido)
+        const camPosAtual = new THREE.Vector3();
+        this.camera.getWorldPosition(camPosAtual);
 
-    // 2. Lógica de Spawning
-    const adjustedCooldown = Math.max(0.45, this.waveCooldown - (currentLevel * 0.012));
-    this.waveTimer += deltaTime;
-    if (this.waveTimer > adjustedCooldown) {
-        this.spawnWave(player, currentLevel);
-        this.waveTimer = 0;
-    }
-
-    // 3. Gerenciamento de Projéteis Inimigos
-    const pPos = new THREE.Vector3();
-    player.mesh.getWorldPosition(pPos);
-    const playerLasers = laserManager.lasers || [];
-
-    for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
-        const p = this.enemyProjectiles[i];
-        p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
-        
-        // Verificação de distância otimizada
-        if (p.mesh.position.distanceTo(pPos) > 1500) {
-            this.scene.remove(p.mesh);
-            this.enemyProjectiles.splice(i, 1);
+        // 1. Lógica de detecção de mudança de nível (Para disparar o Card)
+        if (this.lastLevel !== currentLevel) {
+            this.lastLevel = currentLevel;
+            // Dispara evento global que seu UI pode escutar para mostrar o card
+            window.dispatchEvent(new CustomEvent('levelChanged', { 
+                detail: { level: currentLevel } 
+            }));
         }
-    }
+
+        // 2. Lógica de Spawning
+        const adjustedCooldown = Math.max(0.45, this.waveCooldown - (currentLevel * 0.012));
+        this.waveTimer += deltaTime;
+        if (this.waveTimer > adjustedCooldown) {
+            this.spawnWave(player, currentLevel);
+            this.waveTimer = 0;
+        }
+
+        // 3. Gerenciamento de Projéteis Inimigos
+        const pPos = new THREE.Vector3();
+        player.mesh.getWorldPosition(pPos);
+        const playerLasers = laserManager.lasers || [];
+
+        for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+            const p = this.enemyProjectiles[i];
+            p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
+            
+            // Verificação de distância otimizada
+            if (p.mesh.position.distanceTo(pPos) > 1500) {
+                this.scene.remove(p.mesh);
+                this.enemyProjectiles.splice(i, 1);
+            }
+        }
 
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
@@ -321,17 +325,32 @@ export class EnemyManager {
                 }
             }
 
+            // ... dentro do seu loop 'for' de inimigos ...
+
+            // 1. Movimentação
             enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
 
+            // 2. Som de Passagem (Otimizado)
+            if (soundManager && !data.passSoundPlayed && data.passSound) {
+                // Usamos a variável camPosAtual que você já definiu no update
+                if (enemy.position.distanceTo(camPosAtual) < 500) {
+                    soundManager.play(data.passSound);
+                    data.passSoundPlayed = true;
+                }
+            }
+
+            // 3. Rotação (Apenas para tipos específicos)
             if (data.type === 'drone' || data.type === 'meteoro' || data.type === 'asteroide') {
                 enemy.rotation.x += 0.015;
                 enemy.rotation.y += 0.015;
             }
 
+            // 4. Checagem de colisão com asteroides
             if (data.type !== 'meteoro' && data.type !== 'asteroide' && this._hitsAsteroid(enemy, i, previousPosition)) {
                 continue;
             }
 
+            // 5. Lógica de Laser e Dano
             let foiAtingidoPorLaser = false;
             let pontoDoImpactoReal = null;
 
@@ -360,15 +379,17 @@ export class EnemyManager {
                 }
             }
 
+            // 6. Explosão (Corrigido: som e explosão antes do continue)
             if (foiAtingidoPorLaser && pontoDoImpactoReal) {
+                if (soundManager) soundManager.play('explosao_inimiga');
                 if (explosionManager) explosionManager.create(pontoDoImpactoReal);
+                
                 this.scene.remove(enemy);
                 this.enemies.splice(i, 1);
-                continue;
+                continue; 
             }
 
-            const camPosAtual = new THREE.Vector3();
-            this.camera.getWorldPosition(camPosAtual);
+            // 7. Remoção por distância
             if (enemy.position.z > camPosAtual.z + 200 || enemy.position.distanceTo(camPosAtual) > 2800) {
                 this.scene.remove(enemy);
                 this.enemies.splice(i, 1);
