@@ -40,19 +40,18 @@
         </div>
     </div>
 
+    <!-- NEXUS SELECTOR CORRIGIDO -->
     <div id="nexusSelector">
-        <div class="zone-display" id="zone-display">
-            <div class="zone-header">
-                <span id="current-zone">ZONA 01</span>
-                <span class="zone-subtitle" id="current-subtitle">SETOR ALPHA</span>
-            </div>
+        <div id="zone-header" class="zone-header">
+            ZONA 01 • SETOR ALPHA
+            <span class="arrow">▼</span>
         </div>
 
-        <div class="zone-list">
+        <div id="zone-list" class="zone-list">
             <div class="zone-option active" data-value="1">ZONA 01 • SETOR ALPHA</div>
-            <div class="zone-option" data-value="21">ZONA 21 GIGANTES TIPO 05</div>
-            <div class="zone-option" data-value="31">ZONA 31 GIGANTES TIPO 10</div>
-            <div class="zone-option" data-value="51">ZONA 51 GIGANTES TIPO 15</div>
+            <div class="zone-option" data-value="21">ZONA 21 • GIGANTES TIPO 05</div>
+            <div class="zone-option" data-value="31">ZONA 31 • GIGANTES TIPO 10</div>
+            <div class="zone-option" data-value="51">ZONA 51 • GIGANTES TIPO 15</div>
         </div>
 
         <div class="test-status">
@@ -61,7 +60,6 @@
     </div>
 
     <div id="cockpit-ui">
-        <!-- BOTÕES DE PARAFUSO (ROLL) AGORA AQUI DENTRO, TODOS JUNTOS -->
         <div id="roll-controls">
             <button id="btnRollLeft" class="game-btn">ROLL ◄</button>
             <button id="btnRollRight" class="game-btn">ROLL ►</button>
@@ -83,119 +81,124 @@
             <img src="/assets/img/pause.png" alt="Pausar" style="width: 50%; height: 50%; pointer-events: none;">
         </button> 
     </div>
+
     <div id="countdown-display" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); 
      font-size: 100px; color: #00ffff; font-family: sans-serif; display: none; z-index: 10000; text-shadow: 0 0 20px #000;">
-</div>
+    </div>
 
-     <script>
+    <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const header = document.getElementById('zone-header');
+            const list = document.getElementById('zone-list');
             const options = document.querySelectorAll('.zone-option');
-            const zoneHeader = document.getElementById('current-zone');
-            const subtitle = document.getElementById('current-subtitle');
+
+            if (header && list) {
+                header.addEventListener('click', () => {
+                    list.classList.toggle('open');
+                    header.classList.toggle('open');
+                });
+            }
 
             options.forEach(option => {
                 option.addEventListener('click', () => {
-                    // Remove active de todos
                     options.forEach(opt => opt.classList.remove('active'));
-                    // Ativa o clicado
                     option.classList.add('active');
 
-                    // Atualiza o card principal
-                    const text = option.textContent;
-                    const parts = text.split('•');
-                    zoneHeader.textContent = parts[0].trim();
-                    subtitle.textContent = parts[1] ? parts[1].trim() : '';
+                    // Atualiza o header
+                    header.childNodes[0].nodeValue = option.textContent.trim() + " ";
+
+                    // Fecha após selecionar
+                    list.classList.remove('open');
+                    header.classList.remove('open');
                 });
             });
         });
     </script>
- 
 
     <script type="module" src="/src/index.js"></script>
 
     <style>
         #nexusSelector {
-            position: absolute;
-           
+            position: absolute;          
             left: 12px;
             z-index: 9999;
+            width: 92%;
+            max-width: 380px;
             font-family: 'Courier New', monospace;
-            width: 380px;
-        }
-
-        .zone-display {
-            background: linear-gradient(135deg, #001122, #003355);
-            border: 2px solid #00ddff;
-            border-radius: 12px;
-            padding: 16px 20px;
-            margin-bottom: 10px;
-            box-shadow: 0 0 30px rgba(0, 221, 255, 0.6);
-            text-align: center;
         }
 
         .zone-header {
+            background: linear-gradient(135deg, #001833, #003366);
+            border: 2px solid #00ddff;
+            border-radius: 12px;
+            padding: 16px 20px;
             color: #00ffcc;
-            font-size: 28px;
+            font-size: 18px;
             font-weight: bold;
-            letter-spacing: 3px;
-            text-shadow: 0 0 15px #00ffff;
+            letter-spacing: 2px;
+            text-align: center;
+            box-shadow: 0 0 25px rgba(0, 221, 255, 0.6);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .zone-subtitle {
-            display: block;
-            font-size: 18px;
-            color: #aaffff;
-            margin-top: 4px;
-            opacity: 0.9;
+        .arrow {
+            transition: transform 0.3s;
+        }
+
+        .zone-header.open .arrow {
+            transform: rotate(180deg);
         }
 
         .zone-list {
-            background: rgba(0, 15, 40, 0.85);
-            border: 2px solid #0066aa;
-            border-radius: 10px;
+            background: rgba(0, 20, 50, 0.95);
+            border: 2px solid #0066bb;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
             overflow: hidden;
-            margin-bottom: 10px;
+            max-height: 0;
+            transition: max-height 0.4s ease-out;
+        }
+
+        .zone-list.open {
+            max-height: 320px;
         }
 
         .zone-option {
-            padding: 12px 18px;
-            color: #88ccff;
-            border-bottom: 1px solid rgba(0, 100, 200, 0.3);
+            padding: 13px 20px;
+            color: #88ddff;
+            border-bottom: 1px solid rgba(0, 100, 200, 0.4);
             cursor: pointer;
-            transition: all 0.2s;
-            user-select: none;
         }
 
-        .zone-option:hover {
-            background: rgba(0, 120, 255, 0.25);
+        .zone-option:hover,
+        .zone-option.active {
+            background: rgba(0, 140, 255, 0.35);
             color: #ffffff;
         }
 
-        .zone-option.active {
-            background: rgba(0, 180, 255, 0.3);
-            color: #00ffff;
-            border-left: 4px solid #00ffff;
-        }
-
         .test-status {
-            background: rgba(180, 20, 20, 0.2);
+            background: rgba(180, 20, 20, 0.25);
             color: #ff8888;
             padding: 8px;
             text-align: center;
-            border: 1px solid #ff4444;
+            border: 1px solid #ff5555;
             border-radius: 6px;
             font-size: 13px;
-            letter-spacing: 1px;
+            margin-top: 10px;
         }
-          /* Mobile adjustments */
+
         @media (max-width: 768px) {
-            #nexusSelector {            
+            #nexusSelector {
+                top: 8px;
                 left: 8px;
-                width: 10%;
+                width: 94%;
             }
-            
-            .zone-card, .zone-list {
-                border-radius: 10px;
+            .zone-header {
+                font-size: 17px;
+                padding: 14px 16px;
             }
         }
     </style>

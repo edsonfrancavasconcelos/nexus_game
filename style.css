@@ -467,29 +467,6 @@ canvas {
     align-items: center;
     gap: 10px;
 }
-
-#nexusSelector > * {
-    width: 100%;
-    text-align: center;
-}
-
-.nexus-title {
-    color: #fe0415;
-    font-weight: 800;
-    font-size: 16px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 5px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid rgb(133, 51, 255);
-    text-shadow: 0 0 8px rgba(51, 255, 84, 0.6);
-}
-.nexus-status {
-    font-size: 13px;
-    color: #999;
-    letter-spacing: 1px;
-}
-
 /* HUD alternativo */
 #ui {
     position: fixed;
@@ -512,15 +489,6 @@ canvas {
     letter-spacing: 1px;
     pointer-events: none;
 }
-
-#nexusSelector {
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: 1px solid rgb(255, 75, 51);
-    box-shadow: 0 0 25px rgba(255,51,68,.18);
-}
-
 #virtual-joystick {
     position: fixed !important;
     bottom: 30px !important;
@@ -566,27 +534,10 @@ canvas {
     touch-action: manipulation;
 }
 
-/* Ajustes mobile */
-@media (max-width: 768px) {
-    #nexusSelector {
-        top: 60px !important;
-        width: 150px !important;
-        padding: 6px !important;
-    }
-}
+
 
 @media (max-width: 1024px) {
     .botao-que-atrapalha {
-        display: none !important;
-    }
-}
-
-@media (max-width: 768px) and (orientation: landscape) {
-    #nexusSelector {
-        top: 55px !important;
-        width: 130px !important;
-    }
-    .nexus-status {
         display: none !important;
     }
 }
