@@ -318,7 +318,6 @@ export class Player {
             }
         } else {
             // Controle normal
-
             const suavizacao = 0.01;
             this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.3,suavizacao);
             this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.9, suavizacao);

@@ -484,26 +484,6 @@ canvas {
     border-bottom: 2px solid rgb(133, 51, 255);
     text-shadow: 0 0 8px rgba(51, 255, 84, 0.6);
 }
-
-#debugLevelSelect {
-    width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.4);
-    color: #ffffff;
-    border: 2px solid rgba(54, 255, 51, 0.4);
-    outline: none;
-    cursor: pointer;
-    font-size: 20px;
-    font-weight: 700;
-    transition: 0.3s;
-}
-
-#debugLevelSelect:hover {
-    border-color: #33ffcc;
-    box-shadow: 0 0 10px rgba(255, 51, 68, 0.4);
-}
-
 .nexus-status {
     font-size: 13px;
     color: #999;

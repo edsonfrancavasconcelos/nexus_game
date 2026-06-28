@@ -16,6 +16,9 @@ window.moveInput = { x: 0, y: 0 };
 let audioInitialized = false;
 let currentState = 'menu';
 let score = 0;
+let countdown = 5; 
+let isGameStarted = false;
+
 const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -158,6 +161,27 @@ function getMissionText(level) {
     return "Sobreviva ao ataque e limpe o perímetro.";
 }
 
+function gameLoop() {
+    const deltaTime = clock.getDelta();
+
+    if (!isGameStarted) {
+        countdown -= deltaTime; // Subtrai o tempo decorrido
+        
+        // Exibir o contador na tela (atualize seu HTML aqui)
+        console.log("Iniciando em: " + Math.ceil(countdown));
+
+        if (countdown <= 0) {
+            isGameStarted = true;
+            console.log("JOGO COMEÇOU!");
+        }
+    } else {
+        // AQUI você chama o update da sua classe
+        spaceEnv.update(deltaTime, playerPosition, moveInput, currentLevel, playerMesh, soundManager);
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
 // ==================== OUTRAS FUNÇÕES ====================
 function updateCamera() {
     if (!player.shipModel) return;
@@ -215,6 +239,12 @@ async function initGame() {
 }
 function startGame() {
     if (currentState === GAME_STATE.PLAYING) return;
+    
+    // Reseta o estado do contador
+    countdown = 5;
+    isGameStarted = false;
+    document.getElementById('countdown-display').style.display = 'block'; // Mostra o contador na tela
+
     currentState = GAME_STATE.PLAYING;
     score = 0;
 
@@ -223,24 +253,38 @@ function startGame() {
 
     player.mesh.position.set(0, -1, 8);
     enemyManager.clearAllEnemies();
-
-    const nivelInicial = progressionManager.getLevel();
-    enemyManager.spawnWave(player, nivelInicial);
     
-    // ATUALIZAÇÃO DA UI AO INICIAR
-    updateLevelUI(nivelInicial); 
-    
-    updateEnvironmentTheme();
-    progressionManager.resetLevelResources();
-    syncLevelResources();
-
-    if (audioInitialized) soundManager.startShipEngine();
     updateHUD();
     updateLevelHUD();
 }
 function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
+
+    // --- LÓGICA DE CONTADOR ---
+    if (currentState === GAME_STATE.PLAYING && !isGameStarted) {
+        countdown -= deltaTime;
+        const display = document.getElementById('countdown-display');
+        const num = Math.ceil(countdown);
+        
+        if (num > 0) {
+            display.innerText = num;
+        } else {
+            isGameStarted = true;
+            display.style.display = 'none';
+            
+            // Agora sim, inicializa o jogo real após os 5 segundos
+            const nivelInicial = progressionManager.getLevel();
+            enemyManager.spawnWave(player, nivelInicial);
+            updateLevelUI(nivelInicial);
+            updateEnvironmentTheme();
+            progressionManager.resetLevelResources();
+            syncLevelResources();
+            if (audioInitialized) soundManager.startShipEngine();
+        }
+        renderer.render(scene, camera);
+        return; // Pára aqui, não executa o resto do jogo
+    }
 
     const handleEnemyScore = (pts, hitPosition) => {
         score += pts;

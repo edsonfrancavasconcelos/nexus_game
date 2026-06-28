@@ -41,18 +41,21 @@
     </div>
 
     <div id="nexusSelector">
-        <div class="nexus-title">
-              SELETOR DE ZONA
+        <div class="zone-display" id="zone-display">
+            <div class="zone-header">
+                <span id="current-zone">ZONA 01</span>
+                <span class="zone-subtitle" id="current-subtitle">SETOR ALPHA</span>
+            </div>
         </div>
 
-        <select id="debugLevelSelect">
-            <option value="1">ZONA 01: SETOR ALPHA</option>
-            <option value="21">ZONA 21: GIGANTES TIPO 05</option>
-            <option value="31">ZONA 31: GIGANTES TIPO 10</option>
-            <option value="51">ZONA 51: GIGANTES TIPO 15</option>
-        </select>
+        <div class="zone-list">
+            <div class="zone-option active" data-value="1">ZONA 01 • SETOR ALPHA</div>
+            <div class="zone-option" data-value="21">ZONA 21 GIGANTES TIPO 05</div>
+            <div class="zone-option" data-value="31">ZONA 31 GIGANTES TIPO 10</div>
+            <div class="zone-option" data-value="51">ZONA 51 GIGANTES TIPO 15</div>
+        </div>
 
-        <div class="nexus-status">
+        <div class="test-status">
             SISTEMA DE TESTE DE NÍVEIS ATIVO
         </div>
     </div>
@@ -80,32 +83,109 @@
             <img src="/assets/img/pause.png" alt="Pausar" style="width: 50%; height: 50%; pointer-events: none;">
         </button> 
     </div>
+    <div id="countdown-display" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); 
+     font-size: 100px; color: #00ffff; font-family: sans-serif; display: none; z-index: 10000; text-shadow: 0 0 20px #000;">
+</div>
+
+     <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const options = document.querySelectorAll('.zone-option');
+            const zoneHeader = document.getElementById('current-zone');
+            const subtitle = document.getElementById('current-subtitle');
+
+            options.forEach(option => {
+                option.addEventListener('click', () => {
+                    // Remove active de todos
+                    options.forEach(opt => opt.classList.remove('active'));
+                    // Ativa o clicado
+                    option.classList.add('active');
+
+                    // Atualiza o card principal
+                    const text = option.textContent;
+                    const parts = text.split('•');
+                    zoneHeader.textContent = parts[0].trim();
+                    subtitle.textContent = parts[1] ? parts[1].trim() : '';
+                });
+            });
+        });
+    </script>
  
 
     <script type="module" src="/src/index.js"></script>
 
-    <style>
-        .nexus-title, .nexus-status {
-    /* Força o elemento a ficar acima de tudo */
-    z-index: 9999 !important; 
-    
-    /* Garante que o texto seja visível */
-    position: absolute !important;
-    top: 50px !important;
-    left: 20px !important;
-    
-    /* Garante visibilidade absoluta */
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    
-    /* Adiciona um fundo para garantir que não esteja transparente ou escondido */
-    background: rgba(0, 0, 0, 0.5) !important;
-    padding: 10px !important;
-    color: #00ffff !important;
-    font-family: sans-serif !important;
-    pointer-events: none; /* Para não atrapalhar cliques */
-}
+         <style>
+        #nexusSelector {
+            position: absolute;           
+            left: 12px;
+            z-index: 9999;
+            font-family: 'Courier New', monospace;
+            width: 320px;
+        }
+
+        .zone-display {
+            background: linear-gradient(135deg, #001122, #003355);
+            border: 2px solid #00ddff;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 10px;
+            box-shadow: 0 0 30px rgba(0, 221, 255, 0.6);
+            text-align: center;
+        }
+
+        .zone-header {
+            color: #00ffcc;
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            text-shadow: 0 0 15px #00ffff;
+        }
+
+        .zone-subtitle {
+            display: block;
+            font-size: 18px;
+            color: #aaffff;
+            margin-top: 4px;
+            opacity: 0.9;
+        }
+
+        .zone-list {
+            background: rgba(0, 15, 40, 0.85);
+            border: 2px solid #0066aa;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .zone-option {
+            padding: 12px 18px;
+            color: #88ccff;
+            border-bottom: 1px solid rgba(0, 100, 200, 0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .zone-option:hover {
+            background: rgba(0, 120, 255, 0.25);
+            color: #ffffff;
+        }
+
+        .zone-option.active {
+            background: rgba(0, 180, 255, 0.3);
+            color: #00ffff;
+            border-left: 4px solid #00ffff;
+        }
+
+        .test-status {
+            background: rgba(180, 20, 20, 0.2);
+            color: #ff8888;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ff4444;
+            border-radius: 6px;
+            font-size: 13px;
+            letter-spacing: 1px;
+        }
     </style>
 </body>
 </html>

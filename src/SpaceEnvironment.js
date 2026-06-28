@@ -19,11 +19,9 @@ export class SpaceEnvironment {
     constructor(scene, starCount = 2000, cloudCount = 400) {
         this.scene = scene;
         this.loader = new GLTFLoader();
-        this.globe = null;
-        this.atmosphere = null;
+        this.planets = [];
         this.ambientLight = null;
         this.currentThemeIndex = 0;
-
         this.themes = [
             { background: 0x002244, cloud: 0x446688, ambient: 0xffffff },
             { background: 0x10182f, cloud: 0x6b7cff, ambient: 0xb8c7ff },
@@ -32,44 +30,54 @@ export class SpaceEnvironment {
             { background: 0x06251a, cloud: 0x42d6a4, ambient: 0xc2ffe7 },
             { background: 0x24060a, cloud: 0xff4f7b, ambient: 0xffc0cf }
         ];
-     
         this.starCount = starCount;
         this.starPositions = new Float32Array(starCount * 3);
         this.starColors = new Float32Array(starCount * 3);
         this.starSizes = new Float32Array(starCount);
         this.starVelocities = new Float32Array(starCount);
-     
         this.cloudCount = cloudCount;
         this.cloudPositions = new Float32Array(cloudCount * 3);
         this.cloudVelocities = new Float32Array(cloudCount);
         this.cloudSizes = new Float32Array(cloudCount);
-     
+
         this.initParticles();
         this.initEnvironment();
-        this.initGlobe();
+        this.initPlanets();
     }
 
-    initGlobe() {
-        this.loader.load('/assets/models/planeta.glb', (gltf) => {
-            this.globe = gltf.scene;
-            this.globe.position.set(0, -620, -28000);
-            this.globe.scale.set(45, 45, 45);
-            this.scene.add(this.globe);
+    initPlanets() {
+        const planetFiles = [
+            '/assets/models/planeta.glb',
+            '/assets/models/planeta_dourado.glb',
+            '/assets/models/moon.glb',
+            '/assets/models/green_planeta.glb'
+        ];
 
-            // Atmosfera brilhante
-            const atmosphereGeo = new THREE.SphereGeometry(1, 64, 64);
-            const atmosphereMat = new THREE.MeshBasicMaterial({
-                color: 0x88ccff,
-                transparent: true,
-                opacity: 0.18,
-                blending: THREE.AdditiveBlending,
-                side: THREE.BackSide
-            });
-            this.atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
-            this.globe.add(this.atmosphere);
+        planetFiles.forEach((path, index) => {
+            this.loader.load(
+                path, 
+                (gltf) => {
+                    const p = gltf.scene;
+                    console.log(`✅ Planeta carregado: ${path} (índice ${index})`); // debug
 
-            console.log("✅ Planeta + Atmosfera carregados");
-        }, undefined, (error) => console.error("Erro ao carregar planeta:", error));
+                    // Posições bem separadas
+                    const zPos = -45000 - (index * 35000);
+                    const lanes = [-4500, -1500, 1500, 4500];
+                    const xPos = lanes[index] + (Math.random() - 0.5) * 800;
+                    const yPos = -700 + (Math.random() * 1400);
+
+                    p.position.set(xPos, yPos, zPos);
+                    p.scale.set(100, 100, 100);   // pode precisar ajustar por modelo
+                    p.visible = false;
+                    this.scene.add(p);
+                    this.planets.push(p);
+                },
+                undefined,
+                (error) => {
+                    console.error(`❌ Erro ao carregar ${path}:`, error);
+                }
+            );
+        });
     }
 
     initParticles() {
@@ -77,32 +85,22 @@ export class SpaceEnvironment {
         for (let i = 0; i < this.starCount; i++) {
             this.resetParticle(i, this.starPositions, this.starVelocities, 40, 20);
             this.setStarColor(i);
-            this.starSizes[i] = Math.random() * 1.8 + 0.6;
+            this.starSizes[i] = Math.random() * 2.5 + 1.0;
         }
-
         this.starGeometry.setAttribute('position', new THREE.BufferAttribute(this.starPositions, 3));
         this.starGeometry.setAttribute('color', new THREE.BufferAttribute(this.starColors, 3));
         this.starGeometry.setAttribute('size', new THREE.BufferAttribute(this.starSizes, 1));
-
-        const starMaterial = new THREE.PointsMaterial({ 
-            size: 1.4, vertexColors: true, transparent: true, opacity: 0.85,
-            depthTest: true, depthWrite: false, sizeAttenuation: true
-        });
-
+        const starMaterial = new THREE.PointsMaterial({ size: 2.0, vertexColors: true, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, sizeAttenuation: true });
         this.stars = new THREE.Points(this.starGeometry, starMaterial);
         this.scene.add(this.stars);
 
         this.cloudGeometry = new THREE.BufferGeometry();
         for (let i = 0; i < this.cloudCount; i++) {
             this.resetParticle(i, this.cloudPositions, this.cloudVelocities, 8, 4);
-            this.cloudSizes[i] = Math.random() * 300 + 100;
+            this.cloudSizes[i] = Math.random() * 500 + 200;
         }
         this.cloudGeometry.setAttribute('position', new THREE.BufferAttribute(this.cloudPositions, 3));
-      
-        const cloudMat = new THREE.PointsMaterial({
-            map: cloudTexture, sizeAttenuation: true, transparent: true,
-            depthWrite: false, color: 0x446688, blending: THREE.NormalBlending
-        });
+        const cloudMat = new THREE.PointsMaterial({ map: cloudTexture, sizeAttenuation: true, transparent: true, depthWrite: false, color: 0x446688, blending: THREE.NormalBlending });
         this.clouds = new THREE.Points(this.cloudGeometry, cloudMat);
         this.scene.add(this.clouds);
     }
@@ -110,23 +108,10 @@ export class SpaceEnvironment {
     setStarColor(i) {
         const i3 = i * 3;
         const rand = Math.random();
-        if (rand < 0.45) {
-            this.starColors[i3] = 0.95 + Math.random() * 0.05;
-            this.starColors[i3 + 1] = 0.95 + Math.random() * 0.05;
-            this.starColors[i3 + 2] = 1.0;
-        } else if (rand < 0.75) {
-            this.starColors[i3] = 1.0;
-            this.starColors[i3 + 1] = 0.9 + Math.random() * 0.1;
-            this.starColors[i3 + 2] = 0.65 + Math.random() * 0.25;
-        } else if (rand < 0.9) {
-            this.starColors[i3] = 0.55 + Math.random() * 0.35;
-            this.starColors[i3 + 1] = 0.8 + Math.random() * 0.2;
-            this.starColors[i3 + 2] = 1.0;
-        } else {
-            this.starColors[i3] = 1.0;
-            this.starColors[i3 + 1] = 0.45 + Math.random() * 0.35;
-            this.starColors[i3 + 2] = 0.25 + Math.random() * 0.25;
-        }
+        if (rand < 0.45) { this.starColors[i3] = 0.95 + Math.random() * 0.05; this.starColors[i3 + 1] = 0.95 + Math.random() * 0.05; this.starColors[i3 + 2] = 1.0; }
+        else if (rand < 0.75) { this.starColors[i3] = 1.0; this.starColors[i3 + 1] = 0.9 + Math.random() * 0.1; this.starColors[i3 + 2] = 0.65 + Math.random() * 0.25; }
+        else if (rand < 0.9) { this.starColors[i3] = 0.55 + Math.random() * 0.35; this.starColors[i3 + 1] = 0.8 + Math.random() * 0.2; this.starColors[i3 + 2] = 1.0; }
+        else { this.starColors[i3] = 1.0; this.starColors[i3 + 1] = 0.45 + Math.random() * 0.35; this.starColors[i3 + 2] = 0.25 + Math.random() * 0.25; }
     }
 
     resetParticle(i, posArray, velArray, speedMax, speedMin) {
@@ -153,11 +138,7 @@ export class SpaceEnvironment {
     }
 
     setLevelTheme(level) {
-        if (level <= 1) {
-            this.currentThemeIndex = 0;
-            this.applyTheme(this.themes[0]);
-            return;
-        }
+        if (level <= 1) { this.currentThemeIndex = 0; this.applyTheme(this.themes[0]); return; }
         let nextIndex = 1 + Math.floor(Math.random() * (this.themes.length - 1));
         if (nextIndex === this.currentThemeIndex) nextIndex = 1 + ((nextIndex + 1) % (this.themes.length - 1));
         this.currentThemeIndex = nextIndex;
@@ -165,111 +146,98 @@ export class SpaceEnvironment {
     }
 
     update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager = null) {
-        if (this.globe) {
-            this.globe.visible = (currentLevel <= 20);
+        this.planets.forEach((p, index) => {
+            const shouldBeVisible = (currentLevel >= 5 && currentLevel <= 20);
+            p.visible = shouldBeVisible;
+            
+            if (p.visible) {
+                p.position.z += 60 * deltaTime;
 
-            if (this.globe.visible) {
-                this.globe.position.z += 32 * deltaTime;
-                this.globe.position.x *= 0.992;
-                this.globe.position.y = -620 + Math.sin(Date.now() * 0.00035) * 90;
-
-                const distance = Math.abs(this.globe.position.z);
+                if (p.position.z > 1800) { 
+                    this.resetPlanetPosition(p, index);
+                }
                 
-                let scaleFactor = 45;
-                if (distance < 22000) {
-                    scaleFactor = 45 + (22000 - distance) / 125;
-                }
-                scaleFactor = Math.min(scaleFactor, 340);
-                this.globe.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-                if (this.atmosphere) {
-                    const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.08;
-                    this.atmosphere.scale.set(pulse, pulse, pulse);
-                }
-
-                if (playerMesh && distance < 1400) {
-                    this._avoidPlanetCollision(playerMesh, this.globe, soundManager);
-                }
-
-                if (this.globe.position.z > 3800) {
-                    this.scene.remove(this.globe);
-                    this.globe = null;
-                }
+                const distZ = Math.abs(p.position.z);
+                const scale = Math.max(50, 820 - (distZ / 110));
+                p.scale.set(scale, scale, scale);
+                
+               if (playerMesh && p.position.z > -2800 && p.position.z < 500) {
+    this._avoidPlanetCollision(playerMesh, p, soundManager);
+}
             }
-        }
+        });
 
         const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;
         this.stars.material.opacity = 0.85 * pulse;
         this.clouds.material.opacity = 0.3 * pulse;
-
         this.moveParticles(this.starPositions, this.starVelocities, this.starCount, this.stars, deltaTime, moveInput, playerPosition);
         this.moveParticles(this.cloudPositions, this.cloudVelocities, this.cloudCount, this.clouds, deltaTime, moveInput);
+    }
+
+    resetPlanetPosition(planet, index) {
+        planet.position.z = -100000 - Math.random() * 18000;
+        
+        const lanes = [-4800, -1600, 1600, 4800];
+        planet.position.x = lanes[index] + (Math.random() - 0.5) * 700;
+        
+        planet.position.y = -800 + (Math.random() * 1700) - (index * 100);
     }
 
     moveParticles(pos, vel, count, points, dt, moveInput, playerPos = null) {
         for (let i = 0; i < count; i++) {
             let i3 = i * 3;
-
             pos[i3 + 2] += vel[i] * 32 * dt;
             pos[i3] -= moveInput.x * 20.0 * dt;
             pos[i3 + 1] -= moveInput.y * 20.0 * dt;
-
             if (playerPos) {
-                const dx = pos[i3] - playerPos.x;
-                const dy = pos[i3 + 1] - playerPos.y;
+                const dx = pos[i3] - playerPos.x; const dy = pos[i3 + 1] - playerPos.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < 180 && dist > 0) {
-                    const pushForce = (180 - dist) / 180 * 2.5;
-                    pos[i3] += (dx / dist) * pushForce;
-                    pos[i3 + 1] += (dy / dist) * pushForce;
+                if (dist < 250 && dist > 0) {
+                    const pushForce = (250 - dist) / 250 * 5.0;
+                    pos[i3] += (dx / dist) * pushForce; pos[i3 + 1] += (dy / dist) * pushForce;
                 }
             }
-
-            if (pos[i3 + 2] > 50) {
-                pos[i3 + 2] = -2000;
-                pos[i3] = (Math.random() - 0.5) * 1000;
-                pos[i3 + 1] = (Math.random() - 0.5) * 1000;
-                this.setStarColor(i);
-                this.starSizes[i] = Math.random() * 1.8 + 0.6;
+            if (pos[i3 + 2] > 50) { 
+                pos[i3 + 2] = -2000; 
+                pos[i3] = (Math.random() - 0.5) * 1000; 
+                pos[i3 + 1] = (Math.random() - 0.5) * 1000; 
+                this.setStarColor(i); 
             }
         }
         points.geometry.attributes.position.needsUpdate = true;
-        if (points.geometry.attributes.color) points.geometry.attributes.color.needsUpdate = true;
     }
 
-   _avoidPlanetCollision(playerMesh, globe, soundManager) {
-    const planetPos = globe.position;
-    const scale = globe.scale.x;
-    const planetRadius = scale * 26;
+  
+     _avoidPlanetCollision(playerMesh, planet, soundManager) {
+        const dx = playerMesh.position.x - planet.position.x;
+        const dy = playerMesh.position.y - planet.position.y;
+        const dist2D = Math.sqrt(dx * dx + dy * dy) || 1;
+        
+        const effectiveRadius = planet.scale.x * 0.55; // aumentado
 
-    const dx = playerMesh.position.x - planetPos.x;
-    const dy = playerMesh.position.y - planetPos.y;
-    const dz = playerMesh.position.z - planetPos.z;
+        if (dist2D < effectiveRadius + 80) {
+            if (soundManager && !playerMesh.userData?.planetSoundPlayed) {
+                soundManager.play('meteoro');
+                playerMesh.userData.planetSoundPlayed = true;
+            }
 
-    const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    const minSafeDistance = planetRadius + 55;
+            const pushForce = (effectiveRadius + 80 - dist2D) * 5.5;
+            const pushX = (dx / dist2D) * pushForce * 0.95;
+            const pushY = (dy / dist2D) * pushForce * 2.4;   // força vertical MUITO forte
 
-    if (distance < minSafeDistance && distance > 10) {
-        const pushDir = new THREE.Vector3(dx, dy, dz).normalize();
-        const pushAmount = (minSafeDistance - distance) * 1.8; // Reduzi a força
+            playerMesh.position.x += pushX;
+            playerMesh.position.y += pushY;
 
-        // Empurrão mais suave e equilibrado
-        playerMesh.position.x += pushDir.x * pushAmount * 0.85;
-        playerMesh.position.y += pushDir.y * pushAmount * 0.75;   // Menos força pra cima
-        playerMesh.position.z += pushDir.z * pushAmount * 0.35;
+            // Sobrevoo obrigatório
+            if (playerMesh.position.y < planet.position.y + effectiveRadius * 0.9) {
+                playerMesh.position.y = planet.position.y + effectiveRadius * 0.95 + 80;
+            }
 
-        // Reduz velocidade com mais suavidade
-        if (playerMesh.userData?.velocity) {
-            playerMesh.userData.velocity.multiplyScalar(0.75);
+            // Empurrão forte para trás
+            if (planet.position.z < playerMesh.position.z + 200) {
+                playerMesh.position.z -= 45;
+            }
+        } else {
+            if (playerMesh.userData) playerMesh.userData.planetSoundPlayed = false;
         }
-
-        // Som de raspando
-        if (soundManager && !playerMesh.userData?.planetSoundPlayed) {
-            soundManager.play('meteoro');
-            playerMesh.userData.planetSoundPlayed = true;
-        }
-    } else {
-        if (playerMesh.userData) playerMesh.userData.planetSoundPlayed = false;
-    }
-}
-}
+    }}
