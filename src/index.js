@@ -9,36 +9,45 @@ import { ExplosionManager } from './ExplosionManager.js';
 import { SpaceEnvironment } from './SpaceEnvironment.js';
 import { ProgressionManager } from './ProgressionManager.js';
 import { getLevelData } from './getLevelData.js';
+import { NaveMae } from './NaveMae.js';
 
 window.moveInput = { x: 0, y: 0 };
 
-// --- DECLARAÇÕES GLOBAIS ---
+// ====================== GLOBAIS ======================
 let audioInitialized = false;
 let currentState = 'menu';
 let score = 0;
-let countdown = 5; 
+let countdown = 5;
 let isGameStarted = false;
+let boss = null;
 
 const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
-// Scene, Camera, Renderer
+// ====================== THREE.JS ======================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x010103);
+
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 50000);
 camera.position.set(0, 5, 55);
+
 const clock = new THREE.Clock();
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({ 
+    antialias: false, 
+    powerPreference: "high-performance" 
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(isMobileDevice ? 1 : Math.min(window.devicePixelRatio, 1.5));
 document.body.appendChild(renderer.domElement);
 
-// --- Instâncias ---
+// ====================== INSTÂNCIAS ======================
 const soundManager = new SoundManager();
 window.soundManager = soundManager;
-const laserManager = new LaserManager(scene, soundManager); 
+
+const laserManager = new LaserManager(scene, soundManager);
 const explosionManager = new ExplosionManager(scene, soundManager, isMobileDevice);
 window.explosionManager = explosionManager;
+
 const inputManager = new InputManager();
 const scorePopup = new ScorePopup(scene, camera);
 const player = new Player(scene, laserManager, explosionManager);
@@ -46,149 +55,10 @@ const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice)
 const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 800 : 2000, isMobileDevice ? 120 : 400);
 const progressionManager = new ProgressionManager();
 
+// ====================== HELPERS ======================
 function syncLevelResources() {
     player.setLevelLoadout(progressionManager.getLevelLoadout());
     updateResourceHUD();
-}
-
-// ==================== JOYSTICK VIRTUAL ====================
-let joystickActive = false;
-let joystickBase = null;
-let joystickThumb = null;
-
-function createVirtualJoystick() {
-    const container = document.createElement('div');
-    container.id = 'virtual-joystick';
-    container.style.cssText = `
-        position: fixed; bottom: 40px; left: 40px; width: 140px; height: 140px;
-        border: 5px solid rgba(0,255,255,0.5); border-radius: 50%;
-        background: rgba(0,40,80,0.3); z-index: 10000; touch-action: none; display: none;
-    `;
-
-    const thumb = document.createElement('div');
-    thumb.style.cssText = `
-        position: absolute; width: 55px; height: 55px; background: #00ffff;
-        border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        box-shadow: 0 0 25px #00ffff;
-    `;
-
-    container.appendChild(thumb);
-    document.body.appendChild(container);
-
-    joystickBase = container;
-    joystickThumb = thumb;
-
-    if ('ontouchstart' in window) joystickBase.style.display = 'block';
-
-    setupJoystickEvents();
-}
-
-function updateLevelUI(currentLevel) {
-    const data = getLevelData(currentLevel);
-    const titleElement = document.querySelector('.nexus-title');
-    const taskElement = document.querySelector('.nexus-status');
-
-    if (titleElement && taskElement) {
-        titleElement.innerText = `NÍVEL ${currentLevel} - ${data.title}`;
-        taskElement.innerText = data.task;
-
-        // Força a visibilidade ignorando o CSS !important que pode estar escondendo
-        titleElement.style.display = 'block'; 
-        taskElement.style.display = 'block'; // Adicione isso aqui!
-        
-        titleElement.style.color = '#00ffff';
-        taskElement.style.color = '#ffffff';
-        
-        console.log("UI atualizada para:", data.title);
-    } else {
-        // Se cair aqui, o seu HTML não tem as classes .nexus-title ou .nexus-status
-        console.warn("Elementos não encontrados! Verifique se as classes no HTML são exatamente essas.");
-    }
-}
-
-function setupJoystickEvents() {
-    joystickBase.addEventListener('touchstart', e => { e.preventDefault(); joystickActive = true; handleJoystick(e.touches[0]); });
-    document.addEventListener('touchmove', e => { if (joystickActive) { e.preventDefault(); handleJoystick(e.touches[0]); }});
-    document.addEventListener('touchend', () => {
-        if (!joystickActive) return;
-        joystickActive = false;
-        joystickThumb.style.transform = 'translate(-50%, -50%)';
-        window.moveInput.x = 0;
-        window.moveInput.y = 0;
-    });
-}
-
-function handleJoystick(touch) {
-    const rect = joystickBase.getBoundingClientRect();
-    const cx = rect.left + rect.width/2;
-    const cy = rect.top + rect.height/2;
-    let dx = touch.clientX - cx;
-    let dy = touch.clientY - cy;
-    const dist = Math.min(55, Math.hypot(dx, dy));
-    const angle = Math.atan2(dy, dx);
-
-    dx = Math.cos(angle) * dist;
-    dy = Math.sin(angle) * dist;
-
-    joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
-    window.moveInput.x = dx / 55;
-    window.moveInput.y = dy / 55;
-}
-
-window.showLevelUp = function(level, message) {
-    const existing = document.getElementById('level-up-card');
-    if (existing) existing.remove();
-
-    const card = document.createElement('div');
-    card.id = 'level-up-card';
-    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:30px;border-radius:18px;text-align:center;z-index:20000;color:white;pointer-events:none;background:rgba(0,0,0,0.7);border:1px solid #00ffff;backdrop-filter:blur(10px);`;
-    
-    card.innerHTML = `
-        <h2 style="color:#00ffff;margin:0;font-size:20px;text-transform:uppercase;letter-spacing:2px;">Zona Alcançada</h2>
-        <div style="font-size:60px;font-weight:bold;margin:10px 0;color:#fff;">${level}</div>
-        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message}</p>
-    `;
-    document.body.appendChild(card);
-    setTimeout(() => card.remove(), 5000); // Aumentei para 5s para dar tempo de ler
-};
-
-function getMissionText(level) {
-    if (level <= 5) return "Treinamento: Destrua dróides básicos para calibrar seus sistemas.";
-    if (level <= 20) return "Zona de Asteróides: Evite colisões e destrua as rochas instáveis.";
-    if (level <= 33) return "Bloqueio Hostil: Naves de combate interceptando. Priorize alvos pesados!";
-    if (level <= 50) return "Setor Alfa: Zona de conflito total. Mantenha fogo contínuo!";
-    if (level <= 100) return "Fronteira Final: Destrua a Nave-Mãe e encerre esta guerra!";
-    return "Sobreviva ao ataque e limpe o perímetro.";
-}
-
-function gameLoop() {
-    const deltaTime = clock.getDelta();
-
-    if (!isGameStarted) {
-        countdown -= deltaTime; // Subtrai o tempo decorrido
-        
-        // Exibir o contador na tela (atualize seu HTML aqui)
-        console.log("Iniciando em: " + Math.ceil(countdown));
-
-        if (countdown <= 0) {
-            isGameStarted = true;
-            console.log("JOGO COMEÇOU!");
-        }
-    } else {
-        // AQUI você chama o update da sua classe
-        spaceEnv.update(deltaTime, playerPosition, moveInput, currentLevel, playerMesh, soundManager);
-    }
-
-    requestAnimationFrame(gameLoop);
-}
-
-// ==================== OUTRAS FUNÇÕES ====================
-function updateCamera() {
-    if (!player.shipModel) return;
-    const offset = new THREE.Vector3(0, 15, -80);
-    offset.applyQuaternion(player.shipModel.quaternion);
-    camera.position.lerp(player.shipModel.position.clone().add(offset), 0.1);
-    camera.lookAt(player.shipModel.position);
 }
 
 function updateHUD() {
@@ -217,17 +87,247 @@ function updateEnvironmentTheme(level = progressionManager.getLevel()) {
     }
 }
 
-function setupNexusSelector() {
-    const select = document.getElementById('debugLevelSelect');
-    if (!select) return;
-    select.addEventListener('change', (e) => {
-        const nivel = parseInt(e.target.value);
-        progressionManager.setLevel(nivel);
+function updateLevelUI(currentLevel) {
+    const data = getLevelData(currentLevel);
+    const titleElement = document.querySelector('.nexus-title');
+    const taskElement = document.querySelector('.nexus-status');
+
+    if (titleElement && taskElement) {
+        titleElement.innerText = `NÍVEL ${currentLevel} - ${data.title}`;
+        taskElement.innerText = data.task;
+        titleElement.style.display = 'block';
+        taskElement.style.display = 'block';
+        titleElement.style.color = '#00ffff';
+        taskElement.style.color = '#ffffff';
+    } else {
+        console.warn("Elementos .nexus-title ou .nexus-status não encontrados.");
+    }
+}
+
+window.showLevelUp = function(level, message) {
+    const existing = document.getElementById('level-up-card');
+    if (existing) existing.remove();
+
+    const card = document.createElement('div');
+    card.id = 'level-up-card';
+    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:30px;border-radius:18px;text-align:center;z-index:20000;color:white;pointer-events:none;background:rgba(0,0,0,0.7);border:1px solid #00ffff;backdrop-filter:blur(10px);`;
+    
+    card.innerHTML = `
+        <h2 style="color:#00ffff;margin:0;font-size:20px;text-transform:uppercase;letter-spacing:2px;">Zona Alcançada</h2>
+        <div style="font-size:60px;font-weight:bold;margin:10px 0;color:#fff;">${level}</div>
+        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message}</p>
+    `;
+    document.body.appendChild(card);
+    setTimeout(() => card.remove(), 5000);
+};
+
+// ====================== JOYSTICK ======================
+let joystickActive = false;
+let joystickBase = null;
+let joystickThumb = null;
+
+function createVirtualJoystick() {
+    const container = document.createElement('div');
+    container.id = 'virtual-joystick';
+    container.style.cssText = `
+        position: fixed; bottom: 40px; left: 40px; width: 140px; height: 140px;
+        border: 5px solid rgba(0,255,255,0.5); border-radius: 50%;
+        background: rgba(0,40,80,0.3); z-index: 10000; touch-action: none; display: none;
+    `;
+
+    const thumb = document.createElement('div');
+    thumb.style.cssText = `
+        position: absolute; width: 55px; height: 55px; background: #00ffff;
+        border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        box-shadow: 0 0 25px #00ffff;
+    `;
+
+    container.appendChild(thumb);
+    document.body.appendChild(container);
+
+    joystickBase = container;
+    joystickThumb = thumb;
+
+    if ('ontouchstart' in window) joystickBase.style.display = 'block';
+    setupJoystickEvents();
+}
+
+function setupJoystickEvents() {
+    joystickBase.addEventListener('touchstart', e => {
+        e.preventDefault();
+        joystickActive = true;
+        handleJoystick(e.touches[0]);
+    });
+
+    document.addEventListener('touchmove', e => {
+        if (joystickActive) {
+            e.preventDefault();
+            handleJoystick(e.touches[0]);
+        }
+    });
+
+    document.addEventListener('touchend', () => {
+        if (!joystickActive) return;
+        joystickActive = false;
+        joystickThumb.style.transform = 'translate(-50%, -50%)';
+        window.moveInput.x = 0;
+        window.moveInput.y = 0;
+    });
+}
+
+function handleJoystick(touch) {
+    const rect = joystickBase.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
+    const dist = Math.min(55, Math.hypot(dx, dy));
+    const angle = Math.atan2(dy, dx);
+
+    dx = Math.cos(angle) * dist;
+    dy = Math.sin(angle) * dist;
+
+    joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+    window.moveInput.x = dx / 55;
+    window.moveInput.y = dy / 55;
+}
+
+// ====================== GAME LOGIC ======================
+const handleEnemyScore = (pts, hitPosition) => {
+    score += pts;
+    updateHUD();
+
+    const levelUp = progressionManager.addScore(pts);
+    if (hitPosition) scorePopup.show(pts, hitPosition);
+
+    if (levelUp) {
         updateLevelHUD();
-        updateEnvironmentTheme(nivel);
+        updateEnvironmentTheme();
+        progressionManager.resetLevelResources();
+        syncLevelResources();
+
+        enemyManager.clearAllEnemies();
+        const novoNivel = progressionManager.getLevel();
+        enemyManager.spawnWave(player, novoNivel);
+
+        const info = getLevelData(novoNivel);
+        window.showLevelUp(novoNivel, info.title || info.task || '');
+    }
+};
+
+const handlePlayerHit = () => {
+    const result = progressionManager.loseChance();
+    updateResourceHUD();
+
+    if (result.failed) {
+        const failedLevel = progressionManager.failLevel();
+        enemyManager.clearAllEnemies();
+        progressionManager.resetLevelResources();
+        syncLevelResources();
+        updateLevelHUD();
+        updateEnvironmentTheme(failedLevel);
+        enemyManager.spawnWave(player, failedLevel);
+    }
+};
+
+function updateCamera() {
+    if (!player.shipModel) return;
+    const offset = new THREE.Vector3(0, 15, -80);
+    offset.applyQuaternion(player.shipModel.quaternion);
+    camera.position.lerp(player.shipModel.position.clone().add(offset), 0.1);
+    camera.lookAt(player.shipModel.position);
+}
+
+// ====================== ANIMATE ======================
+function animate() {
+    requestAnimationFrame(animate);
+    const deltaTime = Math.min(clock.getDelta(), 0.1);
+
+    if (currentState !== GAME_STATE.PLAYING) {
+        renderer.render(scene, camera);
+        return;
+    }
+
+    // Countdown
+    if (!isGameStarted) {
+        countdown -= deltaTime;
+        const display = document.getElementById('countdown-display');
+        if (display) {
+            const num = Math.ceil(countdown);
+            display.innerText = num > 0 ? num : '';
+            if (num <= 0) {
+                isGameStarted = true;
+                display.style.display = 'none';
+
+                const nivelInicial = progressionManager.getLevel();
+                enemyManager.spawnWave(player, nivelInicial);
+                updateLevelUI(nivelInicial);
+                updateEnvironmentTheme(nivelInicial);
+                progressionManager.resetLevelResources();
+                syncLevelResources();
+                if (audioInitialized) soundManager.startShipEngine();
+            }
+        }
+        renderer.render(scene, camera);
+        return;
+    }
+
+    // Input
+    const keyboardInput = inputManager.update();
+    const input = {
+        x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
+        y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
+    };
+
+    // Updates
+    player.update(input, deltaTime, enemyManager, handlePlayerHit);
+
+    if (spaceEnvironment) {
+        spaceEnvironment.update(deltaTime, player.mesh.position, input, progressionManager.getLevel(), player.mesh, soundManager);
+    }
+
+    enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
+    laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
+    explosionManager.update(deltaTime);
+    scorePopup.update(deltaTime);
+    updateCamera();
+
+    // Boss
+    const currentLevel = progressionManager.getLevel();
+    if (currentLevel === 50 && !boss) {
+        boss = new NaveMae(scene);
+        console.log("🚀 Nave Mãe spawnada!");
+    }
+
+    if (boss) {
+        boss.update(deltaTime, player.mesh.position);
+        if (boss.hp <= 0) {
+            if (explosionManager && explosionManager.createBigExplosion) {
+                explosionManager.createBigExplosion(boss.mesh.position);
+            }
+            boss.mesh.visible = false;
+            boss = null;
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+
+// ====================== SETUP ======================
+function setupNexusSelector() {
+    window.addEventListener('nivelAlterado', (e) => {
+        const novoNivel = parseInt(e.detail.nivel);
+        progressionManager.setLevel(novoNivel);
+
+        updateLevelHUD();
+        updateLevelUI(novoNivel);
+        updateEnvironmentTheme(novoNivel);
+
         if (currentState === GAME_STATE.PLAYING) {
             enemyManager.clearAllEnemies();
-            enemyManager.spawnWave(player, nivel);
+            progressionManager.resetLevelResources();
+            syncLevelResources();
+            enemyManager.spawnWave(player, novoNivel);
         }
     });
 }
@@ -237,179 +337,49 @@ async function initGame() {
     createVirtualJoystick();
     setupNexusSelector();
 }
+
 function startGame() {
     if (currentState === GAME_STATE.PLAYING) return;
-    
-    // Reseta o estado do contador
+
     countdown = 5;
     isGameStarted = false;
-    document.getElementById('countdown-display').style.display = 'block'; // Mostra o contador na tela
-
-    currentState = GAME_STATE.PLAYING;
     score = 0;
 
+    const countdownDisplay = document.getElementById('countdown-display');
+    if (countdownDisplay) countdownDisplay.style.display = 'block';
+
+    currentState = GAME_STATE.PLAYING;
     document.getElementById('overlay').style.display = 'none';
-    document.getElementById('nexusSelector').style.display = 'none'; 
+    document.getElementById('nexusSelector').style.display = 'none';
 
     player.mesh.position.set(0, -1, 8);
     enemyManager.clearAllEnemies();
-    
+
     updateHUD();
     updateLevelHUD();
 }
-function animate() {
-    requestAnimationFrame(animate);
-    const deltaTime = Math.min(clock.getDelta(), 0.1);
 
-    // --- LÓGICA DE CONTADOR ---
-    if (currentState === GAME_STATE.PLAYING && !isGameStarted) {
-        countdown -= deltaTime;
-        const display = document.getElementById('countdown-display');
-        const num = Math.ceil(countdown);
-        
-        if (num > 0) {
-            display.innerText = num;
-        } else {
-            isGameStarted = true;
-            display.style.display = 'none';
-            
-            // Agora sim, inicializa o jogo real após os 5 segundos
-            const nivelInicial = progressionManager.getLevel();
-            enemyManager.spawnWave(player, nivelInicial);
-            updateLevelUI(nivelInicial);
-            updateEnvironmentTheme();
-            progressionManager.resetLevelResources();
-            syncLevelResources();
-            if (audioInitialized) soundManager.startShipEngine();
-        }
-        renderer.render(scene, camera);
-        return; // Pára aqui, não executa o resto do jogo
-    }
-
-    const handleEnemyScore = (pts, hitPosition) => {
-        score += pts;
-        updateHUD();
-
-        const levelUp = progressionManager.addScore(pts);
-
-        if (hitPosition) scorePopup.show(pts, hitPosition);
-if (levelUp) {
-    updateLevelHUD();
-    updateEnvironmentTheme();
-    progressionManager.resetLevelResources();
-    syncLevelResources();
-
-   
-    const input = window.moveInput || { x: 0, y: 0 };
-const nivelAtual = progressionManager.getLevel();
-player.update(input, deltaTime, enemyManager, handlePlayerHit);
-    const info = getLevelData(nivelAtual);  
-    window.showLevelUp(nivelAtual, info.title, info.task);
-}
-    };
-
-    const handlePlayerHit = () => {
-        const result = progressionManager.loseChance();
-        updateResourceHUD();
-
-        if (result.failed) {
-            const failedLevel = progressionManager.failLevel();
-            enemyManager.clearAllEnemies();
-            progressionManager.resetLevelResources();
-            syncLevelResources();
-            updateLevelHUD();
-            updateEnvironmentTheme(failedLevel);
-            enemyManager.spawnWave(player, failedLevel);
-        }
-    };
-
-    if (currentState === GAME_STATE.PLAYING) {
-        const keyboardInput = inputManager.update();
-        const input = {
-            x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
-            y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
-        };
-
-player.update(input, deltaTime, enemyManager, handlePlayerHit);
-
-if (spaceEnvironment) {
-    spaceEnvironment.update(
-        deltaTime, 
-        player.mesh.position, 
-        input, 
-        progressionManager.getLevel(),
-        player.mesh,           // playerMesh
-        soundManager           // ← adicione o soundManager aqui
-    );
-}
-        // --- ATUALIZAÇÃO DE SCORE E NÍVEL ---
-        enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
-
-        laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
-        explosionManager.update(deltaTime);
-        scorePopup.update(deltaTime);
-        updateCamera();
-
-        
-    }
-    renderer.render(scene, camera);
-}
-
+// ====================== DOM CONTENT LOADED ======================
 window.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('start-btn');
 
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyQ') player.startBarrelRoll(-1);
+        if (e.code === 'KeyE') player.startBarrelRoll(1);
+    });
 
-window.addEventListener('keydown', (e) => {
-    // Q para Esquerda (-1)
-    if (e.code === 'KeyQ') {
-        player.startBarrelRoll(-1);
-    }
-    // E para Direita (1)
-    if (e.code === 'KeyE') {
-        player.startBarrelRoll(1);
-    }
-});
+    const btnLeft = document.getElementById('btnRollLeft');
+    const btnRight = document.getElementById('btnRollRight');
 
-const btnLeft = document.getElementById('btnRollLeft');
-const btnRight = document.getElementById('btnRollRight');
+    if (btnLeft) btnLeft.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); player.startBarrelRoll(-1); });
+    if (btnRight) btnRight.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); player.startBarrelRoll(1); });
 
-
-btnLeft.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation(); 
-    player.startBarrelRoll(-1); 
-});
-
-window.addEventListener('levelChanged', (e) => {
-    const level = e.detail.level;
-    const data = getLevelData(level); // Aqui chamamos a função que você mostrou!
-    
-    // Agora, atualize os elementos HTML na tela
-    const titleElement = document.getElementById('nexus-title'); // Ajuste o ID conforme seu HTML
-    const taskElement = document.getElementById('nexus-status');
-    
-    if (titleElement) titleElement.innerText = data.title;
-    if (taskElement) taskElement.innerText = data.task;
-    
-    console.log(`Nível mudou para ${level}: ${data.title}`);
-});
-
-btnRight.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    player.startBarrelRoll(1);
-});
-    
-  
     const handleStart = async (e) => {
         if (e) e.preventDefault();
-        
-        // Ativa áudio obrigatório para mobile
         if (!audioInitialized) {
             await soundManager.init();
             audioInitialized = true;
         }
-        
         soundManager.startShipEngine();
         startGame();
     };
@@ -428,28 +398,20 @@ btnRight.addEventListener('pointerdown', (e) => {
         btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); player.isFiring = false; });
     }
 
+    // Missile
     const btnMissile = document.getElementById('btnMissile');
     if (btnMissile) {
-        btnMissile.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            if (player.fireMissile()) updateResourceHUD();
-        });
-        btnMissile.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (player.fireMissile()) updateResourceHUD();
-        });
-        btnMissile.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (player.fireMissile()) updateResourceHUD();
-        }, { passive: false });
+        const fire = (e) => { if (e) e.preventDefault(); if (player.fireMissile()) updateResourceHUD(); };
+        btnMissile.addEventListener('pointerdown', fire);
+        btnMissile.addEventListener('click', fire);
+        btnMissile.addEventListener('touchstart', fire, { passive: false });
     }
 
-    // Pause Button
+    // Pause
     const btnPause = document.getElementById('btnPause');
     if (btnPause) {
         btnPause.addEventListener('click', () => {
             currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
-            console.log("Pause toggled:", currentState);
         });
         btnPause.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -457,7 +419,7 @@ btnRight.addEventListener('pointerdown', (e) => {
         });
     }
 
-    // PDC Button
+    // PDC
     const btnPDC = document.getElementById('btnPDC');
     if (btnPDC) {
         btnPDC.addEventListener('click', (e) => {

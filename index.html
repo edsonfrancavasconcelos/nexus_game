@@ -40,24 +40,20 @@
         </div>
     </div>
 
-    <!-- NEXUS SELECTOR CORRIGIDO -->
-    <div id="nexusSelector">
-        <div id="zone-header" class="zone-header">
-            ZONA 01 • SETOR ALPHA
-            <span class="arrow">▼</span>
-        </div>
-
-        <div id="zone-list" class="zone-list">
-            <div class="zone-option active" data-value="1">ZONA 01 • SETOR ALPHA</div>
-            <div class="zone-option" data-value="21">ZONA 21 • GIGANTES TIPO 05</div>
-            <div class="zone-option" data-value="31">ZONA 31 • GIGANTES TIPO 10</div>
-            <div class="zone-option" data-value="51">ZONA 51 • GIGANTES TIPO 15</div>
-        </div>
-
-        <div class="test-status">
-            SISTEMA DE TESTE DE NÍVEIS ATIVO
-        </div>
+ <div id="nexusSelector">
+    <div id="zone-header" class="zone-header">
+        <span id="selected-text">ZONA 01 • SETOR ALPHA</span>
+        <span class="arrow">▼</span>
     </div>
+
+    <div id="zone-list" class="zone-list"></div>
+
+    <div class="test-status">
+        SISTEMA DE TESTE DE NÍVEIS ATIVO
+    </div>
+</div>
+
+        
 
     <div id="cockpit-ui">
         <div id="roll-controls">
@@ -83,122 +79,160 @@
     </div>
 
     <div id="countdown-display" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); 
-     font-size: 100px; color: #00ffff; font-family: sans-serif; display: none; z-index: 10000; text-shadow: 0 0 20px #000;">
+       font-size: 100px; color: #00ffff; font-family: sans-serif; display: none; z-index: 10000; text-shadow: 0 0 20px #000;">
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const header = document.getElementById('zone-header');
-            const list = document.getElementById('zone-list');
-            const options = document.querySelectorAll('.zone-option');
+   <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const header = document.getElementById('zone-header');
+        const list = document.getElementById('zone-list');
+        const selectedText = document.getElementById('selected-text');
 
-            if (header && list) {
-                header.addEventListener('click', () => {
-                    list.classList.toggle('open');
-                    header.classList.toggle('open');
-                });
-            }
+        // Gerar 100 níveis automaticamente
+        for (let i = 1; i <= 100; i++) {
+            const div = document.createElement('div');
+            div.className = 'zone-option';
+            div.dataset.value = i;
+            
+            // Define a lógica de nomes
+            let label = `ZONA ${i.toString().padStart(2, '0')}`;
+            if (i >= 51) label += " • GIGANTES TIPO 15";
+            else if (i >= 31) label += " • GIGANTES TIPO 10";
+            else if (i >= 21) label += " • GIGANTES TIPO 05";
+            else label += " • SETOR ALPHA";
+            
+            div.textContent = label;
 
-            options.forEach(option => {
-                option.addEventListener('click', () => {
-                    options.forEach(opt => opt.classList.remove('active'));
-                    option.classList.add('active');
+            div.addEventListener('click', () => {
+                // Remove classe active de todos
+                document.querySelectorAll('.zone-option').forEach(opt => opt.classList.remove('active'));
+                div.classList.add('active');
 
-                    // Atualiza o header
-                    header.childNodes[0].nodeValue = option.textContent.trim() + " ";
+                selectedText.textContent = div.textContent.trim();
 
-                    // Fecha após selecionar
-                    list.classList.remove('open');
-                    header.classList.remove('open');
-                });
+                // Dispara evento para o seu jogo
+                window.dispatchEvent(new CustomEvent('nivelAlterado', { 
+                    detail: { nivel: i } 
+                }));
+
+                list.classList.remove('open');
+                header.classList.remove('open');
             });
+            list.appendChild(div);
+        }
+
+        // Toggle do menu
+        header.addEventListener('click', () => {
+            list.classList.toggle('open');
+            header.classList.toggle('open');
         });
-    </script>
+    });
+</script>
 
     <script type="module" src="/src/index.js"></script>
 
     <style>
-        #nexusSelector {
-            position: absolute;          
-            left: 12px;
-            z-index: 9999;           
-            max-width: 380px;
-            font-family: 'Courier New', monospace;
-        }
+   #nexusSelector {
+    position: absolute;    
+    left: 12px;
+    z-index: 9999;            
+    width: 320px; /* Definido largura fixa para melhor comportamento */
+    max-width: 90vw; /* Responsividade */
+    font-family: 'Courier New', monospace;
+}
 
-        .zone-header {
-            background: linear-gradient(135deg, #001833, #003366);
-            border: 2px solid #00ddff;
-            border-radius: 12px;
-            padding: 16px 20px;
-            color: #00ffcc;
-            font-size: 18px;
-            font-weight: bold;
-            letter-spacing: 2px;
-            text-align: center;
-            box-shadow: 0 0 25px rgba(0, 221, 255, 0.6);
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+.zone-header {
+    background: linear-gradient(135deg, #001833, #003366);
+    border: 2px solid #00ddff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    color: #00ffcc;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-align: center;
+    box-shadow: 0 0 25px rgba(0, 221, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-        .arrow {
-            transition: transform 0.3s;
-        }
+.arrow {
+    transition: transform 0.3s;
+    margin-left: 10px;
+    user-select: none;
+}
 
-        .zone-header.open .arrow {
-            transform: rotate(180deg);
-        }
+.zone-header.open .arrow {
+    transform: rotate(180deg);
+}
 
-        .zone-list {
-            background: rgba(0, 20, 50, 0.95);
-            border: 2px solid #0066bb;
-            border-top: none;
-            border-radius: 0 0 12px 12px;
-            overflow: hidden;
-            max-height: 0;
-            transition: max-height 0.4s ease-out;
-        }
+.zone-list {
+    background: rgba(0, 20, 50, 0.95);
+    border: 2px solid #0066bb;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    
+    /* Configuração chave para os 100 níveis */
+    max-height: 0; 
+    overflow-y: auto; /* Adiciona a barra de rolagem */
+    transition: max-height 0.4s ease-out;
+}
 
-        .zone-list.open {
-            max-height: 320px;
-        }
+.zone-list.open {
+    /* Define uma altura máxima que caiba na tela do celular */
+    max-height: 350px; 
+}
 
-        .zone-option {
-            padding: 13px 20px;
-            color: #88ddff;
-            border-bottom: 1px solid rgba(0, 100, 200, 0.4);
-            cursor: pointer;
-        }
+/* Estilização da barra de rolagem para um visual futurista */
+.zone-list::-webkit-scrollbar {
+    width: 8px;
+}
+.zone-list::-webkit-scrollbar-track {
+    background: rgba(0, 10, 30, 0.9);
+}
+.zone-list::-webkit-scrollbar-thumb {
+    background: #00ddff;
+    border-radius: 4px;
+}
 
-        .zone-option:hover,
-        .zone-option.active {
-            background: rgba(0, 140, 255, 0.35);
-            color: #ffffff;
-        }
+.zone-option {
+    padding: 13px 20px;
+    color: #88ddff;
+    border-bottom: 1px solid rgba(0, 100, 200, 0.4);
+    cursor: pointer;
+    transition: background 0.2s;
+}
 
-        .test-status {
-            background: rgba(180, 20, 20, 0.25);
-            color: #ff8888;
-            padding: 8px;
-            text-align: center;
-            border: 1px solid #ff5555;
-            border-radius: 6px;
-            font-size: 13px;
-            margin-top: 10px;
-        }
+.zone-option:hover,
+.zone-option.active {
+    background: rgba(0, 140, 255, 0.35);
+    color: #ffffff;
+}
 
-        @media (max-width: 768px) {
-            #nexusSelector {                
-                left: 8px;
-                width: 60%;
-            }
-            .zone-header {
-                font-size: 15px;
-                padding: 14px 16px;
-            }
-        }
+.test-status {
+    background: rgba(180, 20, 20, 0.25);
+    color: #ff8888;
+    padding: 8px;
+    text-align: center;
+    border: 1px solid #ff5555;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-top: 10px;
+    pointer-events: none; /* Não atrapalha o clique */
+}
+
+@media (max-width: 768px) {
+    #nexusSelector {                
+        left: 8px;
+        width: 80%; /* Ajustado para melhor uso no mobile */
+    }
+    .zone-header {
+        font-size: 14px;
+        padding: 12px 14px;
+    }
+}
     </style>
 </body>
 </html>

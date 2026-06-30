@@ -22,19 +22,21 @@ export class EnemyManager {
         this.maxEnemiesOnScreen = isMobile ? 6 : 10;
         this.waveCooldown = isMobile ? 2.0 : 1.6;
 
+        // Templates
         this.enemyTemplate = null;
         this.enemyTemplate5 = null;
         this.enemyTemplate10 = null;
         this.enemyTemplate15 = null;
         this.droneTemplate = null;
         this.meteoroTemplate = null;
-        this.naveMaeTemplate = null;
         this.enemyTemplate6 = null;
 
         this._loadEnemyModel();
     }
 
-    async init() { return Promise.resolve(); }
+    async init() { 
+        return Promise.resolve(); 
+    }
 
     clearAllEnemies() {
         this.enemies.forEach(e => this.scene.remove(e));
@@ -84,29 +86,6 @@ export class EnemyManager {
         return glow;
     }
 
-    _styleRockModel(model, baseColor = 0x6f6a63) {
-        model.traverse((child) => {
-            if (!child.isMesh || !child.material) return;
-
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            const styledMaterials = materials.map((material) => {
-                const nextMaterial = material.clone();
-                if (nextMaterial.color) nextMaterial.color.setHex(baseColor);
-                if (nextMaterial.map) nextMaterial.map.colorSpace = THREE.SRGBColorSpace;
-                if ('roughness' in nextMaterial) nextMaterial.roughness = 1.0;
-                if ('metalness' in nextMaterial) nextMaterial.metalness = 0.02;
-                if ('emissive' in nextMaterial) {
-                    nextMaterial.emissive.setHex(0x050505);
-                    nextMaterial.emissiveIntensity = 0.08;
-                }
-                nextMaterial.needsUpdate = true;
-                return nextMaterial;
-            });
-
-            child.material = Array.isArray(child.material) ? styledMaterials : styledMaterials[0];
-        });
-    }
-
     _styleAsteroidModel(model) {
         model.traverse((child) => {
             if (!child.isMesh || !child.material) return;
@@ -134,37 +113,33 @@ export class EnemyManager {
     _loadEnemyModel() {
         const loader = new GLTFLoader();
 
-        const loadModel = (path, targetKey, scale, rotation = 0, isTemplate = false) => {
+        const loadModel = (path, targetKey, scale, rotation = 0) => {
             loader.load(path, (gltf) => {
-                const model = isTemplate ? gltf.scene : this._createOrientedTemplate(gltf.scene, rotation);
+                const model = this._createOrientedTemplate(gltf.scene, rotation);
                 model.scale.set(...scale);
-
-                if (isTemplate) {
-                    this.templates[targetKey] = model;
-                } else {
-                    this[targetKey] = model;
-                }
+                this[targetKey] = model;
             }, undefined, (error) => {
                 console.error(`❌ Erro ao carregar ${path}:`, error);
             });
         };
 
-        loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [30, 30, 30], 0);
-        loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [30, 30, 30], Math.PI / 2);
-        loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [30, 30, 30], 0);
-        loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [30, 30, 30], 0);
-        loadModel('/assets/models/nave_mae.glb', 'naveMaeTemplate', [100, 100, 100], 0);
+        loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [20, 20, 20], 0);
+        loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [20, 20, 20], Math.PI / 2);
+        loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [20, 20, 20], 0);
+        loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [20, 20, 20], 0);
         loadModel('/assets/models/drone.glb', 'droneTemplate', [80, 80, 80], Math.PI);
         loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [15, 15, 15], 0);
+        loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [35, 35, 35], 0);
+
+        // Asteroid especial
         loader.load('/assets/models/asteroid_ball.glb', (gltf) => {
             const model = gltf.scene;
             model.scale.set(6, 6, 6);
             this._styleAsteroidModel(model);
             this.templates.asteroide = model;
         }, undefined, (error) => {
-            console.error('❌ Erro ao carregar /assets/models/asteroid_ball.glb:', error);
+            console.error('❌ Erro ao carregar asteroid_ball.glb:', error);
         });
-        loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [35, 35, 35], 0);
     }
 
     spawnWave(player, currentLevel = 1) {
@@ -178,6 +153,7 @@ export class EnemyManager {
         let laserSound = 'enemyLaser';
         let hp = 1;
 
+        // Lógica de spawn de inimigos normais
         if (rand < 0.25 && this.templates?.asteroide) {
             selectedTemplate = this.templates.asteroide;
             type = 'asteroide';
@@ -239,8 +215,7 @@ export class EnemyManager {
         }
 
         const enemy = selectedTemplate.clone();
-        if (type === 'asteroide') {
-        } else if (type === 'meteoro') {
+        if (type === 'meteoro') {
             this._addLocalGlow(enemy, 0xff8a3d);
         }
 
@@ -264,9 +239,23 @@ export class EnemyManager {
         enemy.position.copy(finalSpawnPos);
         const moveDir = new THREE.Vector3().subVectors(camPos, enemy.position).normalize();
 
-        enemy.userData = { type, speed, moveDir, shootTimer: (type === 'meteoro' || type === 'asteroide') ? 99999 : (0.8 + Math.random() * 1.2), hp, passSound, laserSound, passSoundPlayed: false };
+        const shootTimer = (type === 'meteoro' || type === 'asteroide') ? 99999 : 0.8 + Math.random() * 1.2;
+
+        enemy.userData = { 
+            type, 
+            speed, 
+            moveDir, 
+            shootTimer, 
+            hp, 
+            passSound, 
+            laserSound, 
+            passSoundPlayed: false 
+        };
+
         enemy.lookAt(camPos);
-        enemy.traverse((child) => { if (child.isMesh) child.frustumCulled = false; });
+        enemy.traverse((child) => { 
+            if (child.isMesh) child.frustumCulled = false; 
+        });
 
         this.scene.add(enemy);
         this.enemies.push(enemy);
@@ -275,20 +264,18 @@ export class EnemyManager {
     update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
         if (!player?.mesh || !deltaTime) return;
 
-        // Definição da posição atual da câmera (corrigido)
         const camPosAtual = new THREE.Vector3();
         this.camera.getWorldPosition(camPosAtual);
 
-        // 1. Lógica de detecção de mudança de nível (Para disparar o Card)
+        // Detecção de mudança de nível
         if (this.lastLevel !== currentLevel) {
             this.lastLevel = currentLevel;
-            // Dispara evento global que seu UI pode escutar para mostrar o card
             window.dispatchEvent(new CustomEvent('levelChanged', { 
                 detail: { level: currentLevel } 
             }));
         }
 
-        // 2. Lógica de Spawning
+        // Spawning
         const adjustedCooldown = Math.max(0.45, this.waveCooldown - (currentLevel * 0.012));
         this.waveTimer += deltaTime;
         if (this.waveTimer > adjustedCooldown) {
@@ -296,7 +283,7 @@ export class EnemyManager {
             this.waveTimer = 0;
         }
 
-        // 3. Gerenciamento de Projéteis Inimigos
+        // Projéteis inimigos
         const pPos = new THREE.Vector3();
         player.mesh.getWorldPosition(pPos);
         const playerLasers = laserManager.lasers || [];
@@ -305,18 +292,19 @@ export class EnemyManager {
             const p = this.enemyProjectiles[i];
             p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
             
-            // Verificação de distância otimizada
             if (p.mesh.position.distanceTo(pPos) > 1500) {
                 this.scene.remove(p.mesh);
                 this.enemyProjectiles.splice(i, 1);
             }
         }
 
+        // Atualização dos inimigos
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
             const data = enemy.userData;
             const previousPosition = enemy.position.clone();
 
+            // Shooting
             if (data.type !== 'meteoro' && data.type !== 'asteroide') {
                 data.shootTimer -= deltaTime;
                 if (data.shootTimer <= 0) {
@@ -325,71 +313,68 @@ export class EnemyManager {
                 }
             }
 
-            // ... dentro do seu loop 'for' de inimigos ...
-
-            // 1. Movimentação
+            // Movimentação
             enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
 
-            // 2. Som de Passagem (Otimizado)
+            // Som de passagem
             if (soundManager && !data.passSoundPlayed && data.passSound) {
-                // Usamos a variável camPosAtual que você já definiu no update
                 if (enemy.position.distanceTo(camPosAtual) < 500) {
                     soundManager.play(data.passSound);
                     data.passSoundPlayed = true;
                 }
             }
 
-            // 3. Rotação (Apenas para tipos específicos)
+            // Rotação
             if (data.type === 'drone' || data.type === 'meteoro' || data.type === 'asteroide') {
                 enemy.rotation.x += 0.015;
                 enemy.rotation.y += 0.015;
             }
 
-            // 4. Checagem de colisão com asteroides
+            // Colisão com asteroides
             if (data.type !== 'meteoro' && data.type !== 'asteroide' && this._hitsAsteroid(enemy, i, previousPosition)) {
                 continue;
             }
 
-            // 5. Lógica de Laser e Dano
+            // Lógica de dano por laser
             let foiAtingidoPorLaser = false;
             let pontoDoImpactoReal = null;
 
-            if (playerLasers.length > 0) {
-                for (let j = playerLasers.length - 1; j >= 0; j--) {
-                    const laser = playerLasers[j];
-                    if (!laser || laser.userData?.destroyed) continue;
+            for (let j = playerLasers.length - 1; j >= 0; j--) {
+                const laser = playerLasers[j];
+                if (!laser || laser.userData?.destroyed) continue;
 
-                    const distLaser = enemy.position.distanceTo(laser.position);
-                    const hitbox = (data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 35;
+                const distLaser = enemy.position.distanceTo(laser.position);
+                const hitbox = (data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 35;
 
-                    if (distLaser < hitbox) {
-                        pontoDoImpactoReal = laser.position.clone();
-                        this.scene.remove(laser);
-                        laser.userData = { destroyed: true };
-                        playerLasers.splice(j, 1);
-                        data.hp--;
+                if (distLaser < hitbox) {
+                    pontoDoImpactoReal = laser.position.clone();
+                    this.scene.remove(laser);
+                    laser.userData = { destroyed: true };
+                    playerLasers.splice(j, 1);
+                    data.hp--;
 
-                        if (data.hp <= 0) {
-                            let pontos = (data.type === 'meteoro' || data.type === 'asteroide') ? 500 : (data.type === 'drone' ? 300 : (data.type === 'roblox' ? 250 : 1000));
-                            if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
-                            foiAtingidoPorLaser = true;
-                        }
-                        break;
+                    if (data.hp <= 0) {
+                        let pontos = (data.type === 'meteoro' || data.type === 'asteroide') ? 500 : 
+                                    (data.type === 'drone' ? 300 : (data.type === 'roblox' ? 250 : 1000));
+                        
+                        if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
+                        foiAtingidoPorLaser = true;
                     }
+                    break;
                 }
             }
 
-            // 6. Explosão (Corrigido: som e explosão antes do continue)
+            // Explosão e remoção
             if (foiAtingidoPorLaser && pontoDoImpactoReal) {
                 if (soundManager) soundManager.play('explosao_inimiga');
                 if (explosionManager) explosionManager.create(pontoDoImpactoReal);
                 
                 this.scene.remove(enemy);
                 this.enemies.splice(i, 1);
-                continue; 
+                continue;
             }
 
-            // 7. Remoção por distância
+            // Remoção por distância
             if (enemy.position.z > camPosAtual.z + 200 || enemy.position.distanceTo(camPosAtual) > 2800) {
                 this.scene.remove(enemy);
                 this.enemies.splice(i, 1);
@@ -420,12 +405,12 @@ export class EnemyManager {
                 return true;
             }
         }
-
         return false;
     }
 
     _enemyShoot(enemy, player, soundManager) {
         if (enemy.userData.type === 'meteoro' || enemy.userData.type === 'asteroide' || !player?.mesh) return;
+
         const pPos = new THREE.Vector3();
         player.mesh.getWorldPosition(pPos);
 
@@ -447,7 +432,9 @@ export class EnemyManager {
         enemy.userData.hp = (enemy.userData.hp || 1) - damage;
 
         if (enemy.userData.hp <= 0) {
-            let pontos = (enemy.userData.type === 'meteoro' || enemy.userData.type === 'asteroide') ? 500 : (enemy.userData.type === 'drone' ? 250 : (enemy.userData.type === 'roblox' ? 150 : 100));
+            let pontos = (enemy.userData.type === 'meteoro' || enemy.userData.type === 'asteroide') ? 500 : 
+                        (enemy.userData.type === 'drone' ? 250 : (enemy.userData.type === 'roblox' ? 150 : 100));
+            
             if (this.scorePopup && hitPoint) this.scorePopup.show(pontos, hitPoint);
             return true;
         }
