@@ -197,22 +197,19 @@ const handleEnemyScore = (pts, hitPosition) => {
     score += pts;
     updateHUD();
 
-    const levelUp = progressionManager.addScore(pts);
-    if (hitPosition) scorePopup.show(pts, hitPosition);
+const levelUp = progressionManager.addScore(pts);
 
-    if (levelUp) {
-        updateLevelHUD();
-        updateEnvironmentTheme();
-        progressionManager.resetLevelResources();
-        syncLevelResources();
-
-        enemyManager.clearAllEnemies();
-        const novoNivel = progressionManager.getLevel();
-        enemyManager.spawnWave(player, novoNivel);
-
-        const info = getLevelData(novoNivel);
-        window.showLevelUp(novoNivel, info.title || info.task || '');
-    }
+if (levelUp) {
+    updateLevelHUD();
+    updateEnvironmentTheme();
+    progressionManager.resetLevelResources();
+    syncLevelResources();
+    enemyManager.clearAllEnemies();
+    enemyManager.spawnWave(player, progressionManager.getLevel());
+    
+    const info = getLevelData(progressionManager.getLevel());
+    window.showLevelUp(progressionManager.getLevel(), info.title);
+}
 };
 
 const handlePlayerHit = () => {
@@ -292,21 +289,27 @@ function animate() {
     scorePopup.update(deltaTime);
     updateCamera();
 
-    // Boss
+     // ====================== BOSS - NAVE MÃE ======================
     const currentLevel = progressionManager.getLevel();
-    if (currentLevel === 50 && !boss) {
+    
+    // Spawn apenas uma vez a partir do nível 50
+  if (currentLevel >= 50 && currentLevel <= 100 && !boss) {
         boss = new NaveMae(scene);
-        console.log("🚀 Nave Mãe spawnada!");
+        console.log(`🚀 Nave Mãe spawnada no nível ${currentLevel}!`);
     }
-
     if (boss) {
         boss.update(deltaTime, player.mesh.position);
+
+        // Só remove o boss quando ele for destruído (hp <= 0)
         if (boss.hp <= 0) {
             if (explosionManager && explosionManager.createBigExplosion) {
                 explosionManager.createBigExplosion(boss.mesh.position);
             }
+            
             boss.mesh.visible = false;
-            boss = null;
+            boss = null;           // Libera para possível respawn futuro (se quiser)
+            
+            console.log("🌌 Nave Mãe foi destruída!");
         }
     }
 

@@ -2,31 +2,20 @@ export class ProgressionManager {
     constructor() {
         this.level = 1;
         this.totalScore = 0;
-        this.enemiesDestroyed = 0;
         this.upgradePoints = 0;
-        this.maxChancesPerLevel = 5;
-        this.maxMissilesPerLevel = 10;
-        this.maxPdcBurstsPerLevel = 30;
-        this.chancesLeft = this.maxChancesPerLevel;
-        
-        // Configuração de Progressão
-        this.baseEnemiesPerLevel = 10; // Nível 1 precisa de 10
-        this.difficultyMultiplier = 1.2; // Aumenta 20% a cada nível
+        this.chancesLeft = 5;
+        this.maxLevel = 100;
+
+        this.baseScorePerLevel = 800;          // ← Reduzido (era 1200)
+        this.difficultyMultiplier = 1.07;      // ← Mais suave (era 1.085)
     }
 
-    /**
-     * Adiciona pontuação e verifica subida de nível
-     * @param {number} points - Pontos ganhos
-     * @returns {boolean} - true se subiu de nível
-     */
     addScore(points) {
         this.totalScore += points;
-        this.enemiesDestroyed++;
 
-        // Cálculo de meta: ex: Nível 1 (10), Nível 2 (12), Nível 3 (15)...
-        const enemiesNeeded = Math.floor(this.baseEnemiesPerLevel * Math.pow(this.difficultyMultiplier, this.level - 1));
+        const scoreNeeded = this.getScoreNeededForNextLevel();
 
-        if (this.enemiesDestroyed >= enemiesNeeded) {
+        if (this.totalScore >= scoreNeeded) {
             this.levelUp();
             return true;
         }
@@ -34,16 +23,22 @@ export class ProgressionManager {
     }
 
     levelUp() {
+        if (this.level >= this.maxLevel) return false;
+
         this.level++;
-        this.upgradePoints++;
-        this.enemiesDestroyed = 0; // Reseta o contador para o próximo degrau de dificuldade
+        this.upgradePoints += 2;
         this.resetLevelResources();
-        
-        console.log(`🚀 Nível UP! Agora no nível ${this.level}. Pontos de Upgrade: ${this.upgradePoints}`);
+
+        console.log(`🚀 NÍVEL ${this.level} ALCANÇADO!`);
+        return true;
+    }
+
+    getScoreNeededForNextLevel() {
+        return Math.floor(this.baseScorePerLevel * Math.pow(this.difficultyMultiplier, this.level - 1));
     }
 
     resetLevelResources() {
-        this.chancesLeft = this.maxChancesPerLevel;
+        this.chancesLeft = 5;
     }
 
     loseChance() {
@@ -55,21 +50,9 @@ export class ProgressionManager {
     }
 
     failLevel() {
-        this.enemiesDestroyed = 0;
+        this.level = Math.max(1, this.level - 3);
         this.resetLevelResources();
         return this.level;
-    }
-
-    getChancesLeft() {
-        return this.chancesLeft;
-    }
-
-    getLevelLoadout() {
-        return {
-            missiles: this.maxMissilesPerLevel,
-            pdcBursts: this.maxPdcBurstsPerLevel,
-            chancesLeft: this.chancesLeft
-        };
     }
 
     getLevel() {
@@ -77,32 +60,22 @@ export class ProgressionManager {
     }
 
     setLevel(level) {
-        const nextLevel = Math.max(1, Math.floor(level || 1));
-        this.level = nextLevel;
-        this.enemiesDestroyed = 0;
+        this.level = Math.max(1, Math.min(this.maxLevel, Math.floor(level)));
         this.resetLevelResources();
-        return this.level;
     }
 
-    getUpgradePoints() {
-        return this.upgradePoints;
+    getChancesLeft() {
+        return this.chancesLeft;
     }
 
-    canUpgrade() {
-        return this.upgradePoints > 0;
-    }
+    getLevelLoadout() {
+        const missileBonus = Math.floor(this.level / 6);
+        const pdcBonus = Math.floor(this.level / 4);
 
-    useUpgradePoint() {
-        if (this.upgradePoints > 0) {
-            this.upgradePoints--;
-            return true;
-        }
-        return false;
-    }
-
-    // Retorna o progresso atual do nível de 0 a 1 (para barras de XP na UI)
-    getLevelProgress() {
-        const enemiesNeeded = Math.floor(this.baseEnemiesPerLevel * Math.pow(this.difficultyMultiplier, this.level - 1));
-        return Math.min(this.enemiesDestroyed / enemiesNeeded, 1);
+        return {
+            missiles: 8 + missileBonus,
+            pdcBursts: 25 + pdcBonus,
+            chancesLeft: this.chancesLeft
+        };
     }
 }
