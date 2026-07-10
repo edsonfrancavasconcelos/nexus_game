@@ -38,12 +38,24 @@ export class EnemyManager {
         return Promise.resolve(); 
     }
 
-    clearAllEnemies() {
-        this.enemies.forEach(e => this.scene.remove(e));
-        this.enemyProjectiles.forEach(p => this.scene.remove(p.mesh));
-        this.enemies = [];
-        this.enemyProjectiles = [];
-    }
+ clearAllEnemies() {
+    // Apenas remove da cena se não for o Boss
+    this.enemies.forEach(e => {
+        // Se o objeto tiver uma propriedade 'isBoss', ele não será removido
+        if (!e.userData || !e.userData.isBoss) {
+            this.scene.remove(e);
+        }
+    });
+
+    // Limpa a lista mantendo apenas o Boss (se houver)
+    this.enemies = this.enemies.filter(e => e.userData && e.userData.isBoss);
+
+    // Projéteis inimigos comuns podem ser limpos normalmente
+    this.enemyProjectiles.forEach(p => {
+        if (p.mesh) this.scene.remove(p.mesh);
+    });
+    this.enemyProjectiles = [];
+}
 
     _createOrientedTemplate(model, yRotation = 0) {
         const group = new THREE.Group();
@@ -157,7 +169,7 @@ export class EnemyManager {
         if (rand < 0.25 && this.templates?.asteroide) {
             selectedTemplate = this.templates.asteroide;
             type = 'asteroide';
-            speed = 65 + Math.random() * 35;
+            speed = 140 + Math.random() * 80;
             passSound = 'meteoro';
             laserSound = null;
             hp = 3;
@@ -171,7 +183,7 @@ export class EnemyManager {
         } else if (rand < 0.60) {
             selectedTemplate = this.meteoroTemplate || this.enemyTemplate;
             type = 'meteoro';
-            speed = 110;
+            speed = 180 + Math.random() * 70;
             passSound = 'meteoro';
             laserSound = null;
             hp = 3;
@@ -249,7 +261,9 @@ export class EnemyManager {
             hp, 
             passSound, 
             laserSound, 
-            passSoundPlayed: false 
+            passSoundPlayed: false,
+            wanderSeed: Math.random() * Math.PI * 2,
+            attackRange: 900 + Math.random() * 300
         };
 
         enemy.lookAt(camPos);
@@ -261,11 +275,11 @@ export class EnemyManager {
         this.enemies.push(enemy);
     }
 
-    update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1) {
-        if (!player?.mesh || !deltaTime) return;
+update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1, onPlayerHit = null) {
+    if (!player?.mesh || !deltaTime) return;
 
-        const camPosAtual = new THREE.Vector3();
-        this.camera.getWorldPosition(camPosAtual);
+    const camPosAtual = new THREE.Vector3();
+    this.camera.getWorldPosition(camPosAtual);
 
         // Detecção de mudança de nível
         if (this.lastLevel !== currentLevel) {
@@ -287,34 +301,66 @@ export class EnemyManager {
         const pPos = new THREE.Vector3();
         player.mesh.getWorldPosition(pPos);
         const playerLasers = laserManager.lasers || [];
+for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+        const p = this.enemyProjectiles[i];
+        if (!p || !p.mesh) {
+            this.enemyProjectiles.splice(i, 1);
+            continue;
+        }
+        
+        p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
+        p.life -= deltaTime;
 
-        for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
-            const p = this.enemyProjectiles[i];
-            p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
-            
-            if (p.mesh.position.distanceTo(pPos) > 1500) {
-                this.scene.remove(p.mesh);
-                this.enemyProjectiles.splice(i, 1);
+        if (p.life <= 0 || p.mesh.position.distanceTo(camPosAtual) > 2500) {
+            this.scene.remove(p.mesh);
+            this.enemyProjectiles.splice(i, 1);
+            continue;
+        }
+
+        if (p.mesh.position.distanceTo(player.mesh.position) < 12) {
+            this.scene.remove(p.mesh);
+            this.enemyProjectiles.splice(i, 1);
+            if (onPlayerHit) onPlayerHit();
+        }
+    }
+
+        // Atualização dos inimigos
+      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        const enemy = this.enemies[i];
+        
+        // TRAVA DE SEGURANÇA: Se o inimigo não existir, remove do array e pula
+        if (!enemy || !enemy.userData) {
+            this.enemies.splice(i, 1);
+            continue;
+        }
+
+        const data = enemy.userData;
+        const previousPosition = enemy.position.clone();
+
+        // Shooting
+        if (data.type !== 'meteoro' && data.type !== 'asteroide') {
+            data.shootTimer -= deltaTime;
+            if (data.shootTimer <= 0) {
+                this._enemyShoot(enemy, player, soundManager);
+                data.shootTimer = 1.4 + Math.random() * 1.2;
             }
         }
 
-        // Atualização dos inimigos
-        for (let i = this.enemies.length - 1; i >= 0; i--) {
-            const enemy = this.enemies[i];
-            const data = enemy.userData;
-            const previousPosition = enemy.position.clone();
+        const pPos = player.mesh.position;
+        const toPlayer = new THREE.Vector3().subVectors(pPos, enemy.position).normalize();
+        const lateralBias = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), toPlayer).normalize();
+        const biasFactor = (data.type === 'meteoro' || data.type === 'asteroide') ? 0.05 : 0.18;
+        const lerpFactor = (data.type === 'meteoro' || data.type === 'asteroide') ? 0.15 : 0.04;
+        
+        lateralBias.multiplyScalar(Math.sin(Date.now() * 0.001 + data.wanderSeed) * biasFactor);
+        const desiredDir = toPlayer.clone().add(lateralBias).normalize();
+        data.moveDir.lerp(desiredDir, lerpFactor);
+        enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
 
-            // Shooting
-            if (data.type !== 'meteoro' && data.type !== 'asteroide') {
-                data.shootTimer -= deltaTime;
-                if (data.shootTimer <= 0) {
-                    this._enemyShoot(enemy, player, soundManager);
-                    data.shootTimer = 1.4 + Math.random() * 1.2;
-                }
-            }
+        enemy.lookAt(pPos.clone().add(new THREE.Vector3(0, Math.sin(Date.now() * 0.001 + data.wanderSeed) * 0.8, 0)));
 
-            // Movimentação
-            enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
+            const aimTarget = pPos.clone().add(new THREE.Vector3(0, Math.sin(Date.now() * 0.001 + data.wanderSeed) * 0.8, 0));
+            enemy.lookAt(aimTarget);
 
             // Som de passagem
             if (soundManager && !data.passSoundPlayed && data.passSound) {
@@ -331,56 +377,50 @@ export class EnemyManager {
             }
 
             // Colisão com asteroides
-            if (data.type !== 'meteoro' && data.type !== 'asteroide' && this._hitsAsteroid(enemy, i, previousPosition)) {
-                continue;
-            }
+          if (data.type !== 'meteoro' && data.type !== 'asteroide' && this._hitsAsteroid(enemy, i, previousPosition)) {
+            continue;
+        }
 
-            // Lógica de dano por laser
-            let foiAtingidoPorLaser = false;
-            let pontoDoImpactoReal = null;
+     // Dano por laser
+        let foiAtingidoPorLaser = false;
+        let pontoDoImpactoReal = null;
 
-            for (let j = playerLasers.length - 1; j >= 0; j--) {
-                const laser = playerLasers[j];
-                if (!laser || laser.userData?.destroyed) continue;
+        const playerLasers = laserManager.lasers || [];
+        for (let j = playerLasers.length - 1; j >= 0; j--) {
+            const laser = playerLasers[j];
+            if (!laser) continue;
 
-                const distLaser = enemy.position.distanceTo(laser.position);
-                const hitbox = (data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 35;
-
-                if (distLaser < hitbox) {
-                    pontoDoImpactoReal = laser.position.clone();
-                    this.scene.remove(laser);
-                    laser.userData = { destroyed: true };
-                    playerLasers.splice(j, 1);
-                    data.hp--;
-
-                    if (data.hp <= 0) {
-                        let pontos = (data.type === 'meteoro' || data.type === 'asteroide') ? 500 : 
-                                    (data.type === 'drone' ? 300 : (data.type === 'roblox' ? 250 : 1000));
-                        
-                        if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
-                        foiAtingidoPorLaser = true;
-                    }
-                    break;
-                }
-            }
-
-            // Explosão e remoção
-            if (foiAtingidoPorLaser && pontoDoImpactoReal) {
-                if (soundManager) soundManager.play('explosao_inimiga');
-                if (explosionManager) explosionManager.create(pontoDoImpactoReal);
-                
-                this.scene.remove(enemy);
-                this.enemies.splice(i, 1);
-                continue;
-            }
-
-            // Remoção por distância
-            if (enemy.position.z > camPosAtual.z + 200 || enemy.position.distanceTo(camPosAtual) > 2800) {
-                this.scene.remove(enemy);
-                this.enemies.splice(i, 1);
+            if (enemy.position.distanceTo(laser.position) < ((data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 35)) {
+                pontoDoImpactoReal = laser.position.clone();
+                laser.userData = { destroyed: true };
+                this.scene.remove(laser);
+                playerLasers.splice(j, 1);
+                data.hp--;
+                if (data.hp <= 0) foiAtingidoPorLaser = true;
+                break;
             }
         }
+
+// Explosão e remoção
+        if (foiAtingidoPorLaser) {
+            if (soundManager) soundManager.play('explosao_inimiga');
+            if (explosionManager) explosionManager.create(pontoDoImpactoReal, currentLevel >= 50 ? 2.5 : 1.0);
+            
+            let pontos = (data.type === 'meteoro' || data.type === 'asteroide') ? 500 : (data.type === 'drone' ? 300 : 1000);
+            if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
+            
+            this.scene.remove(enemy);
+            this.enemies.splice(i, 1);
+            continue;
+        }
+
+    // Remoção por distância
+        if (enemy.position.distanceTo(camPosAtual) > 2800) {
+            this.scene.remove(enemy);
+            this.enemies.splice(i, 1);
+        }
     }
+}
 
     _hitsAsteroid(enemy, enemyIndex, previousPosition) {
         const enemyType = enemy?.userData?.type;
@@ -420,7 +460,7 @@ export class EnemyManager {
         this.scene.add(laser);
 
         const dir = new THREE.Vector3().subVectors(pPos, laser.position).normalize();
-        this.enemyProjectiles.push({ mesh: laser, dir, speed: 520 });
+        this.enemyProjectiles.push({ mesh: laser, dir, speed: 520, life: 2.2 });
 
         if (soundManager && enemy.userData.laserSound) {
             soundManager.play(enemy.userData.laserSound);

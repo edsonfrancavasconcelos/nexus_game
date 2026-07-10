@@ -14,12 +14,39 @@
 <body>
 
     <div id="ui">
-        SCORE: <span id="score-val">0</span>
-        &nbsp;&nbsp;|&nbsp;&nbsp;
-        LEVEL: <span id="level-val">1</span>
-        MISSILES: <span id="missile-val">10</span>
-        PDC: <span id="pdc-val">30</span>
-        CHANCES: <span id="chance-val">5</span>
+        <div class="hud-stat hud-score">
+            <span class="hud-label">SCORE</span>
+            <span id="score-val" class="hud-value-large">0</span>
+        </div>
+        <div class="hud-stat">
+            <span class="hud-label">LEVEL</span>
+            <span id="level-val" class="hud-value-large">1</span>
+        </div>
+        <div class="hud-progress">
+            <span class="hud-label">PROGRESSO</span>
+            <div class="hud-bar"><div id="level-progress-bar"></div></div>
+            <span id="level-progress-label" class="hud-value">0%</span>
+        </div>
+        <div class="hud-stat">
+            <span class="hud-label">MISSILES</span>
+            <span id="missile-val" class="hud-value-large">10</span>
+        </div>
+        <div class="hud-charge">
+            <span class="hud-label">MISSILE LOAD</span>
+            <div class="hud-bar"><div id="missile-load-bar"></div></div>
+        </div>
+        <div class="hud-stat">
+            <span class="hud-label">PDC</span>
+            <span id="pdc-val" class="hud-value-large">30</span>
+        </div>
+        <div class="hud-pdc">
+            <span class="hud-label">PDC LOAD</span>
+            <div class="hud-bar"><div id="pdc-load-bar"></div></div>
+        </div>
+        <div class="hud-stat">
+            <span class="hud-label">CHANCES</span>
+            <span id="chance-val" class="hud-value-large">5</span>
+        </div>
     </div>
     
     <div id="overlay">
@@ -135,27 +162,29 @@
    #nexusSelector {
     position: absolute;    
     left: 12px;
+    top: 110px;
     z-index: 9999;            
-    width: 320px; /* Definido largura fixa para melhor comportamento */
-    max-width: 90vw; /* Responsividade */
-    font-family: 'Courier New', monospace;
+    width: 320px;
+    max-width: 90vw;
+    font-family: 'Orbitron', Arial, sans-serif;
 }
 
 .zone-header {
-    background: linear-gradient(135deg, #001833, #003366);
-    border: 2px solid #00ddff;
-    border-radius: 12px;
-    padding: 16px 20px;
-    color: #00ffcc;
-    font-size: 18px;
-    font-weight: bold;
-    letter-spacing: 2px;
+    background: linear-gradient(135deg, rgba(2, 10, 24, 0.92), rgba(4, 20, 36, 0.82));
+    border: 1px solid rgba(0, 255, 255, 0.28);
+    border-radius: 14px;
+    padding: 14px 16px;
+    color: #7fefff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
     text-align: center;
-    box-shadow: 0 0 25px rgba(0, 221, 255, 0.6);
+    box-shadow: 0 0 24px rgba(0, 255, 255, 0.12);
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    backdrop-filter: blur(14px);
 }
 
 .arrow {
@@ -169,23 +198,20 @@
 }
 
 .zone-list {
-    background: rgba(0, 20, 50, 0.95);
-    border: 2px solid #0066bb;
+    background: linear-gradient(180deg, rgba(2, 12, 24, 0.96), rgba(4, 20, 36, 0.9));
+    border: 1px solid rgba(0, 255, 255, 0.18);
     border-top: none;
-    border-radius: 0 0 12px 12px;
-    
-    /* Configuração chave para os 100 níveis */
-    max-height: 0; 
-    overflow-y: auto; /* Adiciona a barra de rolagem */
+    border-radius: 0 0 14px 14px;
+    max-height: 0;
+    overflow-y: auto;
     transition: max-height 0.4s ease-out;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
 }
 
 .zone-list.open {
-    /* Define uma altura máxima que caiba na tela do celular */
-    max-height: 350px; 
+    max-height: 350px;
 }
 
-/* Estilização da barra de rolagem para um visual futurista */
 .zone-list::-webkit-scrollbar {
     width: 8px;
 }
@@ -193,34 +219,37 @@
     background: rgba(0, 10, 30, 0.9);
 }
 .zone-list::-webkit-scrollbar-thumb {
-    background: #00ddff;
-    border-radius: 4px;
+    background: linear-gradient(180deg, #00ffff, #66ff66);
+    border-radius: 999px;
 }
 
 .zone-option {
-    padding: 13px 20px;
+    padding: 12px 16px;
     color: #88ddff;
-    border-bottom: 1px solid rgba(0, 100, 200, 0.4);
+    border-bottom: 1px solid rgba(0, 100, 200, 0.28);
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    font-size: 13px;
 }
 
 .zone-option:hover,
 .zone-option.active {
-    background: rgba(0, 140, 255, 0.35);
+    background: linear-gradient(90deg, rgba(0, 255, 255, 0.16), rgba(102, 255, 102, 0.12));
     color: #ffffff;
+    transform: translateX(2px);
 }
 
 .test-status {
-    background: rgba(180, 20, 20, 0.25);
-    color: #ff8888;
-    padding: 8px;
+    background: rgba(255, 90, 90, 0.12);
+    color: #ff9d9d;
+    padding: 8px 10px;
     text-align: center;
-    border: 1px solid #ff5555;
-    border-radius: 6px;
-    font-size: 13px;
+    border: 1px solid rgba(255, 90, 90, 0.35);
+    border-radius: 10px;
+    font-size: 12px;
     margin-top: 10px;
-    pointer-events: none; /* Não atrapalha o clique */
+    letter-spacing: 0.8px;
+    pointer-events: none;
 }
 
 @media (max-width: 768px) {

@@ -14,6 +14,7 @@ import { NaveMae } from './NaveMae.js';
 window.moveInput = { x: 0, y: 0 };
 
 // ====================== GLOBAIS ======================
+let lastBossLevel = -1;
 let audioInitialized = false;
 let currentState = 'menu';
 let score = 0;
@@ -64,6 +65,7 @@ function syncLevelResources() {
 function updateHUD() {
     const scoreVal = document.getElementById('score-val');
     if (scoreVal) scoreVal.textContent = score.toString().padStart(7, '0');
+    updateLevelProgressHUD();
 }
 
 function updateLevelHUD() {
@@ -71,14 +73,42 @@ function updateLevelHUD() {
     if (levelVal) levelVal.textContent = progressionManager.getLevel();
 }
 
+function updateLevelProgressHUD() {
+    const progress = progressionManager.getProgressPercent();
+    const bar = document.getElementById('level-progress-bar');
+    const label = document.getElementById('level-progress-label');
+
+    if (bar) {
+        bar.style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
+    }
+
+    if (label) {
+        label.textContent = `${Math.round(progress * 100)}%`;
+    }
+}
+
 function updateResourceHUD() {
     const missileVal = document.getElementById('missile-val');
     const pdcVal = document.getElementById('pdc-val');
     const chanceVal = document.getElementById('chance-val');
 
-    if (missileVal) missileVal.textContent = player.getAmmoStatus().missiles;
-    if (pdcVal) pdcVal.textContent = player.getAmmoStatus().pdcBursts;
+    const ammo = player.getAmmoStatus();
+    if (missileVal) missileVal.textContent = ammo.missiles;
+    if (pdcVal) pdcVal.textContent = ammo.pdcBursts;
     if (chanceVal) chanceVal.textContent = progressionManager.getChancesLeft();
+
+    const chargeBar = document.getElementById('missile-load-bar');
+    if (chargeBar) {
+        const progress = Math.max(0, Math.min(1, ammo.missileReloadProgress));
+        chargeBar.style.width = `${progress * 100}%`;
+        chargeBar.style.opacity = ammo.missiles >= ammo.missileMax ? '0.4' : '1';
+    }
+
+    const pdcBar = document.getElementById('pdc-load-bar');
+    if (pdcBar) {
+        const pdcProgress = Math.max(0, Math.min(1, (player.pdcBurstCount || 0) / Math.max(player.maxPdcBursts || 1, 1)));
+        pdcBar.style.width = `${pdcProgress * 100}%`;
+    }
 }
 
 function updateEnvironmentTheme(level = progressionManager.getLevel()) {
@@ -197,19 +227,28 @@ const handleEnemyScore = (pts, hitPosition) => {
     score += pts;
     updateHUD();
 
-const levelUp = progressionManager.addScore(pts);
+    const levelUp = progressionManager.addScore(pts * 1.1); // Multiplicador para subir mais rápido
 
-if (levelUp) {
-    updateLevelHUD();
-    updateEnvironmentTheme();
-    progressionManager.resetLevelResources();
-    syncLevelResources();
-    enemyManager.clearAllEnemies();
-    enemyManager.spawnWave(player, progressionManager.getLevel());
-    
-    const info = getLevelData(progressionManager.getLevel());
-    window.showLevelUp(progressionManager.getLevel(), info.title);
-}
+    if (levelUp) {
+        updateLevelHUD();
+        updateEnvironmentTheme();
+        progressionManager.resetLevelResources();
+        syncLevelResources();
+        enemyManager.clearAllEnemies();
+        
+        const currentLevel = progressionManager.getLevel();
+        
+        if (boss && boss.isAlive) {
+            boss.hp = 0;
+            boss.explode(null, explosionManager);
+            boss = null;
+        }
+        
+        enemyManager.spawnWave(player, currentLevel);
+        
+        const info = getLevelData(currentLevel);
+        window.showLevelUp(currentLevel, info.title);
+    }
 };
 
 const handlePlayerHit = () => {
@@ -217,22 +256,63 @@ const handlePlayerHit = () => {
     updateResourceHUD();
 
     if (result.failed) {
-        const failedLevel = progressionManager.failLevel();
-        enemyManager.clearAllEnemies();
-        progressionManager.resetLevelResources();
-        syncLevelResources();
-        updateLevelHUD();
-        updateEnvironmentTheme(failedLevel);
-        enemyManager.spawnWave(player, failedLevel);
+        showGameOverOverlay();
     }
 };
 
+function showGameOverOverlay() {
+    const existing = document.getElementById('game-over-overlay');
+    if (existing) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'game-over-overlay';
+    overlay.innerHTML = `
+        <div class="game-over-card">
+            <h2>GAME OVER</h2>
+            <p>Você esgotou suas chances.</p>
+            <button id="restart-btn">REINICIAR</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) {
+        restartBtn.addEventListener('click', () => {
+            overlay.remove();
+            const currentLevel = progressionManager.getLevel();
+            score = 0;
+            progressionManager.resetLevelProgress();
+            updateHUD();
+            updateLevelHUD();
+            updateEnvironmentTheme(currentLevel);
+            enemyManager.clearAllEnemies();
+            syncLevelResources();
+            player.mesh.position.set(0, -1, 8);
+            currentState = GAME_STATE.PLAYING;
+            isGameStarted = true;
+            countdown = 0;
+            enemyManager.spawnWave(player, currentLevel);
+        });
+    }
+}
+
 function updateCamera() {
     if (!player.shipModel) return;
-    const offset = new THREE.Vector3(0, 15, -80);
-    offset.applyQuaternion(player.shipModel.quaternion);
-    camera.position.lerp(player.shipModel.position.clone().add(offset), 0.1);
-    camera.lookAt(player.shipModel.position);
+    
+    const baseOffset = new THREE.Vector3(0, 8, 75);
+    const pitchInfluence = player.shipModel.rotation.x * 0.15;
+    const rollInfluence = player.shipModel.rotation.z * 0.1;
+    
+    const offset = baseOffset.clone();
+    offset.y += Math.sin(pitchInfluence) * 8;
+    offset.z -= Math.cos(pitchInfluence) * 8;
+    offset.x += Math.sin(rollInfluence) * 6;
+    
+    const targetPos = player.shipModel.position.clone().add(offset);
+    camera.position.lerp(targetPos, 0.08);
+    
+    const lookAtTarget = player.shipModel.position.clone().add(new THREE.Vector3(0, 2, -5));
+    camera.lookAt(lookAtTarget);
 }
 
 // ====================== ANIMATE ======================
@@ -283,36 +363,36 @@ function animate() {
         spaceEnvironment.update(deltaTime, player.mesh.position, input, progressionManager.getLevel(), player.mesh, soundManager);
     }
 
-    enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel());
+    enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel(), handlePlayerHit);
     laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
     explosionManager.update(deltaTime);
     scorePopup.update(deltaTime);
     updateCamera();
 
-     // ====================== BOSS - NAVE MÃE ======================
-    const currentLevel = progressionManager.getLevel();
-    
-    // Spawn apenas uma vez a partir do nível 50
-  if (currentLevel >= 50 && currentLevel <= 100 && !boss) {
-        boss = new NaveMae(scene);
-        console.log(`🚀 Nave Mãe spawnada no nível ${currentLevel}!`);
-    }
-    if (boss) {
-        boss.update(deltaTime, player.mesh.position);
+// ====================== BOSS - NAVE MÃE ======================
+const currentLevel = progressionManager.getLevel();
 
-        // Só remove o boss quando ele for destruído (hp <= 0)
-        if (boss.hp <= 0) {
-            if (explosionManager && explosionManager.createBigExplosion) {
-                explosionManager.createBigExplosion(boss.mesh.position);
-            }
-            
-            boss.mesh.visible = false;
-            boss = null;           // Libera para possível respawn futuro (se quiser)
-            
-            console.log("🌌 Nave Mãe foi destruída!");
-        }
+if (currentLevel >= 50 && !boss && (currentLevel % 5 === 0) && lastBossLevel !== currentLevel) {
+    console.log(`🚀 [BOSS] Tentando spawnar Nave Mãe no nível ${currentLevel}`);
+    boss = new NaveMae(scene);
+    lastBossLevel = currentLevel;
+}
+
+if (boss) {
+    if (boss.mesh && !boss.isActive) {
+        boss.ativarNave(currentLevel);
     }
 
+    if (boss.isActive && boss.isAlive && boss.mesh) {
+        boss.update(deltaTime, player.mesh.position, laserManager, explosionManager);
+    }
+
+    if (boss.isActive && (!boss.isAlive || boss.hp <= 0)) {
+        console.log(`💥 [BOSS] Nave Mãe destruída no nível ${currentLevel}`);
+        if (typeof boss.dispose === 'function') boss.dispose();
+        boss = null;
+    }
+}
     renderer.render(scene, camera);
 }
 

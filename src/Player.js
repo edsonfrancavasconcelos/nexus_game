@@ -7,7 +7,11 @@ export class Player {
         this.laserManager = laserManager;
         this.pdcActive = false;
         this.missileCount = 10;
+        this.maxMissiles = 10;
+        this.missileReloadTime = 1.6;
+        this.missileReloadTimer = 0;
         this.pdcBurstCount = 30;
+        this.maxPdcBursts = 30;
         this.pdcDurability = 100;
         this.isFiring = false;
         this.isPaused = false;
@@ -82,8 +86,10 @@ export class Player {
     repairPDC() { this.pdcDurability = 100; }
 
     setLevelLoadout(loadout = {}) {
-        this.missileCount = loadout.missiles ?? 10;
-        this.pdcBurstCount = loadout.pdcBursts ?? 30;
+        this.maxMissiles = loadout.missiles ?? 10;
+        this.missileCount = Math.min(this.maxMissiles, loadout.missiles ?? 10);
+        this.maxPdcBursts = loadout.pdcBursts ?? 30;
+        this.pdcBurstCount = this.maxPdcBursts;
     }
 
     startBarrelRoll(dir) {
@@ -96,7 +102,12 @@ export class Player {
     }
 
     getAmmoStatus() {
-        return { missiles: this.missileCount, pdcBursts: this.pdcBurstCount };
+        return {
+            missiles: this.missileCount,
+            pdcBursts: this.pdcBurstCount,
+            missileMax: this.maxMissiles,
+            missileReloadProgress: this.missileReloadTimer / Math.max(this.missileReloadTime, 0.001)
+        };
     }
 
     _updatePDC(enemyManager, dt) {
@@ -149,6 +160,7 @@ export class Player {
     fireMissile() {
         if (this.missileCount <= 0) return false;
         this.missileCount--;
+        this.missileReloadTimer = 0;
         const ship = this.shipModel || this.mesh;
         ship.updateMatrixWorld();
         const spawnPos = new THREE.Vector3();
@@ -293,10 +305,10 @@ export class Player {
 
     update(moveInput, deltaTime, enemyManager, onPlayerHit = null) {
         if (!this.shipModel || this.isPaused) return;
-        const dt = Math.min(deltaTime, 0.1);
+        const dt = Math.min(deltaTime, 0.10);
 
         // 1. MOVIMENTO
-        const acel = 80.0;
+        const acel = 40.0;
         this.velocity.x += (-moveInput.x) * acel * dt;
         this.velocity.y += (moveInput.y) * acel * dt;
         this.velocity.multiplyScalar(0.90);
@@ -319,12 +331,21 @@ export class Player {
         } else {
             // Controle normal
             const suavizacao = 0.01;
-            this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.3,suavizacao);
+             this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.3,suavizacao);
             this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.9, suavizacao);
             this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
         }
 
-        // 3. RESTO DA LÓGICA
+        // 3. RECARGA DE MÍSSEIS
+        if (this.missileCount < this.maxMissiles) {
+            this.missileReloadTimer += dt;
+            if (this.missileReloadTimer >= this.missileReloadTime) {
+                this.missileCount = Math.min(this.maxMissiles, this.missileCount + 1);
+                this.missileReloadTimer = 0;
+            }
+        }
+
+        // 4. RESTO DA LÓGICA
         this.mesh.updateMatrixWorld();
         if (this.isFiring) this._shoot();
         this._updatePDC(enemyManager, dt);

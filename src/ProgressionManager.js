@@ -6,20 +6,25 @@ export class ProgressionManager {
         this.chancesLeft = 5;
         this.maxLevel = 100;
 
-        this.baseScorePerLevel = 800;          // ← Reduzido (era 1200)
-        this.difficultyMultiplier = 1.07;      // ← Mais suave (era 1.085)
+        this.baseScorePerLevel = 900;
+        this.difficultyMultiplier = 1.02;
+        this.levelProgressScore = 0;
+        this.levelProgressTarget = this.getScoreNeededForNextLevel();
     }
 
     addScore(points) {
         this.totalScore += points;
+        this.levelProgressScore += points;
 
-        const scoreNeeded = this.getScoreNeededForNextLevel();
-
-        if (this.totalScore >= scoreNeeded) {
+        let leveled = false;
+        while (this.levelProgressScore >= this.levelProgressTarget && this.level < this.maxLevel) {
+            this.levelProgressScore -= this.levelProgressTarget;
             this.levelUp();
-            return true;
+            leveled = true;
+            this.levelProgressTarget = this.getScoreNeededForNextLevel();
         }
-        return false;
+
+        return leveled;
     }
 
     levelUp() {
@@ -34,11 +39,12 @@ export class ProgressionManager {
     }
 
     getScoreNeededForNextLevel() {
-        return Math.floor(this.baseScorePerLevel * Math.pow(this.difficultyMultiplier, this.level - 1));
+        return Math.max(650, Math.floor(this.baseScorePerLevel * Math.pow(this.difficultyMultiplier, this.level - 1)));
     }
 
     resetLevelResources() {
         this.chancesLeft = 5;
+        this.levelProgressTarget = this.getScoreNeededForNextLevel();
     }
 
     loseChance() {
@@ -50,9 +56,16 @@ export class ProgressionManager {
     }
 
     failLevel() {
-        this.level = Math.max(1, this.level - 3);
+        this.levelProgressScore = 0;
+        this.levelProgressTarget = this.getScoreNeededForNextLevel();
         this.resetLevelResources();
         return this.level;
+    }
+
+    resetLevelProgress() {
+        this.levelProgressScore = 0;
+        this.levelProgressTarget = this.getScoreNeededForNextLevel();
+        this.chancesLeft = 5;
     }
 
     getLevel() {
@@ -61,11 +74,19 @@ export class ProgressionManager {
 
     setLevel(level) {
         this.level = Math.max(1, Math.min(this.maxLevel, Math.floor(level)));
+        this.totalScore = 0;
+        this.upgradePoints = 0;
+        this.levelProgressScore = 0;
+        this.levelProgressTarget = this.getScoreNeededForNextLevel();
         this.resetLevelResources();
     }
 
     getChancesLeft() {
         return this.chancesLeft;
+    }
+
+    getProgressPercent() {
+        return Math.min(1, this.levelProgressScore / Math.max(this.levelProgressTarget, 1));
     }
 
     getLevelLoadout() {

@@ -53,24 +53,44 @@ export class SpaceEnvironment {
             '/assets/models/green_planeta.glb'
         ];
 
+        // Criar placeholders enquanto os modelos carregam
+        const lanes = [-4800, -1600, 1600, 4800];
         planetFiles.forEach((path, index) => {
+            // Criar um placeholder simples
+            const placeholderGeo = new THREE.SphereGeometry(50, 32, 32);
+            const placeholderMat = new THREE.MeshPhongMaterial({ 
+                color: Math.random() * 0xffffff,
+                emissive: 0x111111
+            });
+            const placeholder = new THREE.Mesh(placeholderGeo, placeholderMat);
+            
+            const xPos = lanes[index] + (Math.random() - 0.5) * 700;
+            const yPos = -800 + (Math.random() * 1700);
+            
+            placeholder.position.set(xPos, yPos, -6000 - Math.random() * 2000);
+            placeholder.visible = false;
+            this.scene.add(placeholder);
+            this.planets.push(placeholder);
+            
+            // Tentar carregar o modelo real
             this.loader.load(
                 path, 
                 (gltf) => {
                     const p = gltf.scene;
-                    console.log(`✅ Planeta carregado: ${path} (índice ${index})`); // debug
+                    console.log(`✅ Planeta carregado: ${path} (índice ${index})`);
 
-                    // Posições bem separadas
-                    const zPos = -45000 - (index * 35000);
-                    const lanes = [-4500, -1500, 1500, 4500];
-                    const xPos = lanes[index] + (Math.random() - 0.5) * 800;
-                    const yPos = -700 + (Math.random() * 1400);
-
-                    p.position.set(xPos, yPos, zPos);
-                    p.scale.set(100, 100, 100);   // pode precisar ajustar por modelo
-                    p.visible = false;
+                    // Copiar posição do placeholder
+                    p.position.copy(placeholder.position);
+                    p.visible = placeholder.visible;
+                    
                     this.scene.add(p);
-                    this.planets.push(p);
+                    this.scene.remove(placeholder);
+                    
+                    // Substituir na array
+                    const idx = this.planets.indexOf(placeholder);
+                    if (idx !== -1) {
+                        this.planets[idx] = p;
+                    }
                 },
                 undefined,
                 (error) => {
@@ -148,22 +168,67 @@ export class SpaceEnvironment {
     update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager = null) {
         this.planets.forEach((p, index) => {
             const shouldBeVisible = (currentLevel >= 5 && currentLevel <= 20);
-            p.visible = shouldBeVisible;
             
-            if (p.visible) {
-                p.position.z += 60 * deltaTime;
+            if (shouldBeVisible) {
+                p.position.z += 80 * deltaTime;
 
                 if (p.position.z > 1800) { 
                     this.resetPlanetPosition(p, index);
                 }
                 
                 const distZ = Math.abs(p.position.z);
-                const scale = Math.max(50, 820 - (distZ / 110));
+                
+                // Fade in MUITO gradual: começa a aparecer bem longe
+                let opacity = 1.0;
+                if (distZ > 8000) {
+                    opacity = 0;
+                    p.visible = false;
+                } else {
+                    p.visible = true;
+                    if (distZ > 6000) {
+                        // Fade muito lento de 8000 até 6000
+                        opacity = (8000 - distZ) / 2000;
+                    }
+                }
+                
+                // Aplicar opacidade ao material
+                p.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        child.material.transparent = true;
+                        child.material.opacity = opacity;
+                    }
+                });
+                
+                // Crescimento MUITO gradual
+                let scale;
+                if (distZ > 7500) {
+                    // Bem longe: bem pequeno
+                    scale = 1;
+                } else if (distZ > 6000) {
+                    // Bem longe indo: crescimento lento
+                    const progress = (7500 - distZ) / 1500;
+                    scale = 1 + (30 - 1) * progress;
+                } else if (distZ > 3000) {
+                    // Médio: crescimento moderado
+                    const progress = (6000 - distZ) / 3000;
+                    scale = 30 + (150 - 30) * (progress * progress);
+                } else if (distZ < 500) {
+                    // Perto: escala máxima (mas não tão grande)
+                    scale = 200;
+                } else {
+                    // Aproximando: crescimento
+                    const progress = (3000 - distZ) / 2500;
+                    scale = 150 + (200 - 150) * progress;
+                }
+                
                 p.scale.set(scale, scale, scale);
                 
-               if (playerMesh && p.position.z > -2800 && p.position.z < 500) {
-    this._avoidPlanetCollision(playerMesh, p, soundManager);
-}
+                // Colisão apenas quando o planeta está visível e perto
+                if (playerMesh && distZ < 3500) {
+                    this._avoidPlanetCollision(playerMesh, p, soundManager);
+                }
+            } else {
+                p.visible = false;
             }
         });
 
@@ -175,7 +240,7 @@ export class SpaceEnvironment {
     }
 
     resetPlanetPosition(planet, index) {
-        planet.position.z = -100000 - Math.random() * 18000;
+        planet.position.z = -8500 - Math.random() * 2500;
         
         const lanes = [-4800, -1600, 1600, 4800];
         planet.position.x = lanes[index] + (Math.random() - 0.5) * 700;
@@ -211,32 +276,36 @@ export class SpaceEnvironment {
      _avoidPlanetCollision(playerMesh, planet, soundManager) {
         const dx = playerMesh.position.x - planet.position.x;
         const dy = playerMesh.position.y - planet.position.y;
+        const dz = playerMesh.position.z - planet.position.z;
         const dist2D = Math.sqrt(dx * dx + dy * dy) || 1;
+        const dist3D = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
         
-        const effectiveRadius = planet.scale.x * 0.55; // aumentado
+        const effectiveRadius = planet.scale.x * 0.5 + 150;
+        const detectionRadius = effectiveRadius * 1.3;
 
-        if (dist2D < effectiveRadius + 80) {
+        if (dist3D < detectionRadius) {
+            // Som apenas uma vez
             if (soundManager && !playerMesh.userData?.planetSoundPlayed) {
                 soundManager.play('meteoro');
                 playerMesh.userData.planetSoundPlayed = true;
             }
 
-            const pushForce = (effectiveRadius + 80 - dist2D) * 5.5;
-            const pushX = (dx / dist2D) * pushForce * 0.95;
-            const pushY = (dy / dist2D) * pushForce * 2.4;   // força vertical MUITO forte
+            // Se já penetrou, forçar para fora
+            if (dist3D < effectiveRadius) {
+                const escapeDir = new THREE.Vector3(dx, dy, dz).normalize();
+                playerMesh.position.copy(planet.position.clone().addScaledVector(escapeDir, effectiveRadius + 50));
+                return;
+            }
+            
+            // Caso contrário, push suave
+            const pushForce = Math.max(1, (detectionRadius - dist3D) / (detectionRadius - effectiveRadius) * 8);
+            const pushX = (dx / dist3D) * pushForce * 0.6;
+            const pushY = (dy / dist3D) * pushForce * 1.2;
+            const pushZ = (dz / dist3D) * pushForce * 0.8;
 
             playerMesh.position.x += pushX;
             playerMesh.position.y += pushY;
-
-            // Sobrevoo obrigatório
-            if (playerMesh.position.y < planet.position.y + effectiveRadius * 0.9) {
-                playerMesh.position.y = planet.position.y + effectiveRadius * 0.95 + 80;
-            }
-
-            // Empurrão forte para trás
-            if (planet.position.z < playerMesh.position.z + 200) {
-                playerMesh.position.z -= 45;
-            }
+            playerMesh.position.z += pushZ;
         } else {
             if (playerMesh.userData) playerMesh.userData.planetSoundPlayed = false;
         }

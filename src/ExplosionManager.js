@@ -15,25 +15,30 @@ export class ExplosionManager {
         this.explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
     }
 
-    create(position) {
-        if (this.soundManager) this.soundManager.play('explosion');
+create(position, multiplicador = 1.0) {
+    if (this.soundManager) this.soundManager.play('explosion');
 
-        // 1. Lógica do Fogo (Sprite Animado)
-        const distancia = Math.abs(position.z);
-        const escalaBase = 100; 
-        const fatorEscala = escalaBase * (100 / (distancia + 100)); 
+    const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
+    if (typeof multiplicador === 'object') multiplicador = 1.0;
 
-        const mat = new THREE.SpriteMaterial({
-            map: this.explosionTexture.clone(),
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
+    // 1. Lógica do Fogo (Sprite Animado)
+    const distancia = Math.abs(safePosition.z);
+    // Adicionamos o multiplicador aqui na base da escala
+    const escalaBase = 100 * multiplicador; 
+    const fatorEscala = escalaBase * (100 / (distancia + 100)); 
 
-        const sprite = new THREE.Sprite(mat);
-        sprite.position.copy(position);
-        sprite.scale.set(fatorEscala, fatorEscala, 1);
-        this.scene.add(sprite);
+    const mat = new THREE.SpriteMaterial({
+        map: this.explosionTexture.clone(),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(safePosition);
+    sprite.scale.set(fatorEscala, fatorEscala, 1);
+    
+    this.scene.add(sprite);
 
         this.explosions.push({
             sprite: sprite,
@@ -42,7 +47,13 @@ export class ExplosionManager {
         });
 
         // 2. DISPARAR OS ESTILHAÇOS (Corrigido: agora a função é chamada)
-        this.createDebris(position, 12); 
+        this.createDebris(safePosition, 12); 
+    }
+
+    createBigExplosion(position) {
+        const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
+        this.create(safePosition, 3.2);
+        this.createDebris(safePosition, 24);
     }
 
     createDebris(position, count = 10) {
