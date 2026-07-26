@@ -13,7 +13,11 @@ function createCloudTexture() {
     return new THREE.CanvasTexture(canvas);
 }
 
+// Inicializa o loader padrão sem nenhuma modificação quebrada
+const loader = new GLTFLoader();
+
 const cloudTexture = createCloudTexture();
+
 
 export class SpaceEnvironment {
     constructor(scene, starCount = 2000, cloudCount = 400) {

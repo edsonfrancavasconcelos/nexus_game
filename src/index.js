@@ -13,6 +13,13 @@ import { NaveMae } from './NaveMae.js';
 
 window.moveInput = { x: 0, y: 0 };
 
+if (typeof window.__BOSS_SPAWNED_LEVELS === 'undefined') {
+    window.__BOSS_SPAWNED_LEVELS = new Set();
+}
+if (typeof window.__NAVE_MAE_ATIVA === 'undefined') {
+    window.__NAVE_MAE_ATIVA = null;
+}
+
 // ====================== GLOBAIS ======================
 let lastBossLevel = -1;
 let audioInitialized = false;
@@ -21,6 +28,7 @@ let score = 0;
 let countdown = 5;
 let isGameStarted = false;
 let boss = null;
+let isBossFight = false;
 
 const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -33,9 +41,9 @@ const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerH
 camera.position.set(0, 5, 55);
 
 const clock = new THREE.Clock();
-const renderer = new THREE.WebGLRenderer({ 
-    antialias: false, 
-    powerPreference: "high-performance" 
+const renderer = new THREE.WebGLRenderer({
+    antialias: false,
+    powerPreference: "high-performance"
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(isMobileDevice ? 1 : Math.min(window.devicePixelRatio, 1.5));
@@ -55,6 +63,7 @@ const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice);
 const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 800 : 2000, isMobileDevice ? 120 : 400);
 const progressionManager = new ProgressionManager();
+const naveMae = new NaveMae(scene);
 
 // ====================== HELPERS ======================
 function syncLevelResources() {
@@ -78,13 +87,8 @@ function updateLevelProgressHUD() {
     const bar = document.getElementById('level-progress-bar');
     const label = document.getElementById('level-progress-label');
 
-    if (bar) {
-        bar.style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
-    }
-
-    if (label) {
-        label.textContent = `${Math.round(progress * 100)}%`;
-    }
+    if (bar) bar.style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
+    if (label) label.textContent = `${Math.round(progress * 100)}%`;
 }
 
 function updateResourceHUD() {
@@ -112,9 +116,7 @@ function updateResourceHUD() {
 }
 
 function updateEnvironmentTheme(level = progressionManager.getLevel()) {
-    if (spaceEnvironment?.setLevelTheme) {
-        spaceEnvironment.setLevelTheme(level);
-    }
+    if (spaceEnvironment?.setLevelTheme) spaceEnvironment.setLevelTheme(level);
 }
 
 function updateLevelUI(currentLevel) {
@@ -129,23 +131,26 @@ function updateLevelUI(currentLevel) {
         taskElement.style.display = 'block';
         titleElement.style.color = '#00ffff';
         taskElement.style.color = '#ffffff';
-    } else {
-        console.warn("Elementos .nexus-title ou .nexus-status não encontrados.");
     }
 }
 
-window.showLevelUp = function(level, message) {
+window.showLevelUp = function (level, message) {
     const existing = document.getElementById('level-up-card');
     if (existing) existing.remove();
 
     const card = document.createElement('div');
     card.id = 'level-up-card';
-    card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:30px;border-radius:18px;text-align:center;z-index:20000;color:white;pointer-events:none;background:rgba(0,0,0,0.7);border:1px solid #00ffff;backdrop-filter:blur(10px);`;
-    
+    card.style.cssText = `
+        position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        padding:30px;border-radius:18px;text-align:center;z-index:20000;
+        color:white;pointer-events:none;background:rgba(0,0,0,0.7);
+        border:1px solid #00ffff;backdrop-filter:blur(10px);
+    `;
+
     card.innerHTML = `
         <h2 style="color:#00ffff;margin:0;font-size:20px;text-transform:uppercase;letter-spacing:2px;">Zona Alcançada</h2>
         <div style="font-size:60px;font-weight:bold;margin:10px 0;color:#fff;">${level}</div>
-        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message}</p>
+        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message || ''}</p>
     `;
     document.body.appendChild(card);
     setTimeout(() => card.remove(), 5000);
@@ -183,6 +188,8 @@ function createVirtualJoystick() {
 }
 
 function setupJoystickEvents() {
+    if (!joystickBase) return;
+
     joystickBase.addEventListener('touchstart', e => {
         e.preventDefault();
         joystickActive = true;
@@ -194,7 +201,7 @@ function setupJoystickEvents() {
             e.preventDefault();
             handleJoystick(e.touches[0]);
         }
-    });
+    }, { passive: false });
 
     document.addEventListener('touchend', () => {
         if (!joystickActive) return;
@@ -206,9 +213,12 @@ function setupJoystickEvents() {
 }
 
 function handleJoystick(touch) {
+    if (!touch || !joystickBase) return;
+
     const rect = joystickBase.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
+
     let dx = touch.clientX - cx;
     let dy = touch.clientY - cy;
     const dist = Math.min(55, Math.hypot(dx, dy));
@@ -222,95 +232,48 @@ function handleJoystick(touch) {
     window.moveInput.y = dy / 55;
 }
 
-// ====================== GAME LOGIC ======================
+// ====================== SCORE / HIT ======================
 const handleEnemyScore = (pts, hitPosition) => {
     score += pts;
     updateHUD();
 
-    const levelUp = progressionManager.addScore(pts * 1.1); // Multiplicador para subir mais rápido
+    const levelUp = progressionManager.addScore(pts * 0.7);
 
     if (levelUp) {
+        const currentLevel = progressionManager.getLevel();
         updateLevelHUD();
         updateEnvironmentTheme();
         progressionManager.resetLevelResources();
         syncLevelResources();
         enemyManager.clearAllEnemies();
-        
-        const currentLevel = progressionManager.getLevel();
-        
-        if (boss && boss.isAlive) {
-            boss.hp = 0;
-            boss.explode(null, explosionManager);
-            boss = null;
-        }
-        
         enemyManager.spawnWave(player, currentLevel);
-        
+
         const info = getLevelData(currentLevel);
         window.showLevelUp(currentLevel, info.title);
     }
 };
 
 const handlePlayerHit = () => {
-    const result = progressionManager.loseChance();
+    // Não tem mais Game Over — só reduz as chances
+    progressionManager.loseChance();
     updateResourceHUD();
-
-    if (result.failed) {
-        showGameOverOverlay();
-    }
 };
-
-function showGameOverOverlay() {
-    const existing = document.getElementById('game-over-overlay');
-    if (existing) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'game-over-overlay';
-    overlay.innerHTML = `
-        <div class="game-over-card">
-            <h2>GAME OVER</h2>
-            <p>Você esgotou suas chances.</p>
-            <button id="restart-btn">REINICIAR</button>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const restartBtn = document.getElementById('restart-btn');
-    if (restartBtn) {
-        restartBtn.addEventListener('click', () => {
-            overlay.remove();
-            const currentLevel = progressionManager.getLevel();
-            score = 0;
-            progressionManager.resetLevelProgress();
-            updateHUD();
-            updateLevelHUD();
-            updateEnvironmentTheme(currentLevel);
-            enemyManager.clearAllEnemies();
-            syncLevelResources();
-            player.mesh.position.set(0, -1, 8);
-            currentState = GAME_STATE.PLAYING;
-            isGameStarted = true;
-            countdown = 0;
-            enemyManager.spawnWave(player, currentLevel);
-        });
-    }
-}
 
 function updateCamera() {
     if (!player.shipModel) return;
-    
+
     const baseOffset = new THREE.Vector3(0, 8, 75);
     const pitchInfluence = player.shipModel.rotation.x * 0.15;
     const rollInfluence = player.shipModel.rotation.z * 0.1;
-    
+
     const offset = baseOffset.clone();
     offset.y += Math.sin(pitchInfluence) * 8;
     offset.z -= Math.cos(pitchInfluence) * 8;
     offset.x += Math.sin(rollInfluence) * 6;
-    
+
     const targetPos = player.shipModel.position.clone().add(offset);
     camera.position.lerp(targetPos, 0.08);
-    
+
     const lookAtTarget = player.shipModel.position.clone().add(new THREE.Vector3(0, 2, -5));
     camera.lookAt(lookAtTarget);
 }
@@ -320,12 +283,16 @@ function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
+    if (naveMae && naveMae.isActive) {
+        naveMae.update(deltaTime, player.mesh?.position, laserManager, explosionManager);
+    }
+
     if (currentState !== GAME_STATE.PLAYING) {
         renderer.render(scene, camera);
         return;
     }
 
-    // Countdown
+    // Countdown inicial
     if (!isGameStarted) {
         countdown -= deltaTime;
         const display = document.getElementById('countdown-display');
@@ -342,6 +309,7 @@ function animate() {
                 updateEnvironmentTheme(nivelInicial);
                 progressionManager.resetLevelResources();
                 syncLevelResources();
+
                 if (audioInitialized) soundManager.startShipEngine();
             }
         }
@@ -349,50 +317,139 @@ function animate() {
         return;
     }
 
-    // Input
+    // Input (teclado + joystick)
     const keyboardInput = inputManager.update();
     const input = {
         x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
         y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
     };
 
-    // Updates
     player.update(input, deltaTime, enemyManager, handlePlayerHit);
 
     if (spaceEnvironment) {
-        spaceEnvironment.update(deltaTime, player.mesh.position, input, progressionManager.getLevel(), player.mesh, soundManager);
+        spaceEnvironment.update(
+            deltaTime,
+            player.mesh.position,
+            input,
+            progressionManager.getLevel(),
+            player.mesh,
+            soundManager
+        );
     }
 
-    enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel(), handlePlayerHit);
+    enemyManager.update(
+        laserManager,
+        handleEnemyScore,
+        player,
+        deltaTime,
+        explosionManager,
+        soundManager,
+        progressionManager.getLevel(),
+        handlePlayerHit
+    );
+
     laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
     explosionManager.update(deltaTime);
     scorePopup.update(deltaTime);
     updateCamera();
 
-// ====================== BOSS - NAVE MÃE ======================
-const currentLevel = progressionManager.getLevel();
+      const currentLevel = progressionManager.getLevel();
 
-if (currentLevel >= 50 && !boss && (currentLevel % 5 === 0) && lastBossLevel !== currentLevel) {
-    console.log(`🚀 [BOSS] Tentando spawnar Nave Mãe no nível ${currentLevel}`);
-    boss = new NaveMae(scene);
-    lastBossLevel = currentLevel;
-}
+    // Progresso de nível (a cada 10.000 pontos)
+    const targetLevel = Math.floor(score / 10000) + 1;
+    
+    // CORREÇÃO: O Boss só deve travar a fase se o nível alvo for EXATAMENTE o 50, 55, 60, 65...
+    // Se o targetLevel for 51, 52, 53, ele NÃO é um nível de boss, então o jogo pode avançar!
+    const isNextLevelBoss = targetLevel >= 50 && targetLevel % 5 === 0;
 
-if (boss) {
-    if (boss.mesh && !boss.isActive) {
-        boss.ativarNave(currentLevel);
+    // Avança de nível normalmente se não for uma luta de boss ativa E o próximo nível não for um novo boss
+    if (targetLevel > currentLevel && !isBossFight && !isNextLevelBoss) {
+        progressionManager.setLevel(targetLevel);
+        updateLevelHUD();
+        updateEnvironmentTheme(targetLevel);
+        progressionManager.resetLevelResources();
+        syncLevelResources();
+        enemyManager.clearAllEnemies();
+        enemyManager.spawnWave(player, targetLevel);
+
+        const info = getLevelData(targetLevel);
+        window.showLevelUp(targetLevel, info.title);
     }
 
-    if (boss.isActive && boss.isAlive && boss.mesh) {
-        boss.update(deltaTime, player.mesh.position, laserManager, explosionManager);
+    // Se o score alcançou um nível de boss múltiplo de 5, força a entrada nele se ainda não estivermos lá
+    if (isNextLevelBoss && currentLevel < targetLevel && !isBossFight) {
+        progressionManager.setLevel(targetLevel);
+        updateLevelHUD();
     }
 
-    if (boss.isActive && (!boss.isAlive || boss.hp <= 0)) {
-        console.log(`💥 [BOSS] Nave Mãe destruída no nível ${currentLevel}`);
-        if (typeof boss.dispose === 'function') boss.dispose();
-        boss = null;
+    // ====================== SPAWN DA NAVE MÃE ======================
+    // O Boss agora spawna no nível 50 e de 5 em 5 níveis (55, 60, 65...)
+    if (
+        progressionManager.getLevel() >= 50 &&
+        progressionManager.getLevel() % 5 === 0 &&
+        !window.__BOSS_SPAWNED_LEVELS.has(progressionManager.getLevel()) &&
+        boss === null
+    ) {
+        const bossLevel = progressionManager.getLevel();
+        window.__BOSS_SPAWNED_LEVELS.add(bossLevel);
+        isBossFight = true;
+        lastBossLevel = bossLevel;
+
+        console.log(`🚀 [BOSS] Ativando Nave Mãe no nível ${bossLevel}`);
+
+        boss = naveMae; 
+        window.__NAVE_MAE_ATIVA = boss;
+
+        if (progressionManager.registerBoss) {
+            progressionManager.registerBoss(boss);
+        }
+        progressionManager.activeBoss = boss;
+
+        if (boss.ativarNave) {
+            const escala = progressionManager.getBossScale ? progressionManager.getBossScale() : 1;
+            boss.ativarNave(bossLevel, escala);
+        }
     }
-}
+
+
+
+    // ====================== ATUALIZAÇÃO DO BOSS ======================
+    if (boss) {
+        isBossFight = true;
+
+        if (boss.mesh && !boss.isActive && boss.ativarNave) {
+            const escalaGradativa = progressionManager.getBossScale ? progressionManager.getBossScale() : 1;
+            boss.ativarNave(currentLevel, escalaGradativa);
+        }
+
+        boss.update(deltaTime, player.mesh?.position, laserManager, explosionManager);
+
+        if (boss.isActive && boss.hp <= 0) {
+            console.log(`💥 [BOSS] Nave Mãe destruída no nível ${currentLevel}`);
+
+            try { boss.dispose(); } catch (e) {}
+
+            boss = null;
+            isBossFight = false;
+            lastBossLevel = currentLevel;
+            window.__NAVE_MAE_ATIVA = null;
+
+            if (window.__BOSS_SPAWNED_LEVELS) {
+                window.__BOSS_SPAWNED_LEVELS.delete(currentLevel);
+            }
+
+            const newLevel = currentLevel + 1;
+            progressionManager.setLevel(newLevel);
+            updateLevelHUD();
+            updateEnvironmentTheme(newLevel);
+            enemyManager.clearAllEnemies();
+            enemyManager.spawnWave(player, newLevel);
+
+            const info = getLevelData(newLevel);
+            window.showLevelUp(newLevel, info.title);
+        }
+    }
+
     renderer.render(scene, camera);
 }
 
@@ -401,12 +458,19 @@ function setupNexusSelector() {
     window.addEventListener('nivelAlterado', (e) => {
         const novoNivel = parseInt(e.detail.nivel);
         progressionManager.setLevel(novoNivel);
-
         updateLevelHUD();
         updateLevelUI(novoNivel);
         updateEnvironmentTheme(novoNivel);
 
         if (currentState === GAME_STATE.PLAYING) {
+            if (boss) {
+                try { boss.dispose(); } catch (e) {}
+                boss = null;
+            }
+            lastBossLevel = -1;
+            isBossFight = false;
+            window.__BOSS_SPAWNED_LEVELS.clear();
+
             enemyManager.clearAllEnemies();
             progressionManager.resetLevelResources();
             syncLevelResources();
@@ -427,13 +491,20 @@ function startGame() {
     countdown = 5;
     isGameStarted = false;
     score = 0;
+    lastBossLevel = -1;
+    boss = null;
+    isBossFight = false;
 
     const countdownDisplay = document.getElementById('countdown-display');
     if (countdownDisplay) countdownDisplay.style.display = 'block';
 
     currentState = GAME_STATE.PLAYING;
-    document.getElementById('overlay').style.display = 'none';
-    document.getElementById('nexusSelector').style.display = 'none';
+
+    const overlay = document.getElementById('overlay');
+    if (overlay) overlay.style.display = 'none';
+
+    const nexusSelector = document.getElementById('nexusSelector');
+    if (nexusSelector) nexusSelector.style.display = 'none';
 
     player.mesh.position.set(0, -1, 8);
     enemyManager.clearAllEnemies();
@@ -442,7 +513,7 @@ function startGame() {
     updateLevelHUD();
 }
 
-// ====================== DOM CONTENT LOADED ======================
+// ====================== DOM ======================
 window.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('start-btn');
 
@@ -453,9 +524,20 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const btnLeft = document.getElementById('btnRollLeft');
     const btnRight = document.getElementById('btnRollRight');
-
-    if (btnLeft) btnLeft.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); player.startBarrelRoll(-1); });
-    if (btnRight) btnRight.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); player.startBarrelRoll(1); });
+    if (btnLeft) {
+        btnLeft.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            player.startBarrelRoll(-1);
+        });
+    }
+    if (btnRight) {
+        btnRight.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            player.startBarrelRoll(1);
+        });
+    }
 
     const handleStart = async (e) => {
         if (e) e.preventDefault();
@@ -472,37 +554,46 @@ window.addEventListener('DOMContentLoaded', () => {
         startBtn.addEventListener('touchstart', handleStart, { passive: false });
     }
 
-    // Shoot Button
     const btnShoot = document.getElementById('btnShoot');
     if (btnShoot) {
         btnShoot.addEventListener('mousedown', () => player.isFiring = true);
         btnShoot.addEventListener('mouseup', () => player.isFiring = false);
-        btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); player.isFiring = true; });
-        btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); player.isFiring = false; });
+        btnShoot.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            player.isFiring = true;
+        });
+        btnShoot.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            player.isFiring = false;
+        });
     }
 
-    // Missile
     const btnMissile = document.getElementById('btnMissile');
     if (btnMissile) {
-        const fire = (e) => { if (e) e.preventDefault(); if (player.fireMissile()) updateResourceHUD(); };
+        const fire = (e) => {
+            if (e) e.preventDefault();
+            if (player.fireMissile()) updateResourceHUD();
+        };
         btnMissile.addEventListener('pointerdown', fire);
         btnMissile.addEventListener('click', fire);
         btnMissile.addEventListener('touchstart', fire, { passive: false });
     }
 
-    // Pause
     const btnPause = document.getElementById('btnPause');
     if (btnPause) {
         btnPause.addEventListener('click', () => {
-            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
+            currentState = (currentState === GAME_STATE.PLAYING)
+                ? GAME_STATE.PAUSED
+                : GAME_STATE.PLAYING;
         });
         btnPause.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            currentState = (currentState === GAME_STATE.PLAYING) ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
+            currentState = (currentState === GAME_STATE.PLAYING)
+                ? GAME_STATE.PAUSED
+                : GAME_STATE.PLAYING;
         });
     }
 
-    // PDC
     const btnPDC = document.getElementById('btnPDC');
     if (btnPDC) {
         btnPDC.addEventListener('click', (e) => {
