@@ -237,24 +237,18 @@ const handleEnemyScore = (pts, hitPosition) => {
     score += pts;
     updateHUD();
 
+    // Progressão principal pelo score (a cada 10.000)
+    // O addScore do ProgressionManager fica como backup
     const levelUp = progressionManager.addScore(pts * 0.7);
-
     if (levelUp) {
-        const currentLevel = progressionManager.getLevel();
         updateLevelHUD();
         updateEnvironmentTheme();
         progressionManager.resetLevelResources();
         syncLevelResources();
-        enemyManager.clearAllEnemies();
-        enemyManager.spawnWave(player, currentLevel);
-
-        const info = getLevelData(currentLevel);
-        window.showLevelUp(currentLevel, info.title);
     }
 };
 
 const handlePlayerHit = () => {
-    // Não tem mais Game Over — só reduz as chances
     progressionManager.loseChance();
     updateResourceHUD();
 };
@@ -317,7 +311,7 @@ function animate() {
         return;
     }
 
-    // Input (teclado + joystick)
+    // Input
     const keyboardInput = inputManager.update();
     const input = {
         x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
@@ -353,51 +347,41 @@ function animate() {
     scorePopup.update(deltaTime);
     updateCamera();
 
-      const currentLevel = progressionManager.getLevel();
-
-    // Progresso de nível (a cada 10.000 pontos)
+    // ====================== PROGRESSÃO DE NÍVEL (sempre a cada 10.000 pontos) ======================
+    const currentLevel = progressionManager.getLevel();
     const targetLevel = Math.floor(score / 10000) + 1;
-    
-    // CORREÇÃO: O Boss só deve travar a fase se o nível alvo for EXATAMENTE o 50, 55, 60, 65...
-    // Se o targetLevel for 51, 52, 53, ele NÃO é um nível de boss, então o jogo pode avançar!
-    const isNextLevelBoss = targetLevel >= 50 && targetLevel % 5 === 0;
 
-    // Avança de nível normalmente se não for uma luta de boss ativa E o próximo nível não for um novo boss
-    if (targetLevel > currentLevel && !isBossFight && !isNextLevelBoss) {
+    if (targetLevel > currentLevel) {
         progressionManager.setLevel(targetLevel);
         updateLevelHUD();
         updateEnvironmentTheme(targetLevel);
         progressionManager.resetLevelResources();
         syncLevelResources();
-        enemyManager.clearAllEnemies();
-        enemyManager.spawnWave(player, targetLevel);
+
+        // Só respawna inimigos normais se não estiver em boss fight
+        if (!isBossFight) {
+            enemyManager.clearAllEnemies();
+            enemyManager.spawnWave(player, targetLevel);
+        }
 
         const info = getLevelData(targetLevel);
         window.showLevelUp(targetLevel, info.title);
     }
 
-    // Se o score alcançou um nível de boss múltiplo de 5, força a entrada nele se ainda não estivermos lá
-    if (isNextLevelBoss && currentLevel < targetLevel && !isBossFight) {
-        progressionManager.setLevel(targetLevel);
-        updateLevelHUD();
-    }
-
-    // ====================== SPAWN DA NAVE MÃE ======================
-    // O Boss agora spawna no nível 50 e de 5 em 5 níveis (55, 60, 65...)
+    // ====================== SPAWN DA NAVE MÃE (50, 55, 60...) ======================
     if (
-        progressionManager.getLevel() >= 50 &&
-        progressionManager.getLevel() % 5 === 0 &&
-        !window.__BOSS_SPAWNED_LEVELS.has(progressionManager.getLevel()) &&
+        currentLevel >= 50 &&
+        currentLevel % 5 === 0 &&
+        !window.__BOSS_SPAWNED_LEVELS.has(currentLevel) &&
         boss === null
     ) {
-        const bossLevel = progressionManager.getLevel();
-        window.__BOSS_SPAWNED_LEVELS.add(bossLevel);
+        window.__BOSS_SPAWNED_LEVELS.add(currentLevel);
         isBossFight = true;
-        lastBossLevel = bossLevel;
+        lastBossLevel = currentLevel;
 
-        console.log(`🚀 [BOSS] Ativando Nave Mãe no nível ${bossLevel}`);
+        console.log(`🚀 [BOSS] Spawnando Nave Mãe no nível ${currentLevel}`);
 
-        boss = naveMae; 
+        boss = naveMae;
         window.__NAVE_MAE_ATIVA = boss;
 
         if (progressionManager.registerBoss) {
@@ -407,46 +391,37 @@ function animate() {
 
         if (boss.ativarNave) {
             const escala = progressionManager.getBossScale ? progressionManager.getBossScale() : 1;
-            boss.ativarNave(bossLevel, escala);
+            boss.ativarNave(currentLevel, escala);
         }
     }
 
-
-
     // ====================== ATUALIZAÇÃO DO BOSS ======================
     if (boss) {
-        isBossFight = true;
-
         if (boss.mesh && !boss.isActive && boss.ativarNave) {
-            const escalaGradativa = progressionManager.getBossScale ? progressionManager.getBossScale() : 1;
-            boss.ativarNave(currentLevel, escalaGradativa);
+            const escala = progressionManager.getBossScale ? progressionManager.getBossScale() : 1;
+            boss.ativarNave(currentLevel, escala);
         }
 
         boss.update(deltaTime, player.mesh?.position, laserManager, explosionManager);
 
-        if (boss.isActive && boss.hp <= 0) {
+        // Boss destruído
+        if (boss.hp <= 0 || (boss.isActive === false && boss.isAlive === false)) {
             console.log(`💥 [BOSS] Nave Mãe destruída no nível ${currentLevel}`);
 
             try { boss.dispose(); } catch (e) {}
 
             boss = null;
             isBossFight = false;
-            lastBossLevel = currentLevel;
+            lastBossLevel = -1;
             window.__NAVE_MAE_ATIVA = null;
 
             if (window.__BOSS_SPAWNED_LEVELS) {
                 window.__BOSS_SPAWNED_LEVELS.delete(currentLevel);
             }
 
-            const newLevel = currentLevel + 1;
-            progressionManager.setLevel(newLevel);
-            updateLevelHUD();
-            updateEnvironmentTheme(newLevel);
+            // Volta os inimigos normais no nível atual
             enemyManager.clearAllEnemies();
-            enemyManager.spawnWave(player, newLevel);
-
-            const info = getLevelData(newLevel);
-            window.showLevelUp(newLevel, info.title);
+            enemyManager.spawnWave(player, progressionManager.getLevel());
         }
     }
 
@@ -494,6 +469,7 @@ function startGame() {
     lastBossLevel = -1;
     boss = null;
     isBossFight = false;
+    window.__BOSS_SPAWNED_LEVELS.clear();
 
     const countdownDisplay = document.getElementById('countdown-display');
     if (countdownDisplay) countdownDisplay.style.display = 'block';

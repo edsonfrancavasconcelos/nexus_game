@@ -5,36 +5,37 @@ export class ProgressionManager {
         this.upgradePoints = 0;
         this.chancesLeft = 5;
         this.maxLevel = 100;
-        // Fixado em 10.000 pontos por nível
         this.levelProgressTarget = 10000; 
         this.levelProgressScore = 0;
         this.activeBoss = null;
     }
 
-    // Método para o index.js avisar o gerenciador que o boss nasceu
+    shouldSpawnBoss() {
+        return this.level >= 50 && this.level % 5 === 0 && !this.activeBoss;
+    }
+
+    getBossScale() {
+        if (this.level < 50) return 1;
+        const progress = (this.level - 50) / (this.maxLevel - 50);
+        return 1.0 + (progress * 1.0); 
+    }
+
     registerBoss(bossInstance) {
         this.activeBoss = bossInstance;
-        this.levelProgressScore = 0;
+        // NÃO zera o progresso — deixa o nível continuar avançando
     }
 
     addScore(points) {
-        // TRAVA DO BOSS
-        if (this.activeBoss && this.activeBoss.isAlive && this.activeBoss.isActive) {
-            return false;
-        }
+        // REMOVIDA a trava do boss — o nível sobe mesmo com a Nave Mãe viva
 
         this.totalScore += points;
         this.levelProgressScore += points;
 
-        // Se não atingiu os 10 mil pontos ou já está no nível máximo, não sobe
         if (this.levelProgressScore < this.levelProgressTarget || this.level >= this.maxLevel) {
             return false;
         }
 
-        // Subtrai exatamente os 10 mil pontos da barra de progresso do nível atual
         this.levelProgressScore = Math.max(0, this.levelProgressScore - this.levelProgressTarget);
-
-        // Executa a subida de nível física do jogo
         this.levelUp();
         return true;
     }
@@ -48,14 +49,12 @@ export class ProgressionManager {
         return true;
     }
 
-    // Mantido por compatibilidade, mas agora retorna sempre o valor fixo
     getScoreNeededForNextLevel() {
         return 10000;
     }
 
     resetLevelResources() {
         this.chancesLeft = 5;
-        // Mantém a meta fixa em 10.000
         this.levelProgressTarget = 10000; 
     }
 
@@ -83,11 +82,10 @@ export class ProgressionManager {
 
     setLevel(level) {
         this.level = Math.max(1, Math.min(this.maxLevel, Math.floor(level)));
-        this.totalScore = 0;
-        this.upgradePoints = 0;
+        // NÃO zera o totalScore — evita conflito com o score do index.js
         this.levelProgressScore = 0;
         this.resetLevelResources();
-        this.activeBoss = null;
+        // Mantém activeBoss se já existir (não limpa automaticamente)
     }
 
     getChancesLeft() {
@@ -101,6 +99,10 @@ export class ProgressionManager {
     getLevelLoadout() {
         const missileBonus = Math.floor(this.level / 6);
         const pdcBonus = Math.floor(this.level / 4);
-        return { missiles: 8 + missileBonus, pdcBursts: 25 + pdcBonus, chancesLeft: this.chancesLeft };
+        return { 
+            missiles: 8 + missileBonus, 
+            pdcBursts: 25 + pdcBonus, 
+            chancesLeft: this.chancesLeft 
+        };
     }
 }
