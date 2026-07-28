@@ -14,20 +14,24 @@ export class NaveMae {
         this.scene = scene;
         this.mesh = null;
         this.explosionModel = null;
-    this.hp = 250000; 
-this.maxHp = 250000;
+        this.hp = 250000;
+        this.maxHp = 250000;
         this.isBoss = true;
         this.isAlive = false;
         this.isActive = false;
         this.invulnerableUntil = 0;
         this.spawnTime = 0;
         this.currentInternalScale = 2;
+        this.lastFireTime = 0;
 
-        this.startScale = 2;
-        this.maxScale = 45;
-        this.startZ = -1400;
+        this.startScale = 45;
+        this.maxScale = 350;
+        this.startZ = -1800;
 
         this.loader = new GLTFLoader();
+        this.textureLoader = new THREE.TextureLoader();
+        this.fogoTexture = this.textureLoader.load('/assets/img/fire_prev.png');
+
         this._loadModel();
         this._loadExplosionModel();
     }
@@ -68,74 +72,68 @@ this.maxHp = 250000;
             this.scene.add(this.explosionModel);
         });
     }
-ativarNave(nivel) {
-    this.isAlive = true;
-    this.isActive = true;
 
-    const nivelSeguro = Math.max(50, Math.min(100, nivel || 50));
-    const progressoNivel = (nivelSeguro - 50) / 50;
-    const multiplicadorEscala = 1.0 + (progressoNivel * 1.0);
+    ativarNave(nivel) {
+        this.isAlive = true;
+        this.isActive = true;
 
-    // Vida bem alta
-    this.hp = Math.floor(250000 * multiplicadorEscala);
-    this.maxHp = this.hp;
+        const nivelSeguro = Math.max(50, Math.min(100, nivel || 50));
+        const progressoNivel = (nivelSeguro - 50) / 50;
+        const multiplicadorEscala = 1.0 + (progressoNivel * 1.0);
 
-    this.startScale = 2 * multiplicadorEscala;
-    this.maxScale = 45 * multiplicadorEscala;
-    this.currentInternalScale = this.startScale;
+        this.hp = Math.floor(250000 * multiplicadorEscala);
+        this.maxHp = this.hp;
 
-    this.spawnTime = Date.now();
-    this.invulnerableUntil = Date.now() + 12000; // 12 segundos de invulnerabilidade
+        this.startScale = 2 * multiplicadorEscala;
+        this.maxScale = 45 * multiplicadorEscala;
+        this.currentInternalScale = this.startScale;
 
-    if (this.mesh) {
-        if (!this.mesh.parent) this.scene.add(this.mesh);
-        this.mesh.visible = true;
-        this.mesh.position.set(0, 40, this.startZ);
-        this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
-        console.log('📍 Nave Mãe visível em:', this.mesh.position);
-    } else {
-        setTimeout(() => {
-            if (this.mesh) {
-                if (!this.mesh.parent) this.scene.add(this.mesh);
-                this.mesh.visible = true;
-                this.mesh.position.set(0, 40, this.startZ);
-                this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
-            }
-        }, 500);
-    }
+        this.spawnTime = Date.now();
+        this.invulnerableUntil = Date.now() + 12000;
 
-    console.log(`💀 [BOSS] Nave Mãe Nível ${nivel} | HP: ${this.hp} | x${multiplicadorEscala.toFixed(2)}`);
-    return true;
-}
+        if (this.mesh) {
+            if (!this.mesh.parent) this.scene.add(this.mesh);
+            this.mesh.visible = true;
+            this.mesh.position.set(0, 40, this.startZ);
+            this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
+            console.log('📍 Nave Mãe visível em:', this.mesh.position);
+        } else {
+            setTimeout(() => {
+                if (this.mesh) {
+                    if (!this.mesh.parent) this.scene.add(this.mesh);
+                    this.mesh.visible = true;
+                    this.mesh.position.set(0, 40, this.startZ);
+                    this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
+                }
+            }, 500);
+        }
 
-   takeDamage(amount, hitPoint = null, explosionManager = null) {
-    if (!this.isAlive || !this.isActive) return false;
-
-    // Só começa a tomar dano depois de crescer bastante (mais perto do jogador)
-    if (this.currentInternalScale < (this.maxScale * 0.55)) return false;
-
-    // Invulnerabilidade inicial
-    if (Date.now() < this.invulnerableUntil) return false;
-
-    // Dano bem reduzido
-    // Laser normal: máximo 6 de dano
-    // Míssil: máximo 25 de dano
-    const limitedDamage = Math.min(amount, amount >= 30 ? 25 : 6);
-    
-    this.hp = Math.max(0, this.hp - limitedDamage);
-
-    // Log a cada 10% de vida perdida (opcional)
-    const percent = Math.floor((this.hp / this.maxHp) * 100);
-    if (percent % 10 === 0) {
-        console.log(`🩸 Boss HP: ${percent}% (${this.hp})`);
-    }
-
-    if (this.hp <= 0) {
-        this.explode(hitPoint, explosionManager);
+        console.log(`💀 [BOSS] Nave Mãe Nível ${nivel} | HP: ${this.hp} | x${multiplicadorEscala.toFixed(2)}`);
         return true;
     }
-    return false;
-}
+
+    takeDamage(amount, hitPoint = null, explosionManager = null) {
+        if (!this.isAlive || !this.isActive) return false;
+
+        // Só toma dano quando já está mais perto (escala maior)
+        if (this.currentInternalScale < (this.maxScale * 0.55)) return false;
+        if (Date.now() < this.invulnerableUntil) return false;
+
+        // Laser: máx 6 | Míssil: máx 25
+        const limitedDamage = Math.min(amount, amount >= 30 ? 25 : 6);
+        this.hp = Math.max(0, this.hp - limitedDamage);
+
+        const percent = Math.floor((this.hp / this.maxHp) * 100);
+        if (percent % 10 === 0) {
+            console.log(`🩸 Boss HP: ${percent}% (${this.hp})`);
+        }
+
+        if (this.hp <= 0) {
+            this.explode(hitPoint, explosionManager);
+            return true;
+        }
+        return false;
+    }
 
     explode(hitPoint = null, explosionManager = null) {
         if (!this.isAlive) return;
@@ -143,7 +141,6 @@ ativarNave(nivel) {
         this.isAlive = false;
         this.isActive = false;
 
-        // Esconde e REMOVE da cena (não fica fantasma no fundo)
         if (this.mesh) {
             this.mesh.visible = false;
             this.scene.remove(this.mesh);
@@ -156,7 +153,6 @@ ativarNave(nivel) {
             const s = this.currentInternalScale * 1.4;
             this.explosionModel.scale.set(s, s, s);
 
-            // Esconde a explosão depois de 3 segundos
             setTimeout(() => {
                 if (this.explosionModel) {
                     this.explosionModel.visible = false;
@@ -172,20 +168,92 @@ ativarNave(nivel) {
 
         console.log('🌌 Nave Mãe destruída e removida da cena!');
     }
+    _criarFogoLocalizado(pontoImpactoMundo, intensidade) {
+        if (!this.mesh || !this.fogoTexture) return;
+
+        // Converte o ponto do impacto no mundo para a coordenada interna/local da nave mãe
+        const pontoLocal = this.mesh.worldToLocal(pontoImpactoMundo.clone());
+
+        // Criamos o sistema de partículas para a chama local
+        const geometria = new THREE.BufferGeometry();
+        const posicoes = [];
+
+        // Cria pequenos focos bem concentrados ao redor do furo do impacto
+        const contagem = Math.ceil(intensidade * 2);
+        for (let i = 0; i < contagem; i++) {
+            const x = pontoLocal.x + (Math.random() - 0.5) * 2.0;
+            const y = pontoLocal.y + (Math.random() - 0.5) * 1.0;
+            const z = pontoLocal.z + (Math.random() - 0.5) * 2.0;
+            posicoes.push(x, y, z);
+        }
+
+        geometria.setAttribute('position', new THREE.Float32BufferAttribute(posicoes, 3));
+
+        // Material ajustado para tamanho de estilhaço/fogo localizado proporcional à lataria
+        const material = new THREE.PointsMaterial({
+            size: 4.5, // Tamanho fixo da chama em relação à malha da nave
+            map: this.fogoTexture,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        material.color.setHex(0xffaa11); // Cor de explosão quente
+
+        const fogoLocal = new THREE.Points(geometria, material);
+        
+        // CRÍTICO: Adiciona o fogo dentro da própria nave mãe para ele ficar preso na fuselagem!
+        this.mesh.add(fogoLocal);
+
+        const tempoNascimento = Date.now();
+        const duracao = 1000 + Math.random() * 500; // Tempo que o buraco fica pegando fogo
+
+        const animarFogoLocal = () => {
+            if (!this.isActive || !this.mesh) {
+                geometria.dispose();
+                material.dispose();
+                return;
+            }
+
+            const idade = Date.now() - tempoNascimento;
+            const progresso = idade / duracao;
+
+            if (progresso >= 1) {
+                geometria.dispose();
+                material.dispose();
+                this.mesh.remove(fogoLocal);
+            } else {
+                material.opacity = (1 - progresso) * 0.9;
+                
+                // Faz as labaredas subirem localmente na carcaça
+                const posArr = geometria.attributes.position.array;
+                for (let i = 1; i < posArr.length; i += 3) {
+                    posArr[i] += 0.05; // Sobe levemente na coordenada local da nave
+                }
+                geometria.attributes.position.needsUpdate = true;
+
+                requestAnimationFrame(animarFogoLocal);
+            }
+        };
+        animarFogoLocal();
+    }
+
 
     update(deltaTime, playerPosition, laserManager = null, explosionManager = null) {
         if (!this.isAlive || !this.isActive || !this.mesh) return;
 
-        const targetZ = (playerPosition?.z ?? 0) - 500;
-        const target = new THREE.Vector3(0, 35, targetZ);
+        // Aproxima até ficar bem perto do jogador
+        const targetZ = (playerPosition?.z ?? 0) - 180;
+        const target = new THREE.Vector3(0, 30, targetZ);
 
         if (playerPosition) {
-            target.x = THREE.MathUtils.clamp(playerPosition.x * 0.3, -100, 100);
-            target.y = Math.max(20, playerPosition.y + 20);
+            target.x = THREE.MathUtils.clamp(playerPosition.x * 0.25, -70, 70);
+            target.y = Math.max(15, playerPosition.y + 12);
         }
 
         const timeSinceSpawn = Date.now() - this.spawnTime;
-        const lerpSpeed = timeSinceSpawn < 5000 ? 0.012 : 0.04;
+        const lerpSpeed = timeSinceSpawn < 6000 ? 0.006 : 0.025;
 
         this.mesh.position.lerp(target, lerpSpeed);
 
@@ -196,13 +264,15 @@ ativarNave(nivel) {
         this.currentInternalScale = THREE.MathUtils.lerp(this.startScale, this.maxScale, progress);
         this.mesh.scale.set(this.currentInternalScale, this.currentInternalScale, this.currentInternalScale);
 
-        this.mesh.rotation.y = Math.PI + Math.sin(Date.now() * 0.0004) * 0.1;
-        this.mesh.rotation.z = Math.sin(Date.now() * 0.0006) * 0.05;
+        this.mesh.rotation.y = Math.PI + Math.sin(Date.now() * 0.0003) * 0.08;
+        this.mesh.rotation.z = Math.sin(Date.now() * 0.0005) * 0.04;
 
-      // Só registra hit quando já está bem grande (mais perto)
-if (this.currentInternalScale < (this.maxScale * 0.55)) return;
+    
 
-const hitRadius = this.currentInternalScale * 3.2; // hitbox um pouco menor
+        // Só processa colisão quando já está maior (mais perto)
+        if (this.currentInternalScale < (this.maxScale * 0.55)) return;
+
+        const hitRadius = this.currentInternalScale * 3.2;
 
         // Lasers
         if (laserManager?.lasers) {
