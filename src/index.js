@@ -277,9 +277,9 @@ function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
-    if (naveMae && naveMae.isActive) {
-        naveMae.update(deltaTime, player.mesh?.position, laserManager, explosionManager);
-    }
+ if (naveMae && naveMae.isActive) {
+    naveMae.update(deltaTime, player.mesh?.position, laserManager, explosionManager, player);
+}
 
     if (currentState !== GAME_STATE.PLAYING) {
         renderer.render(scene, camera);
@@ -368,32 +368,31 @@ function animate() {
         window.showLevelUp(targetLevel, info.title);
     }
 
-    // ====================== SPAWN DA NAVE MÃE (50, 55, 60...) ======================
-    if (
-        currentLevel >= 50 &&
-        currentLevel % 5 === 0 &&
-        !window.__BOSS_SPAWNED_LEVELS.has(currentLevel) &&
-        boss === null
-    ) {
-        window.__BOSS_SPAWNED_LEVELS.add(currentLevel);
-        isBossFight = true;
-        lastBossLevel = currentLevel;
+ // ====================== SPAWN DA NAVE MÃE (apenas 1 vez a partir do nível 50) ======================
+if (
+    currentLevel >= 50 &&
+    boss === null &&
+    !window.__BOSS_SPAWNED_LEVELS.has(50)   // marca só o 50 → nunca spawna de novo
+) {
+    window.__BOSS_SPAWNED_LEVELS.add(50);
+    isBossFight = true;
+    lastBossLevel = 50;
 
-        console.log(`🚀 [BOSS] Spawnando Nave Mãe no nível ${currentLevel}`);
+    console.log(`🚀 [BOSS] Spawnando Nave Mãe no nível ${currentLevel} (início no 50)`);
 
-        boss = naveMae;
-        window.__NAVE_MAE_ATIVA = boss;
+    boss = naveMae;
+    window.__NAVE_MAE_ATIVA = boss;
 
-        if (progressionManager.registerBoss) {
-            progressionManager.registerBoss(boss);
-        }
-        progressionManager.activeBoss = boss;
-
-        if (boss.ativarNave) {
-            const escala = progressionManager.getBossScale ? progressionManager.getBossScale() : 1;
-            boss.ativarNave(currentLevel, escala);
-        }
+    if (progressionManager.registerBoss) {
+        progressionManager.registerBoss(boss);
     }
+    progressionManager.activeBoss = boss;
+
+    // Sempre começa como nível 50 → pequena e cresce gradualmente
+    if (boss.ativarNave) {
+        boss.ativarNave(50);
+    }
+}
 
     // ====================== ATUALIZAÇÃO DO BOSS ======================
     if (boss) {
@@ -402,7 +401,7 @@ function animate() {
             boss.ativarNave(currentLevel, escala);
         }
 
-        boss.update(deltaTime, player.mesh?.position, laserManager, explosionManager);
+       boss.update(deltaTime, player.mesh?.position, laserManager, explosionManager, player);
 
         // Boss destruído
         if (boss.hp <= 0 || (boss.isActive === false && boss.isAlive === false)) {

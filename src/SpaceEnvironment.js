@@ -170,19 +170,21 @@ export class SpaceEnvironment {
     }
 
     update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager = null) {
-        this.planets.forEach((p, index) => {
-            const shouldBeVisible = (currentLevel >= 5 && currentLevel <= 20);
-            
-            if (shouldBeVisible) {
-                p.position.z += 80 * deltaTime;
+    this.planets.forEach((p, index) => {
+        // Só aparece no nível 5
+        const shouldBeVisible = (currentLevel === 5);
 
-                if (p.position.z > 1800) { 
-                    this.resetPlanetPosition(p, index);
-                }
-                
+        if (shouldBeVisible) {
+            p.position.z += 80 * deltaTime;
+
+            // Quando passar da nave → some e NÃO reseta (evita o loop)
+            if (p.position.z > 1800) {
+                p.visible = false;
+                // NÃO chama resetPlanetPosition — isso era o que gerava o loop
+            } else {
                 const distZ = Math.abs(p.position.z);
-                
-                // Fade in MUITO gradual: começa a aparecer bem longe
+
+                // Fade in gradual
                 let opacity = 1.0;
                 if (distZ > 8000) {
                     opacity = 0;
@@ -190,51 +192,47 @@ export class SpaceEnvironment {
                 } else {
                     p.visible = true;
                     if (distZ > 6000) {
-                        // Fade muito lento de 8000 até 6000
                         opacity = (8000 - distZ) / 2000;
                     }
                 }
-                
-                // Aplicar opacidade ao material
+
+                // Aplicar opacidade
                 p.traverse((child) => {
                     if (child.isMesh && child.material) {
                         child.material.transparent = true;
                         child.material.opacity = opacity;
                     }
                 });
-                
-                // Crescimento MUITO gradual
+
+                // Crescimento gradual
                 let scale;
                 if (distZ > 7500) {
-                    // Bem longe: bem pequeno
                     scale = 1;
                 } else if (distZ > 6000) {
-                    // Bem longe indo: crescimento lento
                     const progress = (7500 - distZ) / 1500;
                     scale = 1 + (30 - 1) * progress;
                 } else if (distZ > 3000) {
-                    // Médio: crescimento moderado
                     const progress = (6000 - distZ) / 3000;
                     scale = 30 + (150 - 30) * (progress * progress);
                 } else if (distZ < 500) {
-                    // Perto: escala máxima (mas não tão grande)
                     scale = 200;
                 } else {
-                    // Aproximando: crescimento
                     const progress = (3000 - distZ) / 2500;
                     scale = 150 + (200 - 150) * progress;
                 }
-                
+
                 p.scale.set(scale, scale, scale);
-                
-                // Colisão apenas quando o planeta está visível e perto
+
+                // Colisão
                 if (playerMesh && distZ < 3500) {
                     this._avoidPlanetCollision(playerMesh, p, soundManager);
                 }
-            } else {
-                p.visible = false;
             }
-        });
+        } else {
+            // Fora do nível 5 → fica invisível
+            p.visible = false;
+        }
+    });
 
         const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;
         this.stars.material.opacity = 0.85 * pulse;

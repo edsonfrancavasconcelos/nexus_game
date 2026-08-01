@@ -110,35 +110,48 @@ export class Player {
         };
     }
 
-    _updatePDC(enemyManager, dt) {
-        if (!this.pdcActive || this.pdcBurstCount <= 0) {
-            this._updatePDCProjectiles(enemyManager, dt);
-            return;
-        }
-        this.pdcTimer += dt;
-        let closestEnemy = null;
-        let closestDist = Infinity;
-        if (enemyManager?.enemies) {
-            enemyManager.enemies.forEach((enemy) => {
-                const dist = this.mesh.position.distanceTo(enemy.position);
-                if (dist < this.pdcRange && dist < closestDist) {
-                    closestDist = dist;
-                    closestEnemy = enemy;
-                }
-            });
-        }
-        if (closestEnemy) {
-            const targetPos = new THREE.Vector3();
-            closestEnemy.getWorldPosition(targetPos);
-            this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
-            if (this.pdcTimer >= this.pdcCooldown) {
-                this.pdcBurstCount = Math.max(0, this.pdcBurstCount - 1);
-                this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
-                this.pdcTimer = 0;
-            }
-        }
+ _updatePDC(enemyManager, dt) {
+    if (!this.pdcActive || this.pdcBurstCount <= 0) {
         this._updatePDCProjectiles(enemyManager, dt);
+        return;
     }
+    this.pdcTimer += dt;
+    let closestEnemy = null;
+    let closestDist = Infinity;
+
+    if (enemyManager?.enemies) {
+        enemyManager.enemies.forEach((enemy) => {
+            const dist = this.mesh.position.distanceTo(enemy.position);
+            if (dist < this.pdcRange && dist < closestDist) {
+                closestDist = dist;
+                closestEnemy = enemy;
+            }
+        });
+    }
+
+    // ===== NOVO: também mira na Nave Mãe =====
+    const boss = window.__NAVE_MAE_ATIVA;
+    if (boss?.isActive && boss?.mesh?.visible) {
+        const distBoss = this.mesh.position.distanceTo(boss.mesh.position);
+        if (distBoss < this.pdcRange && distBoss < closestDist) {
+            closestDist = distBoss;
+            closestEnemy = boss.mesh; // usa o mesh do boss como alvo
+        }
+    }
+    // ==========================================
+
+    if (closestEnemy) {
+        const targetPos = new THREE.Vector3();
+        closestEnemy.getWorldPosition(targetPos);
+        this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
+        if (this.pdcTimer >= this.pdcCooldown) {
+            this.pdcBurstCount = Math.max(0, this.pdcBurstCount - 1);
+            this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
+            this.pdcTimer = 0;
+        }
+    }
+    this._updatePDCProjectiles(enemyManager, dt);
+}
 
     _firePDCShot(targetPos, cannon) {
         for (let i = 0; i < 4; i++) {
@@ -157,24 +170,57 @@ export class Player {
 
     togglePDC() { this.pdcActive = !this.pdcActive; return this.pdcActive; }
 
-    fireMissile() {
-        if (this.missileCount <= 0) return false;
-        this.missileCount--;
-        this.missileReloadTimer = 0;
-        const ship = this.shipModel || this.mesh;
-        ship.updateMatrixWorld();
-        const spawnPos = new THREE.Vector3();
-        const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
-        spawnPos.copy(noseLocal).applyMatrix4(ship.matrixWorld);
-        const missileQuat = new THREE.Quaternion();
-        ship.getWorldQuaternion(missileQuat);
-        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
-        spawnPos.addScaledVector(forward, 6);
-        if (this.laserManager && typeof this.laserManager.createMissile === 'function') {
-            this.laserManager.createMissile(spawnPos, missileQuat);
-        }
-        return true;
+   fireMissile() {
+    if (this.missileCount <= 0) {
+        console.log('🚫 Sem mísseis');
+        return false;
     }
+    if (!this.laserManager || typeof this.laserManager.createMissile !== 'function') {
+        console.log('🚫 LaserManager sem createMissile');
+        return false;
+    }
+
+    // Garante que a matriz do mundo está atualizada
+    this.mesh.updateMatrixWorld(true);
+    if (this.shipModel) this.shipModel.updateMatrixWorld(true);
+
+    const ship = this.shipModel || this.mesh;
+
+    // Posição de saída (nariz da nave)
+    const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
+    const spawnPos = noseLocal.clone().applyMatrix4(ship.matrixWorld);
+
+    // Direção para frente da nave
+    // A nave usa rotation.y = Math.PI, então o "frente" visual é -Z local
+    const missileQuat = new THREE.Quaternion();
+    ship.getWorldQuaternion(missileQuat);
+
+    // Direção visual da nave (frente)
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(missileQuat).normalize();
+
+    // Empurra um pouco para frente para não nascer dentro da nave
+    spawnPos.addScaledVector(forward, 8);
+
+    this.missileCount--;
+    this.missileReloadTimer = 0;
+
+    this.laserManager.createMissile(spawnPos, missileQuat);
+
+    // Garante que o míssil use a mesma direção para frente
+    const last = this.laserManager.missiles[this.laserManager.missiles.length - 1];
+    if (last?.mesh) {
+        last.mesh.userData.direction = forward.clone();
+        // Alinha o modelo do míssil com a direção
+        last.mesh.lookAt(spawnPos.clone().add(forward));
+    }
+
+    if (window.soundManager) {
+        try { window.soundManager.play('missile'); } catch (e) {}
+    }
+
+    console.log('🚀 Míssil disparado | restantes:', this.missileCount);
+    return true;
+}
 
     _updatePDCProjectiles(enemyManager, dt) {
         const now = Date.now();

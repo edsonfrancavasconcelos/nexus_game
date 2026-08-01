@@ -18,9 +18,9 @@ export class EnemyManager {
         this.obstacleCollisionBox = new THREE.Box3();
 
         this.waveTimer = 0;
-        this.enemySpeed = 220;
-        this.maxEnemiesOnScreen = isMobile ? 6 : 10;
-        this.waveCooldown = isMobile ? 2.0 : 1.6;
+  this.enemySpeed = 220;
+this.maxEnemiesOnScreen = isMobile ? 12 : 18;  // mais inimigos na tela
+this.waveCooldown = isMobile ? 1.0 : 0.7;      // spawna bem mais rápido
 
         // Templates
         this.enemyTemplate = null;
@@ -135,18 +135,18 @@ export class EnemyManager {
             });
         };
 
-        loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [20, 20, 20], 0);
-        loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [20, 20, 20], Math.PI / 2);
-        loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [20, 20, 20], 0);
-        loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [20, 20, 20], 0);
-        loadModel('/assets/models/drone.glb', 'droneTemplate', [80, 80, 80], Math.PI);
-        loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [15, 15, 15], 0);
-        loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [35, 35, 35], 0);
+loadModel('/assets/models/nave_inimiga.glb', 'enemyTemplate', [20, 20, 20], 0);
+loadModel('/assets/models/nave_inim_5.glb', 'enemyTemplate5', [20, 20, 20], Math.PI / 2);
+loadModel('/assets/models/nave_inim_10.glb', 'enemyTemplate10', [20, 20, 20], 0);
+loadModel('/assets/models/nave_inim_15.glb', 'enemyTemplate15', [20, 20, 20], 0);
+loadModel('/assets/models/drone.glb', 'droneTemplate', [30, 30, 30], Math.PI);
+loadModel('/assets/models/meteoro.glb', 'meteoroTemplate', [5, 5, 5], 0);
+loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
 
         // Asteroid especial
         loader.load('/assets/models/asteroid_ball.glb', (gltf) => {
             const model = gltf.scene;
-            model.scale.set(6, 6, 6);
+          model.scale.set(3.5, 3.5, 3.5);
             this._styleAsteroidModel(model);
             this.templates.asteroide = model;
         }, undefined, (error) => {
@@ -290,7 +290,7 @@ update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, sound
         }
 
         // Spawning
-        const adjustedCooldown = Math.max(0.45, this.waveCooldown - (currentLevel * 0.012));
+       const adjustedCooldown = Math.max(0.25, this.waveCooldown - (currentLevel * 0.015));
         this.waveTimer += deltaTime;
         if (this.waveTimer > adjustedCooldown) {
             this.spawnWave(player, currentLevel);
@@ -346,29 +346,52 @@ for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
             }
         }
 
-        const pPos = player.mesh.position;
-        const toPlayer = new THREE.Vector3().subVectors(pPos, enemy.position).normalize();
-        const lateralBias = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), toPlayer).normalize();
-        const biasFactor = (data.type === 'meteoro' || data.type === 'asteroide') ? 0.05 : 0.18;
-        const lerpFactor = (data.type === 'meteoro' || data.type === 'asteroide') ? 0.15 : 0.04;
-        
-        lateralBias.multiplyScalar(Math.sin(Date.now() * 0.001 + data.wanderSeed) * biasFactor);
-        const desiredDir = toPlayer.clone().add(lateralBias).normalize();
-        data.moveDir.lerp(desiredDir, lerpFactor);
-        enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
 
-        enemy.lookAt(pPos.clone().add(new THREE.Vector3(0, Math.sin(Date.now() * 0.001 + data.wanderSeed) * 0.8, 0)));
+const pPos = player.mesh.position;
+const distToPlayer = enemy.position.distanceTo(pPos);
 
-            const aimTarget = pPos.clone().add(new THREE.Vector3(0, Math.sin(Date.now() * 0.001 + data.wanderSeed) * 0.8, 0));
-            enemy.lookAt(aimTarget);
+// Mantém a direção original de passagem (não vira de volta)
+if (!data.moveDir || data.moveDir.lengthSq() < 0.0001) {
+    data.moveDir = new THREE.Vector3().subVectors(pPos, enemy.position).normalize();
+}
 
-            // Som de passagem
-            if (soundManager && !data.passSoundPlayed && data.passSound) {
-                if (enemy.position.distanceTo(camPosAtual) < 500) {
-                    soundManager.play(data.passSound);
-                    data.passSoundPlayed = true;
-                }
-            }
+// Leve oscilação lateral (só pra não ir 100% reto)
+const side = new THREE.Vector3()
+    .crossVectors(data.moveDir.clone().normalize(), new THREE.Vector3(0, 1, 0))
+    .normalize();
+
+if (side.lengthSq() < 0.001) {
+    side.set(1, 0, 0);
+}
+
+const wander = Math.sin(Date.now() * 0.0007 + data.wanderSeed) * 0.12;
+
+// Direção desejada = sempre para frente + leve desvio lateral
+const desiredDir = data.moveDir.clone().normalize();
+desiredDir.addScaledVector(side, wander);
+desiredDir.y += wander * 0.15;
+desiredDir.normalize();
+
+// Suaviza bem pouco (não deixa girar bruto)
+data.moveDir.lerp(desiredDir, 0.03);
+data.moveDir.normalize();
+
+// Avança
+enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
+
+// Mira visualmente no jogador (só rotação, não muda o caminho)
+const aimTarget = pPos.clone().add(
+    new THREE.Vector3(0, Math.sin(Date.now() * 0.001 + data.wanderSeed) * 0.8, 0)
+);
+enemy.lookAt(aimTarget);
+
+// Som de passagem
+if (soundManager && !data.passSoundPlayed && data.passSound) {
+    if (enemy.position.distanceTo(camPosAtual) < 500) {
+        soundManager.play(data.passSound);
+        data.passSoundPlayed = true;
+    }
+}
 
             // Rotação
             if (data.type === 'drone' || data.type === 'meteoro' || data.type === 'asteroide') {

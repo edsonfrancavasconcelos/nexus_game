@@ -70,9 +70,9 @@ export class LaserManager {
         missile.position.copy(position);
         missile.quaternion.copy(quaternion);       
         missile.scale.set(1, 1, 1); // Garanta escala 1        
-        missile.userData = {
-            direction: new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize()
-        };
+missile.userData = {
+    direction: new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion).normalize()
+};
         this.scene.add(missile);
         this.missiles.push({ mesh: missile, speed: 620.0, life: 5.0 });
     }
@@ -96,9 +96,9 @@ export class LaserManager {
     // Atualizar Mísseis
    for (let i = this.missiles.length - 1; i >= 0; i--) {
     const m = this.missiles[i];  
-    const forward = m.mesh.userData?.direction || new THREE.Vector3(0, 0, 1).applyQuaternion(m.mesh.quaternion).normalize();
-
-    m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
+   const forward = (m.mesh.userData?.direction || new THREE.Vector3(0, 0, -1)).clone().normalize();
+m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
+  
 
     let hitEnemy = false;
     if (enemyManager?.enemies?.length) {
