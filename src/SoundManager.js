@@ -17,6 +17,7 @@ export class SoundManager {
             laser_inimi_5: new Audio('/assets/sounds/laser_inimi_5.mp3'),
             laser_inim_6: new Audio('/assets/sounds/laser_inimigo.mp3'), // fallback
             laser_inimigo: new Audio('/assets/sounds/laser_inimigo.mp3'),
+            missile: new Audio('/assets/sounds/laser.mp3'),
 
             // --- SONS DE PASSAGEM ---
             nave_pass_15: new Audio('/assets/sounds/nave_pass_15.mp3'),
@@ -57,6 +58,21 @@ export class SoundManager {
 
         this.lastLaserTime = 0;
         this.lastPdcTime = 0;
+        this.activeCloneCount = {};
+        this.maxCloneCount = {
+            explosion: 3,
+            enemyLaser: 4,
+            laser: 4,
+            pdc: 3,
+            enemyPass: 2,
+            drone: 2,
+            meteoro: 2,
+            inimiga_passando: 2,
+            nave_pass_15: 1,
+            nave_pss_10: 1,
+            nave_pass_5: 1,
+            nave_pass_6: 1
+        };
     }
 
     init() {
@@ -106,7 +122,8 @@ export class SoundManager {
             'laser_inim_15': 'laser_inim_15',
             'laser_inim_10': 'laser_inim_10',
             'laser_inimi_5': 'laser_inimi_5',
-            'laser_inim_6': 'laser_inim_6'
+            'laser_inim_6': 'laser_inim_6',
+            'missile': 'missile'
         };
 
         if (nameMap[name]) soundKey = nameMap[name];
@@ -126,8 +143,13 @@ export class SoundManager {
         if (soundKey.includes('laser')) this.lastLaserTime = now;
         if (soundKey === 'pdc') this.lastPdcTime = now;
 
-        // Clone para a maioria dos sons (permite overlap)
+        const maxClones = this.maxCloneCount[soundKey] ?? 3;
+        const activeClones = this.activeCloneCount[soundKey] || 0;
+        if (activeClones >= maxClones) return;
+
+        this.activeCloneCount[soundKey] = activeClones + 1;
         const soundClone = baseSound.cloneNode(true);
+        soundClone.loop = false;
 
         // Volumes específicos
         if (soundKey.includes('laser')) {
@@ -140,10 +162,24 @@ export class SoundManager {
             soundClone.volume = 0.35;
         }
 
-        soundClone.play().catch(e => {
-            // console.warn("Áudio bloqueado:", e); // descomente se precisar debug
-        });
+        const cleanupClone = () => {
+            if (this.activeCloneCount[soundKey] > 0) {
+                this.activeCloneCount[soundKey] -= 1;
+            }
+            soundClone.remove();
+        };
 
-        soundClone.onended = () => soundClone.remove();
+        let cleanupCalled = false;
+        const safeCleanup = () => {
+            if (cleanupCalled) return;
+            cleanupCalled = true;
+            cleanupClone();
+        };
+
+        soundClone.onended = safeCleanup;
+        soundClone.play().catch(() => safeCleanup());
+
+        // Fallback para liberar caso o onended não seja disparado
+        setTimeout(safeCleanup, 3500);
     }
 }

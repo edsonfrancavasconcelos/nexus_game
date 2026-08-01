@@ -317,7 +317,7 @@ for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
             continue;
         }
 
-        if (p.mesh.position.distanceTo(player.mesh.position) < 12) {
+        if (p.mesh.position.distanceTo(player.mesh.position) < 18) {
             this.scene.remove(p.mesh);
             this.enemyProjectiles.splice(i, 1);
             if (onPlayerHit) onPlayerHit();
@@ -413,7 +413,7 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
             const laser = playerLasers[j];
             if (!laser) continue;
 
-            if (enemy.position.distanceTo(laser.position) < ((data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 35)) {
+            if (enemy.position.distanceTo(laser.position) < ((data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 55)) {
                 pontoDoImpactoReal = laser.position.clone();
                 laser.userData = { destroyed: true };
                 this.scene.remove(laser);
@@ -483,6 +483,7 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
         this.scene.add(laser);
 
         const dir = new THREE.Vector3().subVectors(pPos, laser.position).normalize();
+        laser.userData = { direction: dir };
         this.enemyProjectiles.push({ mesh: laser, dir, speed: 520, life: 2.2 });
 
         if (soundManager && enemy.userData.laserSound) {

@@ -70,9 +70,9 @@ export class LaserManager {
         missile.position.copy(position);
         missile.quaternion.copy(quaternion);       
         missile.scale.set(1, 1, 1); // Garanta escala 1        
-missile.userData = {
-    direction: new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion).normalize()
-};
+        missile.userData = {
+            direction: new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize()
+        };
         this.scene.add(missile);
         this.missiles.push({ mesh: missile, speed: 620.0, life: 5.0 });
     }
@@ -107,22 +107,29 @@ m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
             if (!enemy) continue;
 
             const enemyType = enemy.userData?.type;
-            const hitRadius = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 90 : 55;
+            const hitRadius = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 110 : 70;
             if (m.mesh.position.distanceTo(enemy.position) <= hitRadius) {
                 const hitPoint = m.mesh.position.clone();
                 const destroyed = enemyManager.damageEnemy
                     ? enemyManager.damageEnemy(enemy, 35, hitPoint)
                     : true;
 
+                if (explosionManager) {
+                    if (destroyed) {
+                        explosionManager.create(hitPoint, {
+                            kind: 'missile',
+                            flashColor: 0xd8ffb8,
+                            lightColor: 0x66ff33,
+                            lightIntensity: 2600,
+                            smokeColor: 0x254b20
+                        });
+                    } else {
+                        explosionManager.create(hitPoint, 0.6);
+                    }
+                }
+
                 if (destroyed) {
                     const points = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 500 : (enemyType === 'drone' ? 250 : (enemyType === 'roblox' ? 150 : 100));
-                    if (explosionManager) explosionManager.create(hitPoint, {
-                        kind: 'missile',
-                        flashColor: 0xd8ffb8,
-                        lightColor: 0x66ff33,
-                        lightIntensity: 2600,
-                        smokeColor: 0x254b20
-                    });
                     if (onEnemyDestroyed) onEnemyDestroyed(points, hitPoint);
                     enemyManager.scene.remove(enemy);
                     enemyManager.enemies.splice(j, 1);

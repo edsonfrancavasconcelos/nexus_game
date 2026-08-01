@@ -107,6 +107,7 @@ class SoundManager {
       laser_inim_6: new Audio("/assets/sounds/laser_inimigo.mp3"),
       // fallback
       laser_inimigo: new Audio("/assets/sounds/laser_inimigo.mp3"),
+      missile: new Audio("/assets/sounds/laser.mp3"),
       // --- SONS DE PASSAGEM ---
       nave_pass_15: new Audio("/assets/sounds/nave_pass_15.mp3"),
       nave_pss_10: new Audio("/assets/sounds/nave_pass_10.mp3"),
@@ -139,6 +140,21 @@ class SoundManager {
     });
     this.lastLaserTime = 0;
     this.lastPdcTime = 0;
+    this.activeCloneCount = {};
+    this.maxCloneCount = {
+      explosion: 3,
+      enemyLaser: 4,
+      laser: 4,
+      pdc: 3,
+      enemyPass: 2,
+      drone: 2,
+      meteoro: 2,
+      inimiga_passando: 2,
+      nave_pass_15: 1,
+      nave_pss_10: 1,
+      nave_pass_5: 1,
+      nave_pass_6: 1
+    };
   }
   init() {
     console.log("🔊 Inicializando todos os sons do jogo...");
@@ -180,7 +196,8 @@ class SoundManager {
       "laser_inim_15": "laser_inim_15",
       "laser_inim_10": "laser_inim_10",
       "laser_inimi_5": "laser_inimi_5",
-      "laser_inim_6": "laser_inim_6"
+      "laser_inim_6": "laser_inim_6",
+      "missile": "missile"
     };
     if (nameMap[name]) soundKey = nameMap[name];
     const baseSound = this.sounds[soundKey];
@@ -193,7 +210,12 @@ class SoundManager {
     if (soundKey === "pdc" && now - this.lastPdcTime < 200) return;
     if (soundKey.includes("laser")) this.lastLaserTime = now;
     if (soundKey === "pdc") this.lastPdcTime = now;
+    const maxClones = this.maxCloneCount[soundKey] ?? 3;
+    const activeClones = this.activeCloneCount[soundKey] || 0;
+    if (activeClones >= maxClones) return;
+    this.activeCloneCount[soundKey] = activeClones + 1;
     const soundClone = baseSound.cloneNode(true);
+    soundClone.loop = false;
     if (soundKey.includes("laser")) {
       soundClone.volume = 0.22;
     } else if (soundKey === "explosion") {
@@ -203,9 +225,21 @@ class SoundManager {
     } else {
       soundClone.volume = 0.35;
     }
-    soundClone.play().catch((e) => {
-    });
-    soundClone.onended = () => soundClone.remove();
+    const cleanupClone = () => {
+      if (this.activeCloneCount[soundKey] > 0) {
+        this.activeCloneCount[soundKey] -= 1;
+      }
+      soundClone.remove();
+    };
+    let cleanupCalled = false;
+    const safeCleanup = () => {
+      if (cleanupCalled) return;
+      cleanupCalled = true;
+      cleanupClone();
+    };
+    soundClone.onended = safeCleanup;
+    soundClone.play().catch(() => safeCleanup());
+    setTimeout(safeCleanup, 3500);
   }
 }
 class InputManager {
@@ -2840,8 +2874,8 @@ class Player {
     this.maxMissiles = 10;
     this.missileReloadTime = 1.6;
     this.missileReloadTimer = 0;
-    this.pdcBurstCount = 30;
-    this.maxPdcBursts = 30;
+    this.pdcBurstCount = Infinity;
+    this.maxPdcBursts = Infinity;
     this.pdcDurability = 100;
     this.isFiring = false;
     this.isPaused = false;
@@ -2871,8 +2905,9 @@ class Player {
       depthWrite: false
     });
     this.pdcRange = 650;
-    this.pdcCooldown = 0.08;
+    this.pdcCooldown = 0.12;
     this.pdcTimer = 0;
+    this.pdcProjectileLife = 1.2;
     this.pdcProjectiles = [];
     this.pdcBulletGeo = new CylinderGeometry(0.35, 0.15, 6, 8);
     this.pdcBulletGeo.rotateX(Math.PI / 2);
@@ -2907,8 +2942,8 @@ class Player {
   setLevelLoadout(loadout = {}) {
     this.maxMissiles = loadout.missiles ?? 10;
     this.missileCount = Math.min(this.maxMissiles, loadout.missiles ?? 10);
-    this.maxPdcBursts = loadout.pdcBursts ?? 30;
-    this.pdcBurstCount = this.maxPdcBursts;
+    this.maxPdcBursts = Infinity;
+    this.pdcBurstCount = Infinity;
   }
   startBarrelRoll(dir) {
     if (!this.isRolling) {
@@ -2921,14 +2956,15 @@ class Player {
   getAmmoStatus() {
     return {
       missiles: this.missileCount,
-      pdcBursts: this.pdcBurstCount,
+      pdcBursts: this.pdcBurstCount === Infinity ? "∞" : this.pdcBurstCount,
       missileMax: this.maxMissiles,
       missileReloadProgress: this.missileReloadTimer / Math.max(this.missileReloadTime, 1e-3)
     };
   }
-  _updatePDC(enemyManager2, dt) {
+  _updatePDC(enemyManager2, dt, onEnemyDestroyed = null) {
+    var _a;
     if (!this.pdcActive || this.pdcBurstCount <= 0) {
-      this._updatePDCProjectiles(enemyManager2, dt);
+      this._updatePDCProjectiles(enemyManager2, dt, onEnemyDestroyed);
       return;
     }
     this.pdcTimer += dt;
@@ -2943,6 +2979,14 @@ class Player {
         }
       });
     }
+    const boss2 = window.__NAVE_MAE_ATIVA;
+    if ((boss2 == null ? void 0 : boss2.isActive) && ((_a = boss2 == null ? void 0 : boss2.mesh) == null ? void 0 : _a.visible)) {
+      const distBoss = this.mesh.position.distanceTo(boss2.mesh.position);
+      if (distBoss < this.pdcRange && distBoss < closestDist) {
+        closestDist = distBoss;
+        closestEnemy = boss2.mesh;
+      }
+    }
     if (closestEnemy) {
       const targetPos = new Vector3();
       closestEnemy.getWorldPosition(targetPos);
@@ -2953,46 +2997,61 @@ class Player {
         this.pdcTimer = 0;
       }
     }
-    this._updatePDCProjectiles(enemyManager2, dt);
+    this._updatePDCProjectiles(enemyManager2, dt, onEnemyDestroyed);
   }
   _firePDCShot(targetPos, cannon) {
-    for (let i = 0; i < 4; i++) {
-      const bullet = new Mesh(this.pdcBulletGeo, this.pdcBulletMat);
-      const spawnPos = new Vector3();
-      cannon.container.getWorldPosition(spawnPos);
-      bullet.position.copy(spawnPos);
-      const spread = 0.4;
-      bullet.rotation.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
-      this.scene.add(bullet);
-      if (i === 0 && window.soundManager) window.soundManager.play("pdc");
-      const dir = new Vector3().subVectors(targetPos, spawnPos).normalize();
-      this.pdcProjectiles.push({ mesh: bullet, dir, startTime: Date.now(), offset: Math.random() * Math.PI * 2 });
-    }
+    const bullet = new Mesh(this.pdcBulletGeo, this.pdcBulletMat);
+    const spawnPos = new Vector3();
+    cannon.container.getWorldPosition(spawnPos);
+    bullet.position.copy(spawnPos);
+    const spread = 0.26;
+    bullet.rotation.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
+    this.scene.add(bullet);
+    if (window.soundManager) window.soundManager.play("pdc");
+    const dir = new Vector3().subVectors(targetPos, spawnPos).normalize();
+    this.pdcProjectiles.push({ mesh: bullet, dir, life: this.pdcProjectileLife, startTime: Date.now(), offset: Math.random() * Math.PI * 2 });
   }
   togglePDC() {
     this.pdcActive = !this.pdcActive;
     return this.pdcActive;
   }
   fireMissile() {
-    if (this.missileCount <= 0) return false;
-    this.missileCount--;
-    this.missileReloadTimer = 0;
+    if (this.missileCount <= 0) {
+      console.log("🚫 Sem mísseis");
+      return false;
+    }
+    if (!this.laserManager || typeof this.laserManager.createMissile !== "function") {
+      console.log("🚫 LaserManager sem createMissile");
+      return false;
+    }
+    this.mesh.updateMatrixWorld(true);
+    if (this.shipModel) this.shipModel.updateMatrixWorld(true);
     const ship = this.shipModel || this.mesh;
-    ship.updateMatrixWorld();
-    const spawnPos = new Vector3();
     const noseLocal = this.gunNose || new Vector3(0, 2.2, -11);
-    spawnPos.copy(noseLocal).applyMatrix4(ship.matrixWorld);
+    const spawnPos = noseLocal.clone().applyMatrix4(ship.matrixWorld);
     const missileQuat = new Quaternion();
     ship.getWorldQuaternion(missileQuat);
     const forward = new Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
-    spawnPos.addScaledVector(forward, 6);
-    if (this.laserManager && typeof this.laserManager.createMissile === "function") {
-      this.laserManager.createMissile(spawnPos, missileQuat);
+    spawnPos.addScaledVector(forward, 14);
+    this.missileCount--;
+    this.missileReloadTimer = 0;
+    this.laserManager.createMissile(spawnPos, missileQuat);
+    const last = this.laserManager.missiles[this.laserManager.missiles.length - 1];
+    if (last == null ? void 0 : last.mesh) {
+      last.mesh.userData.direction = forward.clone();
+      last.mesh.lookAt(spawnPos.clone().add(forward));
     }
+    if (window.soundManager) {
+      try {
+        window.soundManager.play("missile");
+      } catch (e) {
+      }
+    }
+    console.log("🚀 Míssil disparado | restantes:", this.missileCount);
     return true;
   }
-  _updatePDCProjectiles(enemyManager2, dt) {
-    var _a;
+  _updatePDCProjectiles(enemyManager2, dt, onEnemyDestroyed = null) {
+    var _a, _b, _c, _d;
     const now = Date.now();
     for (let i = this.pdcProjectiles.length - 1; i >= 0; i--) {
       const b = this.pdcProjectiles[i];
@@ -3007,19 +3066,48 @@ class Player {
         for (let j = enemyManager2.enemies.length - 1; j >= 0; j--) {
           const e = enemyManager2.enemies[j];
           if (!e || ((_a = e.userData) == null ? void 0 : _a.type) === "meteoro") continue;
-          if (b.mesh.position.distanceTo(e.position) < 30) {
-            const canExplode = enemyManager2.damageEnemy ? enemyManager2.damageEnemy(e, 15, b.mesh.position) : true;
-            if (canExplode) {
-              if (window.explosionManager) window.explosionManager.create(b.mesh.position.clone());
+          const hitRadius = ((_b = e.userData) == null ? void 0 : _b.type) === "roblox" ? 64 : 52;
+          if (b.mesh.position.distanceTo(e.position) < hitRadius) {
+            const enemyKilled = enemyManager2.damageEnemy ? enemyManager2.damageEnemy(e, 15, b.mesh.position) : true;
+            if (window.explosionManager) {
+              if (enemyKilled) {
+                window.explosionManager.create(b.mesh.position.clone());
+              } else {
+                window.explosionManager.create(b.mesh.position.clone(), 0.45);
+              }
+            }
+            if (enemyKilled) {
               this.scene.remove(e);
               enemyManager2.enemies.splice(j, 1);
+              if (onEnemyDestroyed) {
+                const enemyType = (_c = e.userData) == null ? void 0 : _c.type;
+                const points = enemyType === "meteoro" || enemyType === "asteroide" ? 500 : enemyType === "drone" ? 250 : enemyType === "roblox" ? 150 : 100;
+                onEnemyDestroyed(points, b.mesh.position.clone());
+              }
             }
             hit = true;
             break;
           }
         }
       }
-      if (hit || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
+      const boss2 = window.__NAVE_MAE_ATIVA;
+      if (!hit && (boss2 == null ? void 0 : boss2.isActive) && ((_d = boss2 == null ? void 0 : boss2.mesh) == null ? void 0 : _d.visible)) {
+        const bossHitRadius = Math.min(boss2.currentInternalScale * 0.9, 210);
+        if (b.mesh.position.distanceTo(boss2.mesh.position) < bossHitRadius) {
+          const bossDestroyed = boss2.takeDamage(25, b.mesh.position.clone(), window.explosionManager);
+          hit = true;
+          if (window.explosionManager) {
+            if (bossDestroyed) {
+              window.explosionManager.createBigExplosion(b.mesh.position.clone());
+              if (onEnemyDestroyed) onEnemyDestroyed(5e3, b.mesh.position.clone());
+            } else {
+              window.explosionManager.create(b.mesh.position.clone(), 0.75);
+            }
+          }
+        }
+      }
+      b.life -= dt;
+      if (hit || b.life <= 0 || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
         this.scene.remove(b.mesh);
         this.pdcProjectiles.splice(i, 1);
       }
@@ -3117,10 +3205,10 @@ class Player {
       this.particles.push({ mesh: p, life: 1, speedZ: 180, driftX: (Math.random() - 0.5) * 4, driftY: (Math.random() - 0.5) * 4 });
     }
   }
-  update(moveInput, deltaTime, enemyManager2, onPlayerHit = null) {
+  update(moveInput, deltaTime, enemyManager2, onPlayerHit = null, onEnemyDestroyed = null) {
     if (!this.shipModel || this.isPaused) return;
     const dt = Math.min(deltaTime, 0.1);
-    const acel = 80;
+    const acel = 40;
     this.velocity.x += -moveInput.x * acel * dt;
     this.velocity.y += moveInput.y * acel * dt;
     this.velocity.multiplyScalar(0.9);
@@ -3152,7 +3240,7 @@ class Player {
     }
     this.mesh.updateMatrixWorld();
     if (this.isFiring) this._shoot();
-    this._updatePDC(enemyManager2, dt);
+    this._updatePDC(enemyManager2, dt, onEnemyDestroyed);
     this._emitHeatWash();
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -3260,7 +3348,7 @@ class LaserManager {
     }
     for (let i = this.missiles.length - 1; i >= 0; i--) {
       const m = this.missiles[i];
-      const forward = ((_a = m.mesh.userData) == null ? void 0 : _a.direction) || new Vector3(0, 0, 1).applyQuaternion(m.mesh.quaternion).normalize();
+      const forward = (((_a = m.mesh.userData) == null ? void 0 : _a.direction) || new Vector3(0, 0, -1)).clone().normalize();
       m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
       let hitEnemy = false;
       if ((_b = enemyManager2 == null ? void 0 : enemyManager2.enemies) == null ? void 0 : _b.length) {
@@ -3268,19 +3356,25 @@ class LaserManager {
           const enemy = enemyManager2.enemies[j];
           if (!enemy) continue;
           const enemyType = (_c = enemy.userData) == null ? void 0 : _c.type;
-          const hitRadius = enemyType === "meteoro" || enemyType === "asteroide" ? 90 : 55;
+          const hitRadius = enemyType === "meteoro" || enemyType === "asteroide" ? 110 : 70;
           if (m.mesh.position.distanceTo(enemy.position) <= hitRadius) {
             const hitPoint = m.mesh.position.clone();
             const destroyed = enemyManager2.damageEnemy ? enemyManager2.damageEnemy(enemy, 35, hitPoint) : true;
+            if (explosionManager2) {
+              if (destroyed) {
+                explosionManager2.create(hitPoint, {
+                  kind: "missile",
+                  flashColor: 14221240,
+                  lightColor: 6750003,
+                  lightIntensity: 2600,
+                  smokeColor: 2444064
+                });
+              } else {
+                explosionManager2.create(hitPoint, 0.6);
+              }
+            }
             if (destroyed) {
               const points = enemyType === "meteoro" || enemyType === "asteroide" ? 500 : enemyType === "drone" ? 250 : enemyType === "roblox" ? 150 : 100;
-              if (explosionManager2) explosionManager2.create(hitPoint, {
-                kind: "missile",
-                flashColor: 14221240,
-                lightColor: 6750003,
-                lightIntensity: 2600,
-                smokeColor: 2444064
-              });
               if (onEnemyDestroyed) onEnemyDestroyed(points, hitPoint);
               enemyManager2.scene.remove(enemy);
               enemyManager2.enemies.splice(j, 1);
@@ -3325,8 +3419,8 @@ class EnemyManager {
     this.obstacleCollisionBox = new Box3();
     this.waveTimer = 0;
     this.enemySpeed = 220;
-    this.maxEnemiesOnScreen = isMobile ? 6 : 10;
-    this.waveCooldown = isMobile ? 2 : 1.6;
+    this.maxEnemiesOnScreen = isMobile ? 12 : 18;
+    this.waveCooldown = isMobile ? 1 : 0.7;
     this.enemyTemplate = null;
     this.enemyTemplate5 = null;
     this.enemyTemplate10 = null;
@@ -3340,9 +3434,15 @@ class EnemyManager {
     return Promise.resolve();
   }
   clearAllEnemies() {
-    this.enemies.forEach((e) => this.scene.remove(e));
-    this.enemyProjectiles.forEach((p) => this.scene.remove(p.mesh));
-    this.enemies = [];
+    this.enemies.forEach((e) => {
+      if (!e.userData || !e.userData.isBoss) {
+        this.scene.remove(e);
+      }
+    });
+    this.enemies = this.enemies.filter((e) => e.userData && e.userData.isBoss);
+    this.enemyProjectiles.forEach((p) => {
+      if (p.mesh) this.scene.remove(p.mesh);
+    });
     this.enemyProjectiles = [];
   }
   _createOrientedTemplate(model, yRotation = 0) {
@@ -3415,12 +3515,12 @@ class EnemyManager {
     loadModel("/assets/models/nave_inim_5.glb", "enemyTemplate5", [20, 20, 20], Math.PI / 2);
     loadModel("/assets/models/nave_inim_10.glb", "enemyTemplate10", [20, 20, 20], 0);
     loadModel("/assets/models/nave_inim_15.glb", "enemyTemplate15", [20, 20, 20], 0);
-    loadModel("/assets/models/drone.glb", "droneTemplate", [80, 80, 80], Math.PI);
-    loadModel("/assets/models/meteoro.glb", "meteoroTemplate", [15, 15, 15], 0);
-    loadModel("/assets/models/roblox.glb", "enemyTemplate6", [35, 35, 35], 0);
+    loadModel("/assets/models/drone.glb", "droneTemplate", [30, 30, 30], Math.PI);
+    loadModel("/assets/models/meteoro.glb", "meteoroTemplate", [5, 5, 5], 0);
+    loadModel("/assets/models/roblox.glb", "enemyTemplate6", [7, 7, 7], 0);
     loader.load("/assets/models/asteroid_ball.glb", (gltf) => {
       const model = gltf.scene;
-      model.scale.set(6, 6, 6);
+      model.scale.set(3.5, 3.5, 3.5);
       this._styleAsteroidModel(model);
       this.templates.asteroide = model;
     }, void 0, (error) => {
@@ -3535,7 +3635,6 @@ class EnemyManager {
     this.enemies.push(enemy);
   }
   update(laserManager2, onScoreIncrease, player2, deltaTime, explosionManager2, soundManager2, currentLevel = 1, onPlayerHit = null) {
-    var _a;
     if (!(player2 == null ? void 0 : player2.mesh) || !deltaTime) return;
     const camPosAtual = new Vector3();
     this.camera.getWorldPosition(camPosAtual);
@@ -3545,7 +3644,7 @@ class EnemyManager {
         detail: { level: currentLevel }
       }));
     }
-    const adjustedCooldown = Math.max(0.45, this.waveCooldown - currentLevel * 0.012);
+    const adjustedCooldown = Math.max(0.25, this.waveCooldown - currentLevel * 0.015);
     this.waveTimer += deltaTime;
     if (this.waveTimer > adjustedCooldown) {
       this.spawnWave(player2, currentLevel);
@@ -3553,18 +3652,21 @@ class EnemyManager {
     }
     const pPos = new Vector3();
     player2.mesh.getWorldPosition(pPos);
-    const playerLasers = laserManager2.lasers || [];
+    laserManager2.lasers || [];
     for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
       const p = this.enemyProjectiles[i];
+      if (!p || !p.mesh) {
+        this.enemyProjectiles.splice(i, 1);
+        continue;
+      }
       p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
       p.life -= deltaTime;
-      if (p.life <= 0 || p.mesh.position.distanceTo(pPos) > 2200) {
+      if (p.life <= 0 || p.mesh.position.distanceTo(camPosAtual) > 2500) {
         this.scene.remove(p.mesh);
         this.enemyProjectiles.splice(i, 1);
         continue;
       }
-      const hitDistance = p.mesh.position.distanceTo(player2.mesh.position);
-      if (hitDistance < 12) {
+      if (p.mesh.position.distanceTo(player2.mesh.position) < 18) {
         this.scene.remove(p.mesh);
         this.enemyProjectiles.splice(i, 1);
         if (onPlayerHit) onPlayerHit();
@@ -3572,6 +3674,10 @@ class EnemyManager {
     }
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
+      if (!enemy || !enemy.userData) {
+        this.enemies.splice(i, 1);
+        continue;
+      }
       const data = enemy.userData;
       const previousPosition = enemy.position.clone();
       if (data.type !== "meteoro" && data.type !== "asteroide") {
@@ -3581,16 +3687,26 @@ class EnemyManager {
           data.shootTimer = 1.4 + Math.random() * 1.2;
         }
       }
-      const toPlayer = new Vector3().subVectors(pPos, enemy.position).normalize();
-      const lateralBias = new Vector3().crossVectors(new Vector3(0, 1, 0), toPlayer).normalize();
-      const biasFactor = data.type === "meteoro" || data.type === "asteroide" ? 0.05 : 0.18;
-      const lerpFactor = data.type === "meteoro" || data.type === "asteroide" ? 0.15 : 0.04;
-      lateralBias.multiplyScalar(Math.sin(Date.now() * 1e-3 + data.wanderSeed) * biasFactor);
-      const desiredDir = toPlayer.clone().add(lateralBias);
+      const pPos2 = player2.mesh.position;
+      enemy.position.distanceTo(pPos2);
+      if (!data.moveDir || data.moveDir.lengthSq() < 1e-4) {
+        data.moveDir = new Vector3().subVectors(pPos2, enemy.position).normalize();
+      }
+      const side = new Vector3().crossVectors(data.moveDir.clone().normalize(), new Vector3(0, 1, 0)).normalize();
+      if (side.lengthSq() < 1e-3) {
+        side.set(1, 0, 0);
+      }
+      const wander = Math.sin(Date.now() * 7e-4 + data.wanderSeed) * 0.12;
+      const desiredDir = data.moveDir.clone().normalize();
+      desiredDir.addScaledVector(side, wander);
+      desiredDir.y += wander * 0.15;
       desiredDir.normalize();
-      data.moveDir.lerp(desiredDir, lerpFactor);
+      data.moveDir.lerp(desiredDir, 0.03);
+      data.moveDir.normalize();
       enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
-      const aimTarget = pPos.clone().add(new Vector3(0, Math.sin(Date.now() * 1e-3 + data.wanderSeed) * 0.8, 0));
+      const aimTarget = pPos2.clone().add(
+        new Vector3(0, Math.sin(Date.now() * 1e-3 + data.wanderSeed) * 0.8, 0)
+      );
       enemy.lookAt(aimTarget);
       if (soundManager2 && !data.passSoundPlayed && data.passSound) {
         if (enemy.position.distanceTo(camPosAtual) < 500) {
@@ -3607,36 +3723,30 @@ class EnemyManager {
       }
       let foiAtingidoPorLaser = false;
       let pontoDoImpactoReal = null;
+      const playerLasers = laserManager2.lasers || [];
       for (let j = playerLasers.length - 1; j >= 0; j--) {
         const laser = playerLasers[j];
-        if (!laser || ((_a = laser.userData) == null ? void 0 : _a.destroyed)) continue;
-        const distLaser = enemy.position.distanceTo(laser.position);
-        const hitbox = data.type === "meteoro" || data.type === "asteroide" ? 70 : 35;
-        if (distLaser < hitbox) {
+        if (!laser) continue;
+        if (enemy.position.distanceTo(laser.position) < (data.type === "meteoro" || data.type === "asteroide" ? 70 : 55)) {
           pontoDoImpactoReal = laser.position.clone();
-          this.scene.remove(laser);
           laser.userData = { destroyed: true };
+          this.scene.remove(laser);
           playerLasers.splice(j, 1);
           data.hp--;
-          if (data.hp <= 0) {
-            let pontos = data.type === "meteoro" || data.type === "asteroide" ? 500 : data.type === "drone" ? 300 : data.type === "roblox" ? 250 : 1e3;
-            if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
-            foiAtingidoPorLaser = true;
-          }
+          if (data.hp <= 0) foiAtingidoPorLaser = true;
           break;
         }
       }
-      if (foiAtingidoPorLaser && pontoDoImpactoReal) {
+      if (foiAtingidoPorLaser) {
         if (soundManager2) soundManager2.play("explosao_inimiga");
-        const scaleMultiplier = currentLevel >= 50 ? 2.5 : 1;
-        if (explosionManager2) {
-          explosionManager2.create(pontoDoImpactoReal, scaleMultiplier);
-        }
+        if (explosionManager2) explosionManager2.create(pontoDoImpactoReal, currentLevel >= 50 ? 2.5 : 1);
+        let pontos = data.type === "meteoro" || data.type === "asteroide" ? 500 : data.type === "drone" ? 300 : 1e3;
+        if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
         this.scene.remove(enemy);
         this.enemies.splice(i, 1);
         continue;
       }
-      if (enemy.position.z > camPosAtual.z + 200 || enemy.position.distanceTo(camPosAtual) > 2800) {
+      if (enemy.position.distanceTo(camPosAtual) > 2800) {
         this.scene.remove(enemy);
         this.enemies.splice(i, 1);
       }
@@ -3672,6 +3782,7 @@ class EnemyManager {
     laser.lookAt(pPos);
     this.scene.add(laser);
     const dir = new Vector3().subVectors(pPos, laser.position).normalize();
+    laser.userData = { direction: dir };
     this.enemyProjectiles.push({ mesh: laser, dir, speed: 520, life: 2.2 });
     if (soundManager2 && enemy.userData.laserSound) {
       soundManager2.play(enemy.userData.laserSound);
@@ -3698,6 +3809,8 @@ class ExplosionManager {
     this.totalFrames = this.spriteColumns * this.spriteRows;
     const textureLoader = new TextureLoader();
     this.explosionTexture = textureLoader.load("/assets/img/explosion.png");
+    this.explosionTexture.wrapS = RepeatWrapping;
+    this.explosionTexture.wrapT = RepeatWrapping;
     this.explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
   }
   create(position, multiplicador = 1) {
@@ -3705,11 +3818,17 @@ class ExplosionManager {
     const safePosition = position instanceof Vector3 ? position.clone() : new Vector3(0, 0, 0);
     if (typeof multiplicador === "object") multiplicador = 1;
     const distancia = Math.abs(safePosition.z);
-    const escalaBase = 100 * multiplicador;
-    const fatorEscala = escalaBase * (100 / (distancia + 100));
+    const escalaBase = 28 * multiplicador;
+    const fatorEscala = escalaBase * (80 / (distancia + 100));
+    const explosionTexture = new Texture(this.explosionTexture.image);
+    explosionTexture.wrapS = RepeatWrapping;
+    explosionTexture.wrapT = RepeatWrapping;
+    explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
+    explosionTexture.needsUpdate = true;
     const mat = new SpriteMaterial({
-      map: this.explosionTexture.clone(),
+      map: explosionTexture,
       transparent: true,
+      opacity: 0.7,
       blending: AdditiveBlending,
       depthWrite: false
     });
@@ -3719,42 +3838,45 @@ class ExplosionManager {
     this.scene.add(sprite);
     this.explosions.push({
       sprite,
-      life: 1.6,
-      maxLife: 1.6
+      life: 0.7,
+      maxLife: 0.7
     });
-    this.createDebris(safePosition, 12);
+    this.createDebris(safePosition, 4);
   }
   createBigExplosion(position) {
     const safePosition = position instanceof Vector3 ? position.clone() : new Vector3(0, 0, 0);
-    this.create(safePosition, 3.2);
-    this.createDebris(safePosition, 24);
+    this.create(safePosition, 1.3);
+    this.createDebris(safePosition, 6);
   }
-  createDebris(position, count = 10) {
+  createDebris(position, count = 5) {
     for (let i = 0; i < count; i++) {
-      const geometry = new TetrahedronGeometry(Math.random() * 2 + 1);
+      const geometry = new TetrahedronGeometry(Math.random() * 1 + 0.5);
       const material = new MeshStandardMaterial({
-        color: 5592405,
-        roughness: 0.8
+        color: 6710886,
+        roughness: 0.88,
+        metalness: 0.12
       });
       const debris = new Mesh(geometry, material);
       debris.position.copy(position);
       this.scene.add(debris);
-      const velocity = new Vector3(
-        (Math.random() - 0.5) * 40,
-        (Math.random() - 0.5) * 40,
-        (Math.random() - 0.5) * 40
-      );
+      const direction = new Vector3(
+        (Math.random() - 0.5) * 2,
+        Math.random() * 1.2 + 0.4,
+        (Math.random() - 0.5) * 2
+      ).normalize();
+      const strength = 18 + Math.random() * 12;
+      const velocity = direction.multiplyScalar(strength);
       const rotationSpeed = new Vector3(
-        Math.random() * 0.2,
-        Math.random() * 0.2,
-        Math.random() * 0.2
+        Math.random() * 0.05,
+        Math.random() * 0.05,
+        Math.random() * 0.05
       );
       this.explosions.push({
         isDebris: true,
         mesh: debris,
         velocity,
         rotationSpeed,
-        life: 2
+        life: 1.05
       });
     }
   }
@@ -3768,7 +3890,8 @@ class ExplosionManager {
         exp.mesh.position.addScaledVector(exp.velocity, deltaTime);
         exp.mesh.rotation.x += exp.rotationSpeed.x;
         exp.mesh.rotation.y += exp.rotationSpeed.y;
-        if (exp.life <= 0) {
+        exp.mesh.rotation.z += exp.rotationSpeed.z;
+        if (exp.life <= 0 || exp.mesh.position.length() > 4500) {
           this.scene.remove(exp.mesh);
           exp.mesh.geometry.dispose();
           exp.mesh.material.dispose();
@@ -3788,10 +3911,9 @@ class ExplosionManager {
       const currentFrame = Math.min(this.totalFrames - 1, Math.floor(progress * this.totalFrames));
       const col = currentFrame % this.spriteColumns;
       const row = Math.floor(currentFrame / this.spriteColumns);
-      exp.sprite.material.map.offset.set(
-        col / this.spriteColumns,
-        1 - (row + 1) / this.spriteRows
-      );
+      const texture = exp.sprite.material.map;
+      texture.offset.set(col / this.spriteColumns, 1 - (row + 1) / this.spriteRows);
+      texture.needsUpdate = true;
     }
   }
 }
@@ -3807,6 +3929,7 @@ function createCloudTexture() {
   ctx.fillRect(0, 0, 128, 128);
   return new CanvasTexture(canvas);
 }
+new GLTFLoader();
 const cloudTexture = createCloudTexture();
 class SpaceEnvironment {
   constructor(scene2, starCount = 2e3, cloudCount = 400) {
@@ -3956,47 +4079,48 @@ class SpaceEnvironment {
   }
   update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager2 = null) {
     this.planets.forEach((p, index) => {
-      const shouldBeVisible = currentLevel >= 5 && currentLevel <= 20;
+      const shouldBeVisible = currentLevel === 5;
       if (shouldBeVisible) {
         p.position.z += 80 * deltaTime;
         if (p.position.z > 1800) {
-          this.resetPlanetPosition(p, index);
-        }
-        const distZ = Math.abs(p.position.z);
-        let opacity = 1;
-        if (distZ > 8e3) {
-          opacity = 0;
           p.visible = false;
         } else {
-          p.visible = true;
-          if (distZ > 6e3) {
-            opacity = (8e3 - distZ) / 2e3;
+          const distZ = Math.abs(p.position.z);
+          let opacity = 1;
+          if (distZ > 8e3) {
+            opacity = 0;
+            p.visible = false;
+          } else {
+            p.visible = true;
+            if (distZ > 6e3) {
+              opacity = (8e3 - distZ) / 2e3;
+            }
           }
-        }
-        p.traverse((child) => {
-          if (child.isMesh && child.material) {
-            child.material.transparent = true;
-            child.material.opacity = opacity;
+          p.traverse((child) => {
+            if (child.isMesh && child.material) {
+              child.material.transparent = true;
+              child.material.opacity = opacity;
+            }
+          });
+          let scale;
+          if (distZ > 7500) {
+            scale = 1;
+          } else if (distZ > 6e3) {
+            const progress = (7500 - distZ) / 1500;
+            scale = 1 + (30 - 1) * progress;
+          } else if (distZ > 3e3) {
+            const progress = (6e3 - distZ) / 3e3;
+            scale = 30 + (150 - 30) * (progress * progress);
+          } else if (distZ < 500) {
+            scale = 200;
+          } else {
+            const progress = (3e3 - distZ) / 2500;
+            scale = 150 + (200 - 150) * progress;
           }
-        });
-        let scale;
-        if (distZ > 7500) {
-          scale = 1;
-        } else if (distZ > 6e3) {
-          const progress = (7500 - distZ) / 1500;
-          scale = 1 + (30 - 1) * progress;
-        } else if (distZ > 3e3) {
-          const progress = (6e3 - distZ) / 3e3;
-          scale = 30 + (150 - 30) * (progress * progress);
-        } else if (distZ < 500) {
-          scale = 200;
-        } else {
-          const progress = (3e3 - distZ) / 2500;
-          scale = 150 + (200 - 150) * progress;
-        }
-        p.scale.set(scale, scale, scale);
-        if (playerMesh && distZ < 3500) {
-          this._avoidPlanetCollision(playerMesh, p, soundManager2);
+          p.scale.set(scale, scale, scale);
+          if (playerMesh && distZ < 3500) {
+            this._avoidPlanetCollision(playerMesh, p, soundManager2);
+          }
         }
       } else {
         p.visible = false;
@@ -4076,22 +4200,30 @@ class ProgressionManager {
     this.upgradePoints = 0;
     this.chancesLeft = 5;
     this.maxLevel = 100;
-    this.baseScorePerLevel = 900;
-    this.difficultyMultiplier = 1.08;
+    this.levelProgressTarget = 1e4;
     this.levelProgressScore = 0;
-    this.levelProgressTarget = this.getScoreNeededForNextLevel();
+    this.activeBoss = null;
+  }
+  shouldSpawnBoss() {
+    return this.level >= 50 && this.level % 5 === 0 && !this.activeBoss;
+  }
+  getBossScale() {
+    if (this.level < 50) return 1;
+    const progress = (this.level - 50) / (this.maxLevel - 50);
+    return 1 + progress * 1;
+  }
+  registerBoss(bossInstance) {
+    this.activeBoss = bossInstance;
   }
   addScore(points) {
     this.totalScore += points;
     this.levelProgressScore += points;
-    let leveled = false;
-    while (this.levelProgressScore >= this.levelProgressTarget && this.level < this.maxLevel) {
-      this.levelProgressScore -= this.levelProgressTarget;
-      this.levelUp();
-      leveled = true;
-      this.levelProgressTarget = this.getScoreNeededForNextLevel();
+    if (this.levelProgressScore < this.levelProgressTarget || this.level >= this.maxLevel) {
+      return false;
     }
-    return leveled;
+    this.levelProgressScore = Math.max(0, this.levelProgressScore - this.levelProgressTarget);
+    this.levelUp();
+    return true;
   }
   levelUp() {
     if (this.level >= this.maxLevel) return false;
@@ -4102,46 +4234,40 @@ class ProgressionManager {
     return true;
   }
   getScoreNeededForNextLevel() {
-    return Math.max(650, Math.floor(this.baseScorePerLevel * Math.pow(this.difficultyMultiplier, this.level - 1)));
+    return 1e4;
   }
   resetLevelResources() {
     this.chancesLeft = 5;
-    this.levelProgressTarget = this.getScoreNeededForNextLevel();
+    this.levelProgressTarget = 1e4;
   }
   loseChance() {
     this.chancesLeft = Math.max(0, this.chancesLeft - 1);
-    return {
-      chancesLeft: this.chancesLeft,
-      failed: this.chancesLeft === 0
-    };
+    return { chancesLeft: this.chancesLeft, failed: this.chancesLeft === 0 };
   }
   failLevel() {
     this.levelProgressScore = 0;
-    this.levelProgressTarget = this.getScoreNeededForNextLevel();
     this.resetLevelResources();
     return this.level;
   }
   resetLevelProgress() {
     this.levelProgressScore = 0;
-    this.levelProgressTarget = this.getScoreNeededForNextLevel();
+    this.levelProgressTarget = 1e4;
     this.chancesLeft = 5;
+    this.activeBoss = null;
   }
   getLevel() {
     return this.level;
   }
   setLevel(level) {
     this.level = Math.max(1, Math.min(this.maxLevel, Math.floor(level)));
-    this.totalScore = 0;
-    this.upgradePoints = 0;
     this.levelProgressScore = 0;
-    this.levelProgressTarget = this.getScoreNeededForNextLevel();
     this.resetLevelResources();
   }
   getChancesLeft() {
     return this.chancesLeft;
   }
   getProgressPercent() {
-    return Math.min(1, this.levelProgressScore / Math.max(this.levelProgressTarget, 1));
+    return Math.min(1, this.levelProgressScore / this.levelProgressTarget);
   }
   getLevelLoadout() {
     const missileBonus = Math.floor(this.level / 6);
@@ -4167,41 +4293,67 @@ function getLevelData(level) {
 }
 class NaveMae {
   constructor(scene2) {
+    if (window.__NAVE_MAE_ATIVA) {
+      console.warn("⚠️ Nave Mãe duplicada bloqueada");
+      this.isAlive = false;
+      this.isActive = false;
+      return;
+    }
+    window.__NAVE_MAE_ATIVA = this;
     this.scene = scene2;
     this.mesh = null;
     this.explosionModel = null;
-    this.hp = 2500;
-    this.isAlive = true;
-    this.speed = 120;
-    this.isApproaching = true;
+    this.hp = 25e4;
+    this.maxHp = 25e4;
+    this.isBoss = true;
+    this.isAlive = false;
+    this.isActive = false;
+    this.invulnerableUntil = 0;
+    this.spawnTime = 0;
+    this.currentInternalScale = 2;
+    this.lastFireTime = 0;
+    this.fireRate = 2.2;
+    this.bossLaserSound = "laser_inimigo";
+    this.startScale = 45;
+    this.maxScale = 350;
+    this.startZ = -1800;
+    this.cannonOffsets = [
+      new Vector3(80, 55, 0),
+      new Vector3(-80, 55, 0),
+      new Vector3(0, 55, 70),
+      new Vector3(0, 55, -70)
+    ];
     this.loader = new GLTFLoader();
+    this.textureLoader = new TextureLoader();
+    this.fogoTexture = this.textureLoader.load("/assets/img/fire_prev.png");
     this._loadModel();
     this._loadExplosionModel();
   }
   _loadModel() {
     this.loader.load("/assets/models/nave_mae/scene.gltf", (gltf) => {
+      if (window.__NAVE_MAE_ATIVA !== this) return;
       this.mesh = gltf.scene;
-      this.mesh.position.set(0, 0, -1400);
-      this.mesh.scale.set(12, 12, 12);
+      this.mesh.userData = { isBoss: true, type: "boss", laserSound: this.bossLaserSound };
+      this.mesh.visible = false;
+      this.mesh.position.set(0, 40, this.startZ);
+      this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
       this.mesh.rotation.y = Math.PI;
       this.mesh.traverse((child) => {
         if (child.isMesh) {
-          child.visible = true;
           child.frustumCulled = false;
-          if (child.material) {
-            child.material.visible = true;
-            child.material.transparent = false;
-          }
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
       });
       this.scene.add(this.mesh);
       console.log("✅ Nave Mãe adicionada e pronta para o combate");
     }, void 0, (error) => {
-      console.error("❌ Erro crítico ao carregar nave_mae:", error);
+      console.error("❌ Erro ao carregar nave_mae:", error);
     });
   }
   _loadExplosionModel() {
     this.loader.load("/assets/models/nave_mae/explosion.glb", (gltf) => {
+      if (window.__NAVE_MAE_ATIVA !== this) return;
       this.explosionModel = gltf.scene;
       this.explosionModel.visible = false;
       this.explosionModel.position.set(0, 0, -100);
@@ -4209,9 +4361,64 @@ class NaveMae {
       this.scene.add(this.explosionModel);
     });
   }
+  ativarNave(nivel) {
+    this.isAlive = true;
+    this.isActive = true;
+    this.hp = 10;
+    this.maxHp = 10;
+    this.requiredDestructionLevel = 98;
+    this.startScale = 12;
+    this.maxScale = 320;
+    this.currentInternalScale = this.startScale;
+    this.spawnTime = Date.now();
+    this.invulnerableUntil = Date.now() + 2500;
+    this.lastHpPercentLog = 100;
+    if (this.mesh) {
+      if (!this.mesh.parent) this.scene.add(this.mesh);
+      this.mesh.visible = true;
+      this.mesh.position.set(0, 50, this.startZ);
+      this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
+    } else {
+      setTimeout(() => {
+        if (this.mesh) {
+          if (!this.mesh.parent) this.scene.add(this.mesh);
+          this.mesh.visible = true;
+          this.mesh.position.set(0, 50, this.startZ);
+          this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
+        }
+      }, 500);
+    }
+    console.log(`💀 [BOSS] Nave Mãe ativada | HP: ${this.hp} | escala ${this.startScale} → ${this.maxScale}`);
+    return true;
+  }
+  _calculateVulnerability(level) {
+    if (level < 50) return 0;
+    return Math.min(10, Math.floor((level - 50) / 5) + 1);
+  }
   takeDamage(amount, hitPoint = null, explosionManager2 = null) {
-    if (!this.isAlive) return false;
-    this.hp = Math.max(0, this.hp - amount);
+    if (!this.isAlive || !this.isActive) return false;
+    if (Date.now() < this.invulnerableUntil) return false;
+    const currentLevel = window.currentLevel || 50;
+    const allowedSegments = this._calculateVulnerability(currentLevel);
+    const minHp = Math.max(0, this.maxHp - allowedSegments);
+    if (this.hp <= minHp) {
+      return false;
+    }
+    this.hp = Math.max(minHp, this.hp - 1);
+    const percent = Math.floor(this.hp / this.maxHp * 100);
+    if (percent >= 0 && percent % 10 === 0 && percent < this.lastHpPercentLog) {
+      console.log(`🩸 Boss HP: ${percent}% (${this.hp})`);
+      this.lastHpPercentLog = percent;
+    }
+    if (explosionManager2 && hitPoint) {
+      explosionManager2.create(hitPoint.clone(), {
+        kind: "boss",
+        flashColor: 16737792,
+        lightColor: 16759603,
+        lightIntensity: 1800,
+        smokeColor: 6693376
+      });
+    }
     if (this.hp <= 0) {
       this.explode(hitPoint, explosionManager2);
       return true;
@@ -4220,40 +4427,57 @@ class NaveMae {
   }
   explode(hitPoint = null, explosionManager2 = null) {
     this.isAlive = false;
-    if (this.mesh) {
-      this.mesh.visible = false;
-    }
-    if (this.explosionModel) {
-      const position = hitPoint || (this.mesh ? this.mesh.position.clone() : new Vector3(0, 0, 0));
-      this.explosionModel.visible = true;
-      this.explosionModel.position.copy(position);
-      this.explosionModel.scale.set(16, 16, 16);
-    }
-    if (explosionManager2 == null ? void 0 : explosionManager2.createBigExplosion) {
-      explosionManager2.createBigExplosion(hitPoint || (this.mesh ? this.mesh.position.clone() : new Vector3(0, 0, 0)));
-    } else if (explosionManager2 == null ? void 0 : explosionManager2.create) {
-      explosionManager2.create(hitPoint || (this.mesh ? this.mesh.position.clone() : new Vector3(0, 0, 0)), 3.2);
+    this.isActive = false;
+    if (explosionManager2 && hitPoint) {
+      explosionManager2.create(hitPoint, {
+        kind: "boss",
+        flashColor: 16737792,
+        lightColor: 16759603,
+        lightIntensity: 2800,
+        smokeColor: 6693376
+      });
     }
   }
-  update(deltaTime, playerPosition, laserManager2 = null, explosionManager2 = null) {
-    var _a;
-    if (!this.mesh || !this.isAlive) return;
-    const target = new Vector3(0, 6, ((playerPosition == null ? void 0 : playerPosition.z) ?? 0) - 700);
+  update(deltaTime, playerPosition, laserManager2 = null, explosionManager2 = null, player2 = null, enemyManager2 = null, soundManager2 = null) {
+    var _a, _b;
+    if (!this.isAlive || !this.isActive || !this.mesh) return;
+    const timeSinceSpawn = (Date.now() - this.spawnTime) / 1e3;
+    const growthDuration = 280;
+    const timeProgress = Math.min(1, timeSinceSpawn / growthDuration);
+    const targetZ = ((playerPosition == null ? void 0 : playerPosition.z) ?? 0) - 220;
+    const totalDistance = Math.abs(this.startZ - targetZ);
+    const currentDistance = Math.abs(this.mesh.position.z - targetZ);
+    const approachProgress = MathUtils.clamp(1 - currentDistance / totalDistance, 0, 1);
+    const progress = timeProgress * 0.7 + approachProgress * 0.3;
+    this.currentInternalScale = MathUtils.lerp(this.startScale, this.maxScale, progress);
+    this.mesh.scale.set(
+      this.currentInternalScale,
+      this.currentInternalScale,
+      this.currentInternalScale
+    );
+    const target = new Vector3(0, 40, targetZ);
     if (playerPosition) {
-      target.x = MathUtils.clamp(playerPosition.x * 0.45, -120, 120);
-      target.y = Math.max(6, playerPosition.y + 8);
+      const bossOrbitX = Math.sin(timeSinceSpawn * 0.14) * 90;
+      const bossOrbitY = Math.cos(timeSinceSpawn * 0.08) * 16;
+      target.x = MathUtils.clamp((playerPosition.x ?? 0) * 0.05 + bossOrbitX, -120, 120);
+      target.y = Math.max(26, (playerPosition.y ?? 20) + 24 + bossOrbitY);
     }
-    this.mesh.position.lerp(target, 0.02);
-    this.mesh.rotation.y = Math.PI + Math.sin(Date.now() * 8e-4) * 0.15;
-    this.mesh.rotation.z = Math.sin(Date.now() * 1e-3) * 0.08;
+    const lerpSpeed = timeSinceSpawn < 25 ? 2e-3 : 8e-3;
+    this.mesh.position.lerp(target, lerpSpeed);
+    this.mesh.rotation.y = Math.PI + Math.sin(Date.now() * 25e-5) * 0.06;
+    this.mesh.rotation.z = Math.sin(Date.now() * 4e-4) * 0.03;
+    if (player2 && enemyManager2 && soundManager2) {
+      this._attemptShoot(player2, enemyManager2, soundManager2);
+    }
+    const hitRadius = Math.min(this.currentInternalScale * 0.9, 220);
     if (laserManager2 == null ? void 0 : laserManager2.lasers) {
       for (let i = laserManager2.lasers.length - 1; i >= 0; i--) {
         const laser = laserManager2.lasers[i];
         if (!(laser == null ? void 0 : laser.position)) continue;
-        if (laser.position.distanceTo(this.mesh.position) < 95) {
+        if (laser.position.distanceTo(this.mesh.position) < hitRadius) {
           laserManager2.scene.remove(laser);
           laserManager2.lasers.splice(i, 1);
-          this.takeDamage(55, laser.position.clone(), explosionManager2);
+          this.takeDamage(8, laser.position.clone(), explosionManager2);
           break;
         }
       }
@@ -4262,21 +4486,87 @@ class NaveMae {
       for (let i = laserManager2.missiles.length - 1; i >= 0; i--) {
         const missile = laserManager2.missiles[i];
         if (!((_a = missile == null ? void 0 : missile.mesh) == null ? void 0 : _a.position)) continue;
-        if (missile.mesh.position.distanceTo(this.mesh.position) < 120) {
-          this.takeDamage(250, missile.mesh.position.clone(), explosionManager2);
+        if (missile.mesh.position.distanceTo(this.mesh.position) < hitRadius * 1.3) {
+          const hitPoint = missile.mesh.position.clone();
+          this.takeDamage(120, hitPoint, explosionManager2);
+          if (typeof laserManager2.disposeMissile === "function") {
+            laserManager2.disposeMissile(missile.mesh);
+          } else {
+            laserManager2.scene.remove(missile.mesh);
+          }
+          laserManager2.missiles.splice(i, 1);
           break;
         }
       }
     }
+    if (player2 == null ? void 0 : player2.pdcProjectiles) {
+      const projectiles = player2.pdcProjectiles;
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const b = projectiles[i];
+        if (!((_b = b == null ? void 0 : b.mesh) == null ? void 0 : _b.position)) continue;
+        if (b.mesh.position.distanceTo(this.mesh.position) < hitRadius) {
+          this.takeDamage(4, b.mesh.position.clone(), explosionManager2);
+          this.scene.remove(b.mesh);
+          projectiles.splice(i, 1);
+        }
+      }
+    }
+  }
+  _getCannonWorldPositions() {
+    if (!this.mesh) return [];
+    this.mesh.updateMatrixWorld(true);
+    return this.cannonOffsets.map((offset) => offset.clone().applyMatrix4(this.mesh.matrixWorld));
+  }
+  _attemptShoot(player2, enemyManager2, soundManager2) {
+    if (!this.mesh || !this.isAlive || !this.isActive) return;
+    if (this.currentInternalScale < this.maxScale * 0.35) return;
+    const now = Date.now();
+    if (now - this.lastFireTime < this.fireRate * 1e3) return;
+    if (!(player2 == null ? void 0 : player2.mesh) || !enemyManager2 || typeof enemyManager2._enemyShoot !== "function") return;
+    const targetPos = new Vector3();
+    player2.mesh.getWorldPosition(targetPos);
+    const dist = this.mesh.position.distanceTo(targetPos);
+    if (dist > 2200) return;
+    this.lastFireTime = now;
+    const cannonPositions = this._getCannonWorldPositions();
+    cannonPositions.forEach((pos) => {
+      const fakeEnemy = {
+        position: pos,
+        userData: { type: "boss", laserSound: this.bossLaserSound }
+      };
+      enemyManager2._enemyShoot(fakeEnemy, player2, soundManager2);
+    });
+  }
+  dispose() {
+    if (window.__NAVE_MAE_ATIVA === this) {
+      window.__NAVE_MAE_ATIVA = null;
+    }
+    this.isAlive = false;
+    this.isActive = false;
+    if (this.mesh) {
+      this.scene.remove(this.mesh);
+      this.mesh = null;
+    }
+    if (this.explosionModel) {
+      this.scene.remove(this.explosionModel);
+      this.explosionModel = null;
+    }
   }
 }
 window.moveInput = { x: 0, y: 0 };
+if (typeof window.__BOSS_SPAWNED_LEVELS === "undefined") {
+  window.__BOSS_SPAWNED_LEVELS = /* @__PURE__ */ new Set();
+}
+if (typeof window.__NAVE_MAE_ATIVA === "undefined") {
+  window.__NAVE_MAE_ATIVA = null;
+}
 let audioInitialized = false;
 let currentState = "menu";
 let score = 0;
 let countdown = 5;
 let isGameStarted = false;
 let boss = null;
+let isBossFight = false;
 const GAME_STATE = { PLAYING: "playing", PAUSED: "paused" };
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 const scene = new Scene();
@@ -4302,6 +4592,7 @@ const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice);
 const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 800 : 2e3, isMobileDevice ? 120 : 400);
 const progressionManager = new ProgressionManager();
+const naveMae = new NaveMae(scene);
 function syncLevelResources() {
   player.setLevelLoadout(progressionManager.getLevelLoadout());
   updateResourceHUD();
@@ -4319,12 +4610,8 @@ function updateLevelProgressHUD() {
   const progress = progressionManager.getProgressPercent();
   const bar = document.getElementById("level-progress-bar");
   const label = document.getElementById("level-progress-label");
-  if (bar) {
-    bar.style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
-  }
-  if (label) {
-    label.textContent = `${Math.round(progress * 100)}%`;
-  }
+  if (bar) bar.style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
+  if (label) label.textContent = `${Math.round(progress * 100)}%`;
 }
 function updateResourceHUD() {
   const missileVal = document.getElementById("missile-val");
@@ -4342,14 +4629,12 @@ function updateResourceHUD() {
   }
   const pdcBar = document.getElementById("pdc-load-bar");
   if (pdcBar) {
-    const pdcProgress = Math.max(0, Math.min(1, (player.pdcBurstCount || 0) / Math.max(player.maxPdcBursts || 1, 1)));
+    const pdcProgress = player.maxPdcBursts === Infinity ? 1 : Math.max(0, Math.min(1, (player.pdcBurstCount || 0) / Math.max(player.maxPdcBursts || 1, 1)));
     pdcBar.style.width = `${pdcProgress * 100}%`;
   }
 }
 function updateEnvironmentTheme(level = progressionManager.getLevel()) {
-  if (spaceEnvironment == null ? void 0 : spaceEnvironment.setLevelTheme) {
-    spaceEnvironment.setLevelTheme(level);
-  }
+  if (spaceEnvironment == null ? void 0 : spaceEnvironment.setLevelTheme) spaceEnvironment.setLevelTheme(level);
 }
 function updateLevelUI(currentLevel) {
   const data = getLevelData(currentLevel);
@@ -4362,8 +4647,6 @@ function updateLevelUI(currentLevel) {
     taskElement.style.display = "block";
     titleElement.style.color = "#00ffff";
     taskElement.style.color = "#ffffff";
-  } else {
-    console.warn("Elementos .nexus-title ou .nexus-status não encontrados.");
   }
 }
 window.showLevelUp = function(level, message) {
@@ -4371,11 +4654,16 @@ window.showLevelUp = function(level, message) {
   if (existing) existing.remove();
   const card = document.createElement("div");
   card.id = "level-up-card";
-  card.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:30px;border-radius:18px;text-align:center;z-index:20000;color:white;pointer-events:none;background:rgba(0,0,0,0.7);border:1px solid #00ffff;backdrop-filter:blur(10px);`;
+  card.style.cssText = `
+        position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        padding:30px;border-radius:18px;text-align:center;z-index:20000;
+        color:white;pointer-events:none;background:rgba(0,0,0,0.7);
+        border:1px solid #00ffff;backdrop-filter:blur(10px);
+    `;
   card.innerHTML = `
         <h2 style="color:#00ffff;margin:0;font-size:20px;text-transform:uppercase;letter-spacing:2px;">Zona Alcançada</h2>
         <div style="font-size:60px;font-weight:bold;margin:10px 0;color:#fff;">${level}</div>
-        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message}</p>
+        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message || ""}</p>
     `;
   document.body.appendChild(card);
   setTimeout(() => card.remove(), 5e3);
@@ -4405,6 +4693,7 @@ function createVirtualJoystick() {
   setupJoystickEvents();
 }
 function setupJoystickEvents() {
+  if (!joystickBase) return;
   joystickBase.addEventListener("touchstart", (e) => {
     e.preventDefault();
     joystickActive = true;
@@ -4415,7 +4704,7 @@ function setupJoystickEvents() {
       e.preventDefault();
       handleJoystick(e.touches[0]);
     }
-  });
+  }, { passive: false });
   document.addEventListener("touchend", () => {
     if (!joystickActive) return;
     joystickActive = false;
@@ -4425,6 +4714,7 @@ function setupJoystickEvents() {
   });
 }
 function handleJoystick(touch) {
+  if (!touch || !joystickBase) return;
   const rect = joystickBase.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
@@ -4441,58 +4731,18 @@ function handleJoystick(touch) {
 const handleEnemyScore = (pts, hitPosition) => {
   score += pts;
   updateHUD();
-  const levelUp = progressionManager.addScore(pts);
+  const levelUp = progressionManager.addScore(pts * 0.7);
   if (levelUp) {
     updateLevelHUD();
     updateEnvironmentTheme();
     progressionManager.resetLevelResources();
     syncLevelResources();
-    enemyManager.clearAllEnemies();
-    enemyManager.spawnWave(player, progressionManager.getLevel());
-    const info = getLevelData(progressionManager.getLevel());
-    window.showLevelUp(progressionManager.getLevel(), info.title);
   }
 };
 const handlePlayerHit = () => {
-  const result = progressionManager.loseChance();
+  progressionManager.loseChance();
   updateResourceHUD();
-  if (result.failed) {
-    showGameOverOverlay();
-  }
 };
-function showGameOverOverlay() {
-  const existing = document.getElementById("game-over-overlay");
-  if (existing) return;
-  const overlay = document.createElement("div");
-  overlay.id = "game-over-overlay";
-  overlay.innerHTML = `
-        <div class="game-over-card">
-            <h2>GAME OVER</h2>
-            <p>Você esgotou suas chances.</p>
-            <button id="restart-btn">REINICIAR</button>
-        </div>
-    `;
-  document.body.appendChild(overlay);
-  const restartBtn = document.getElementById("restart-btn");
-  if (restartBtn) {
-    restartBtn.addEventListener("click", () => {
-      overlay.remove();
-      const currentLevel = progressionManager.getLevel();
-      score = 0;
-      progressionManager.resetLevelProgress();
-      updateHUD();
-      updateLevelHUD();
-      updateEnvironmentTheme(currentLevel);
-      enemyManager.clearAllEnemies();
-      syncLevelResources();
-      player.mesh.position.set(0, -1, 8);
-      currentState = GAME_STATE.PLAYING;
-      isGameStarted = true;
-      countdown = 0;
-      enemyManager.spawnWave(player, currentLevel);
-    });
-  }
-}
 function updateCamera() {
   if (!player.shipModel) return;
   const baseOffset = new Vector3(0, 8, 75);
@@ -4508,6 +4758,7 @@ function updateCamera() {
   camera.lookAt(lookAtTarget);
 }
 function animate() {
+  var _a;
   requestAnimationFrame(animate);
   const deltaTime = Math.min(clock.getDelta(), 0.1);
   if (currentState !== GAME_STATE.PLAYING) {
@@ -4535,39 +4786,79 @@ function animate() {
     renderer.render(scene, camera);
     return;
   }
+  const currentLevel = progressionManager.getLevel();
+  window.currentLevel = currentLevel;
   const keyboardInput = inputManager.update();
   const input = {
     x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
     y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
   };
-  player.update(input, deltaTime, enemyManager, handlePlayerHit);
+  player.update(input, deltaTime, enemyManager, handlePlayerHit, handleEnemyScore);
   if (spaceEnvironment) {
-    spaceEnvironment.update(deltaTime, player.mesh.position, input, progressionManager.getLevel(), player.mesh, soundManager);
+    spaceEnvironment.update(
+      deltaTime,
+      player.mesh.position,
+      input,
+      progressionManager.getLevel(),
+      player.mesh,
+      soundManager
+    );
   }
-  enemyManager.update(laserManager, handleEnemyScore, player, deltaTime, explosionManager, soundManager, progressionManager.getLevel(), handlePlayerHit);
+  enemyManager.update(
+    laserManager,
+    handleEnemyScore,
+    player,
+    deltaTime,
+    explosionManager,
+    soundManager,
+    progressionManager.getLevel(),
+    handlePlayerHit
+  );
   laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
   explosionManager.update(deltaTime);
   scorePopup.update(deltaTime);
   updateCamera();
-  const currentLevel = progressionManager.getLevel();
-  if (currentLevel >= 49 && currentLevel <= 100) {
-    console.log(`DEBUG: Nível atual é ${currentLevel}. Boss existe? ${!!boss}`);
+  const targetLevel = Math.floor(score / 1e4) + 1;
+  if (targetLevel > currentLevel) {
+    progressionManager.setLevel(targetLevel);
+    updateLevelHUD();
+    updateEnvironmentTheme(targetLevel);
+    progressionManager.resetLevelResources();
+    syncLevelResources();
+    if (!isBossFight) {
+      enemyManager.clearAllEnemies();
+      enemyManager.spawnWave(player, targetLevel);
+    }
+    const info = getLevelData(targetLevel);
+    window.showLevelUp(targetLevel, info.title);
   }
-  if (currentLevel >= 50 && currentLevel <= 100 && !boss) {
-    console.log(`🚀 Tentando spawnar Nave Mãe no nível ${currentLevel}!`);
-    boss = new NaveMae(scene);
-    if (!boss) {
-      console.error("❌ A variável boss não foi inicializada!");
+  if (currentLevel >= 50 && boss === null && !window.__BOSS_SPAWNED_LEVELS.has(50)) {
+    window.__BOSS_SPAWNED_LEVELS.add(50);
+    isBossFight = true;
+    console.log(`🚀 [BOSS] Spawnando Nave Mãe no nível ${currentLevel} (início no 50)`);
+    boss = naveMae;
+    window.__NAVE_MAE_ATIVA = boss;
+    if (progressionManager.registerBoss) {
+      progressionManager.registerBoss(boss);
+    }
+    progressionManager.activeBoss = boss;
+    if (boss.ativarNave) {
+      boss.ativarNave(50);
     }
   }
   if (boss) {
-    boss.update(deltaTime, player.mesh.position, laserManager, explosionManager);
-    if (!boss.isAlive || boss.hp <= 0) {
-      if (boss.mesh) {
-        boss.mesh.visible = false;
+    boss.update(deltaTime, (_a = player.mesh) == null ? void 0 : _a.position, laserManager, explosionManager, player, enemyManager, soundManager);
+    if (boss.hp <= 0 || boss.isActive === false && boss.isAlive === false) {
+      console.log(`💥 [BOSS] Nave Mãe destruída no nível ${currentLevel}`);
+      try {
+        boss.dispose();
+      } catch (e) {
       }
       boss = null;
-      console.log("🌌 Nave Mãe foi destruída!");
+      isBossFight = false;
+      window.__NAVE_MAE_ATIVA = null;
+      enemyManager.clearAllEnemies();
+      enemyManager.spawnWave(player, progressionManager.getLevel());
     }
   }
   renderer.render(scene, camera);
@@ -4580,6 +4871,15 @@ function setupNexusSelector() {
     updateLevelUI(novoNivel);
     updateEnvironmentTheme(novoNivel);
     if (currentState === GAME_STATE.PLAYING) {
+      if (boss) {
+        try {
+          boss.dispose();
+        } catch (e2) {
+        }
+        boss = null;
+      }
+      isBossFight = false;
+      window.__BOSS_SPAWNED_LEVELS.clear();
       enemyManager.clearAllEnemies();
       progressionManager.resetLevelResources();
       syncLevelResources();
@@ -4597,11 +4897,16 @@ function startGame() {
   countdown = 5;
   isGameStarted = false;
   score = 0;
+  boss = null;
+  isBossFight = false;
+  window.__BOSS_SPAWNED_LEVELS.clear();
   const countdownDisplay = document.getElementById("countdown-display");
   if (countdownDisplay) countdownDisplay.style.display = "block";
   currentState = GAME_STATE.PLAYING;
-  document.getElementById("overlay").style.display = "none";
-  document.getElementById("nexusSelector").style.display = "none";
+  const overlay = document.getElementById("overlay");
+  if (overlay) overlay.style.display = "none";
+  const nexusSelector = document.getElementById("nexusSelector");
+  if (nexusSelector) nexusSelector.style.display = "none";
   player.mesh.position.set(0, -1, 8);
   enemyManager.clearAllEnemies();
   updateHUD();
@@ -4615,16 +4920,20 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   const btnLeft = document.getElementById("btnRollLeft");
   const btnRight = document.getElementById("btnRollRight");
-  if (btnLeft) btnLeft.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    player.startBarrelRoll(-1);
-  });
-  if (btnRight) btnRight.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    player.startBarrelRoll(1);
-  });
+  if (btnLeft) {
+    btnLeft.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      player.startBarrelRoll(-1);
+    });
+  }
+  if (btnRight) {
+    btnRight.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      player.startBarrelRoll(1);
+    });
+  }
   const handleStart = async (e) => {
     if (e) e.preventDefault();
     if (!audioInitialized) {

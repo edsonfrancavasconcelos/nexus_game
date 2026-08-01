@@ -23,10 +23,18 @@ export class NaveMae {
         this.spawnTime = 0;
         this.currentInternalScale = 2;
         this.lastFireTime = 0;
+        this.fireRate = 2.2; // segundos entre tiros de boss
+        this.bossLaserSound = 'laser_inimigo';
 
         this.startScale = 45;
         this.maxScale = 350;
         this.startZ = -1800;
+        this.cannonOffsets = [
+            new THREE.Vector3(80, 55, 0),
+            new THREE.Vector3(-80, 55, 0),
+            new THREE.Vector3(0, 55, 70),
+            new THREE.Vector3(0, 55, -70)
+        ];
 
         this.loader = new GLTFLoader();
         this.textureLoader = new THREE.TextureLoader();
@@ -41,7 +49,7 @@ export class NaveMae {
             if (window.__NAVE_MAE_ATIVA !== this) return;
 
             this.mesh = gltf.scene;
-            this.mesh.userData = { isBoss: true };
+            this.mesh.userData = { isBoss: true, type: 'boss', laserSound: this.bossLaserSound };
             this.mesh.visible = false;
             this.mesh.position.set(0, 40, this.startZ);
             this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
@@ -78,24 +86,23 @@ export class NaveMae {
     this.isActive = true;
 
     // Sempre começa no “modo nível 50” (pequena) e cresce com o tempo
-    this.hp = 1800000;          // HP bem alto → aguenta até perto do 100
-    this.maxHp = 1800000;
+    this.hp = 10;          // 10 acertos para zerar o boss
+    this.maxHp = 10;
+    this.requiredDestructionLevel = 98;
 
     this.startScale = 12;       // já aparece, mas ainda pequena
     this.maxScale = 320;        // fica GIGANTE (estilo da imagem)
     this.currentInternalScale = this.startScale;
 
     this.spawnTime = Date.now();
-    this.invulnerableUntil = Date.now() + 8000; // 8 segundos de invulnerabilidade inicial
-
-    this.startZ = -2200;        // nasce mais longe
+    this.invulnerableUntil = Date.now() + 2500; // 2,5 segundos de invulnerabilidade inicial
+    this.lastHpPercentLog = 100;
 
     if (this.mesh) {
         if (!this.mesh.parent) this.scene.add(this.mesh);
         this.mesh.visible = true;
         this.mesh.position.set(0, 50, this.startZ);
         this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
-        console.log('📍 Nave Mãe visível em:', this.mesh.position);
     } else {
         setTimeout(() => {
             if (this.mesh) {
@@ -111,31 +118,63 @@ export class NaveMae {
     return true;
 }
 
-takeDamage(amount, hitPoint = null, explosionManager = null) {
-    if (!this.isAlive || !this.isActive) return false;
-
-    // Só toma dano depois de crescer um pouco
-    if (this.currentInternalScale < (this.maxScale * 0.35)) return false;
-    if (Date.now() < this.invulnerableUntil) return false;
-
-    // Laser máx 5 | Míssil máx 18  (dano um pouco menor para durar mais)
-    const limitedDamage = Math.min(amount, amount >= 30 ? 18 : 5);
-    this.hp = Math.max(0, this.hp - limitedDamage);
-
-    const percent = Math.floor((this.hp / this.maxHp) * 100);
-    // Log a cada 10% (e evita spam de 0%)
-    if (percent > 0 && percent % 10 === 0) {
-        console.log(`🩸 Boss HP: ${percent}% (${this.hp})`);
+    _calculateVulnerability(level) {
+        if (level < 50) return 0;
+        return Math.min(10, Math.floor((level - 50) / 5) + 1);
     }
 
-    if (this.hp <= 0) {
-        this.explode(hitPoint, explosionManager);
-        return true;
+    takeDamage(amount, hitPoint = null, explosionManager = null) {
+        if (!this.isAlive || !this.isActive) return false;
+        if (Date.now() < this.invulnerableUntil) return false;
+
+        const currentLevel = window.currentLevel || 50;
+        const allowedSegments = this._calculateVulnerability(currentLevel);
+        const minHp = Math.max(0, this.maxHp - allowedSegments);
+
+        if (this.hp <= minHp) {
+            return false;
+        }
+
+        this.hp = Math.max(minHp, this.hp - 1);
+
+        const percent = Math.floor((this.hp / this.maxHp) * 100);
+        if (percent >= 0 && percent % 10 === 0 && percent < this.lastHpPercentLog) {
+            console.log(`🩸 Boss HP: ${percent}% (${this.hp})`);
+            this.lastHpPercentLog = percent;
+        }
+
+        if (explosionManager && hitPoint) {
+            explosionManager.create(hitPoint.clone(), {
+                kind: 'boss',
+                flashColor: 0xff6600,
+                lightColor: 0xffbb33,
+                lightIntensity: 1800,
+                smokeColor: 0x662200
+            });
+        }
+
+        if (this.hp <= 0) {
+            this.explode(hitPoint, explosionManager);
+            return true;
+        }
+        return false;
     }
-    return false;
+
+explode(hitPoint = null, explosionManager = null) {
+    this.isAlive = false;
+    this.isActive = false;
+    if (explosionManager && hitPoint) {
+        explosionManager.create(hitPoint, {
+            kind: 'boss',
+            flashColor: 0xff6600,
+            lightColor: 0xffbb33,
+            lightIntensity: 2800,
+            smokeColor: 0x662200
+        });
+    }
 }
 
-update(deltaTime, playerPosition, laserManager = null, explosionManager = null) {
+update(deltaTime, playerPosition, laserManager = null, explosionManager = null, player = null, enemyManager = null, soundManager = null) {
     if (!this.isAlive || !this.isActive || !this.mesh) return;    
 
     const timeSinceSpawn = (Date.now() - this.spawnTime) / 1000; // segundos
@@ -164,22 +203,25 @@ update(deltaTime, playerPosition, laserManager = null, explosionManager = null) 
     // ===== MOVIMENTO (aproximação lenta) =====
     const target = new THREE.Vector3(0, 40, targetZ);
     if (playerPosition) {
-        target.x = THREE.MathUtils.clamp(playerPosition.x * 0.18, -60, 60);
-        target.y = Math.max(20, playerPosition.y + 18);
+        const bossOrbitX = Math.sin(timeSinceSpawn * 0.14) * 90;
+        const bossOrbitY = Math.cos(timeSinceSpawn * 0.08) * 16;
+        target.x = THREE.MathUtils.clamp((playerPosition.x ?? 0) * 0.05 + bossOrbitX, -120, 120);
+        target.y = Math.max(26, (playerPosition.y ?? 20) + 24 + bossOrbitY);
     }
 
     // Bem mais lenta no começo
-    const lerpSpeed = timeSinceSpawn < 25 ? 0.003 : 0.012;
+    const lerpSpeed = timeSinceSpawn < 25 ? 0.002 : 0.008;
     this.mesh.position.lerp(target, lerpSpeed);
 
     // Leve balanço
     this.mesh.rotation.y = Math.PI + Math.sin(Date.now() * 0.00025) * 0.06;
     this.mesh.rotation.z = Math.sin(Date.now() * 0.0004) * 0.03;
 
-    // ===== DANO só depois de crescer um pouco =====
-    if (this.currentInternalScale < (this.maxScale * 0.35)) return;
+    if (player && enemyManager && soundManager) {
+        this._attemptShoot(player, enemyManager, soundManager);
+    }
 
-    const hitRadius = Math.min(this.currentInternalScale * 0.9, 180);
+    const hitRadius = Math.min(this.currentInternalScale * 0.9, 220);
 
     // ----- Lasers -----
 if (laserManager?.lasers) {
@@ -204,7 +246,7 @@ if (laserManager?.missiles) {
 
         if (missile.mesh.position.distanceTo(this.mesh.position) < hitRadius * 1.3) {
             const hitPoint = missile.mesh.position.clone();
-            this.takeDamage(40, hitPoint, explosionManager);
+            this.takeDamage(120, hitPoint, explosionManager);
 
             // Remove o míssil direito
             if (typeof laserManager.disposeMissile === 'function') {
@@ -220,9 +262,8 @@ if (laserManager?.missiles) {
 
 // ----- PDC (projéteis do jogador) -----
 // O Player guarda os projéteis em player.pdcProjectiles
-// Precisamos do player – veja o ajuste no index.js abaixo
-if (this._playerRef?.pdcProjectiles) {
-    const projectiles = this._playerRef.pdcProjectiles;
+if (player?.pdcProjectiles) {
+    const projectiles = player.pdcProjectiles;
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const b = projectiles[i];
         if (!b?.mesh?.position) continue;
@@ -235,6 +276,36 @@ if (this._playerRef?.pdcProjectiles) {
     }
 }
 }
+
+    _getCannonWorldPositions() {
+        if (!this.mesh) return [];
+        this.mesh.updateMatrixWorld(true);
+        return this.cannonOffsets.map((offset) => offset.clone().applyMatrix4(this.mesh.matrixWorld));
+    }
+
+    _attemptShoot(player, enemyManager, soundManager) {
+        if (!this.mesh || !this.isAlive || !this.isActive) return;
+        if (this.currentInternalScale < (this.maxScale * 0.35)) return;
+
+        const now = Date.now();
+        if (now - this.lastFireTime < this.fireRate * 1000) return;
+        if (!player?.mesh || !enemyManager || typeof enemyManager._enemyShoot !== 'function') return;
+
+        const targetPos = new THREE.Vector3();
+        player.mesh.getWorldPosition(targetPos);
+        const dist = this.mesh.position.distanceTo(targetPos);
+        if (dist > 2200) return;
+
+        this.lastFireTime = now;
+        const cannonPositions = this._getCannonWorldPositions();
+        cannonPositions.forEach((pos) => {
+            const fakeEnemy = {
+                position: pos,
+                userData: { type: 'boss', laserSound: this.bossLaserSound }
+            };
+            enemyManager._enemyShoot(fakeEnemy, player, soundManager);
+        });
+    }
 
     dispose() {
         if (window.__NAVE_MAE_ATIVA === this) {

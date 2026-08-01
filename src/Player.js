@@ -10,8 +10,8 @@ export class Player {
         this.maxMissiles = 10;
         this.missileReloadTime = 1.6;
         this.missileReloadTimer = 0;
-        this.pdcBurstCount = 30;
-        this.maxPdcBursts = 30;
+        this.pdcBurstCount = Infinity;
+        this.maxPdcBursts = Infinity;
         this.pdcDurability = 100;
         this.isFiring = false;
         this.isPaused = false;
@@ -47,8 +47,9 @@ export class Player {
         });
 
         this.pdcRange = 650;
-        this.pdcCooldown = 0.08;
+        this.pdcCooldown = 0.12;
         this.pdcTimer = 0;
+        this.pdcProjectileLife = 1.2;
         this.pdcProjectiles = [];
         this.pdcBulletGeo = new THREE.CylinderGeometry(0.35, 0.15, 6.0, 8);
         this.pdcBulletGeo.rotateX(Math.PI / 2);
@@ -88,8 +89,8 @@ export class Player {
     setLevelLoadout(loadout = {}) {
         this.maxMissiles = loadout.missiles ?? 10;
         this.missileCount = Math.min(this.maxMissiles, loadout.missiles ?? 10);
-        this.maxPdcBursts = loadout.pdcBursts ?? 30;
-        this.pdcBurstCount = this.maxPdcBursts;
+        this.maxPdcBursts = Infinity;
+        this.pdcBurstCount = Infinity;
     }
 
     startBarrelRoll(dir) {
@@ -104,20 +105,20 @@ export class Player {
     getAmmoStatus() {
         return {
             missiles: this.missileCount,
-            pdcBursts: this.pdcBurstCount,
+            pdcBursts: this.pdcBurstCount === Infinity ? '∞' : this.pdcBurstCount,
             missileMax: this.maxMissiles,
             missileReloadProgress: this.missileReloadTimer / Math.max(this.missileReloadTime, 0.001)
         };
     }
 
- _updatePDC(enemyManager, dt) {
-    if (!this.pdcActive || this.pdcBurstCount <= 0) {
-        this._updatePDCProjectiles(enemyManager, dt);
-        return;
-    }
-    this.pdcTimer += dt;
-    let closestEnemy = null;
-    let closestDist = Infinity;
+_updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
+        if (!this.pdcActive || this.pdcBurstCount <= 0) {
+            this._updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed);
+            return;
+        }
+        this.pdcTimer += dt;
+        let closestEnemy = null;
+        let closestDist = Infinity;
 
     if (enemyManager?.enemies) {
         enemyManager.enemies.forEach((enemy) => {
@@ -150,22 +151,20 @@ export class Player {
             this.pdcTimer = 0;
         }
     }
-    this._updatePDCProjectiles(enemyManager, dt);
+    this._updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed);
 }
 
     _firePDCShot(targetPos, cannon) {
-        for (let i = 0; i < 4; i++) {
-            const bullet = new THREE.Mesh(this.pdcBulletGeo, this.pdcBulletMat);
-            const spawnPos = new THREE.Vector3();
-            cannon.container.getWorldPosition(spawnPos);
-            bullet.position.copy(spawnPos);
-            const spread = 0.4;
-            bullet.rotation.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
-            this.scene.add(bullet);
-            if (i === 0 && window.soundManager) window.soundManager.play('pdc');
-            const dir = new THREE.Vector3().subVectors(targetPos, spawnPos).normalize();
-            this.pdcProjectiles.push({ mesh: bullet, dir: dir, startTime: Date.now(), offset: Math.random() * Math.PI * 2 });
-        }
+        const bullet = new THREE.Mesh(this.pdcBulletGeo, this.pdcBulletMat);
+        const spawnPos = new THREE.Vector3();
+        cannon.container.getWorldPosition(spawnPos);
+        bullet.position.copy(spawnPos);
+        const spread = 0.26;
+        bullet.rotation.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
+        this.scene.add(bullet);
+        if (window.soundManager) window.soundManager.play('pdc');
+        const dir = new THREE.Vector3().subVectors(targetPos, spawnPos).normalize();
+        this.pdcProjectiles.push({ mesh: bullet, dir: dir, life: this.pdcProjectileLife, startTime: Date.now(), offset: Math.random() * Math.PI * 2 });
     }
 
     togglePDC() { this.pdcActive = !this.pdcActive; return this.pdcActive; }
@@ -191,15 +190,15 @@ export class Player {
     const spawnPos = noseLocal.clone().applyMatrix4(ship.matrixWorld);
 
     // Direção para frente da nave
-    // A nave usa rotation.y = Math.PI, então o "frente" visual é -Z local
+    // A nave usa rotation.y = Math.PI e o laser usa +Z local como frente
     const missileQuat = new THREE.Quaternion();
     ship.getWorldQuaternion(missileQuat);
 
     // Direção visual da nave (frente)
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(missileQuat).normalize();
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
 
     // Empurra um pouco para frente para não nascer dentro da nave
-    spawnPos.addScaledVector(forward, 8);
+    spawnPos.addScaledVector(forward, 14);
 
     this.missileCount--;
     this.missileReloadTimer = 0;
@@ -222,7 +221,7 @@ export class Player {
     return true;
 }
 
-    _updatePDCProjectiles(enemyManager, dt) {
+    _updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed = null) {
         const now = Date.now();
         for (let i = this.pdcProjectiles.length - 1; i >= 0; i--) {
             const b = this.pdcProjectiles[i];
@@ -237,18 +236,54 @@ export class Player {
                 for (let j = enemyManager.enemies.length - 1; j >= 0; j--) {
                     const e = enemyManager.enemies[j];
                     if (!e || e.userData?.type === 'meteoro') continue;
-                    if (b.mesh.position.distanceTo(e.position) < 30) {
-                        const canExplode = enemyManager.damageEnemy ? enemyManager.damageEnemy(e, 15, b.mesh.position) : true;
-                        if (canExplode) {
-                            if (window.explosionManager) window.explosionManager.create(b.mesh.position.clone());
+
+                    const hitRadius = e.userData?.type === 'roblox' ? 64 : 52;
+                    if (b.mesh.position.distanceTo(e.position) < hitRadius) {
+                        const enemyKilled = enemyManager.damageEnemy ? enemyManager.damageEnemy(e, 15, b.mesh.position) : true;
+                        if (window.explosionManager) {
+                            if (enemyKilled) {
+                                window.explosionManager.create(b.mesh.position.clone());
+                            } else {
+                                window.explosionManager.create(b.mesh.position.clone(), 0.45);
+                            }
+                        }
+                        if (enemyKilled) {
                             this.scene.remove(e);
                             enemyManager.enemies.splice(j, 1);
+
+                            if (onEnemyDestroyed) {
+                                const enemyType = e.userData?.type;
+                                const points = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 500 :
+                                               (enemyType === 'drone' ? 250 :
+                                               (enemyType === 'roblox' ? 150 : 100));
+                                onEnemyDestroyed(points, b.mesh.position.clone());
+                            }
                         }
-                        hit = true; break;
+                        hit = true;
+                        break;
                     }
                 }
             }
-            if (hit || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
+
+            const boss = window.__NAVE_MAE_ATIVA;
+            if (!hit && boss?.isActive && boss?.mesh?.visible) {
+                const bossHitRadius = Math.min(boss.currentInternalScale * 0.9, 210);
+                if (b.mesh.position.distanceTo(boss.mesh.position) < bossHitRadius) {
+                    const bossDestroyed = boss.takeDamage(25, b.mesh.position.clone(), window.explosionManager);
+                    hit = true;
+                    if (window.explosionManager) {
+                        if (bossDestroyed) {
+                            window.explosionManager.createBigExplosion(b.mesh.position.clone());
+                            if (onEnemyDestroyed) onEnemyDestroyed(5000, b.mesh.position.clone());
+                        } else {
+                            window.explosionManager.create(b.mesh.position.clone(), 0.75);
+                        }
+                    }
+                }
+            }
+
+            b.life -= dt;
+            if (hit || b.life <= 0 || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
                 this.scene.remove(b.mesh);
                 this.pdcProjectiles.splice(i, 1);
             }
@@ -349,7 +384,7 @@ export class Player {
         }
     }
 
-    update(moveInput, deltaTime, enemyManager, onPlayerHit = null) {
+    update(moveInput, deltaTime, enemyManager, onPlayerHit = null, onEnemyDestroyed = null) {
         if (!this.shipModel || this.isPaused) return;
         const dt = Math.min(deltaTime, 0.10);
 
@@ -394,7 +429,7 @@ export class Player {
         // 4. RESTO DA LÓGICA
         this.mesh.updateMatrixWorld();
         if (this.isFiring) this._shoot();
-        this._updatePDC(enemyManager, dt);
+        this._updatePDC(enemyManager, dt, onEnemyDestroyed);
         this._emitHeatWash();
 
         for (let i = this.particles.length - 1; i >= 0; i--) {

@@ -12,71 +12,78 @@ export class ExplosionManager {
 
         const textureLoader = new THREE.TextureLoader();
         this.explosionTexture = textureLoader.load('/assets/img/explosion.png');
+        this.explosionTexture.wrapS = THREE.RepeatWrapping;
+        this.explosionTexture.wrapT = THREE.RepeatWrapping;
         this.explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
     }
 
-create(position, multiplicador = 1.0) {
-    if (this.soundManager) this.soundManager.play('explosion');
+    create(position, multiplicador = 1.0) {
+        if (this.soundManager) this.soundManager.play('explosion');
 
-    const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
-    if (typeof multiplicador === 'object') multiplicador = 1.0;
+        const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
+        if (typeof multiplicador === 'object') multiplicador = 1.0;
 
-    // 1. Lógica do Fogo (Sprite Animado)
-    const distancia = Math.abs(safePosition.z);
-    // Adicionamos o multiplicador aqui na base da escala
-    const escalaBase = 100 * multiplicador; 
-    const fatorEscala = escalaBase * (100 / (distancia + 100)); 
+        const distancia = Math.abs(safePosition.z);
+        const escalaBase = 28 * multiplicador;
+        const fatorEscala = escalaBase * (80 / (distancia + 100));
 
-    const mat = new THREE.SpriteMaterial({
-        map: this.explosionTexture.clone(),
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
+        const explosionTexture = new THREE.Texture(this.explosionTexture.image);
+        explosionTexture.wrapS = THREE.RepeatWrapping;
+        explosionTexture.wrapT = THREE.RepeatWrapping;
+        explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
+        explosionTexture.needsUpdate = true;
 
-    const sprite = new THREE.Sprite(mat);
-    sprite.position.copy(safePosition);
-    sprite.scale.set(fatorEscala, fatorEscala, 1);
-    
-    this.scene.add(sprite);
+        const mat = new THREE.SpriteMaterial({
+            map: explosionTexture,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const sprite = new THREE.Sprite(mat);
+        sprite.position.copy(safePosition);
+        sprite.scale.set(fatorEscala, fatorEscala, 1);
+        this.scene.add(sprite);
 
         this.explosions.push({
             sprite: sprite,
-            life: 1.6,
-            maxLife: 1.6
+            life: 0.7,
+            maxLife: 0.7
         });
 
-        // 2. DISPARAR OS ESTILHAÇOS (Corrigido: agora a função é chamada)
-        this.createDebris(safePosition, 12); 
+        this.createDebris(safePosition, 4);
     }
 
     createBigExplosion(position) {
         const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
-        this.create(safePosition, 3.2);
-        this.createDebris(safePosition, 24);
+        this.create(safePosition, 1.3);
+        this.createDebris(safePosition, 6);
     }
 
-    createDebris(position, count = 10) {
+    createDebris(position, count = 5) {
         for (let i = 0; i < count; i++) {
-            const geometry = new THREE.TetrahedronGeometry(Math.random() * 2 + 1);
-            const material = new THREE.MeshStandardMaterial({ 
-                color: 0x555555, 
-                roughness: 0.8 
+            const geometry = new THREE.TetrahedronGeometry(Math.random() * 1 + 0.5);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x666666,
+                roughness: 0.88,
+                metalness: 0.12
             });
             const debris = new THREE.Mesh(geometry, material);
-            
             debris.position.copy(position);
             this.scene.add(debris);
 
-            const velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 40,
-                (Math.random() - 0.5) * 40,
-                (Math.random() - 0.5) * 40
-            );
+            const direction = new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                Math.random() * 1.2 + 0.4,
+                (Math.random() - 0.5) * 2
+            ).normalize();
+            const strength = 18 + Math.random() * 12;
+            const velocity = direction.multiplyScalar(strength);
             const rotationSpeed = new THREE.Vector3(
-                Math.random() * 0.2, 
-                Math.random() * 0.2, 
-                Math.random() * 0.2
+                Math.random() * 0.05,
+                Math.random() * 0.05,
+                Math.random() * 0.05
             );
 
             this.explosions.push({
@@ -84,7 +91,7 @@ create(position, multiplicador = 1.0) {
                 mesh: debris,
                 velocity: velocity,
                 rotationSpeed: rotationSpeed,
-                life: 2.0
+                life: 1.05
             });
         }
     }
@@ -94,16 +101,16 @@ create(position, multiplicador = 1.0) {
 
         for (let i = this.explosions.length - 1; i >= 0; i--) {
             const exp = this.explosions[i];
-            
-            // Lógica para Estilhaços
+
             if (exp.isDebris) {
                 exp.life -= deltaTime;
-                exp.velocity.y -= 0.5 * deltaTime; 
+                exp.velocity.y -= 0.5 * deltaTime;
                 exp.mesh.position.addScaledVector(exp.velocity, deltaTime);
                 exp.mesh.rotation.x += exp.rotationSpeed.x;
                 exp.mesh.rotation.y += exp.rotationSpeed.y;
-                
-                if (exp.life <= 0) {
+                exp.mesh.rotation.z += exp.rotationSpeed.z;
+
+                if (exp.life <= 0 || exp.mesh.position.length() > 4500) {
                     this.scene.remove(exp.mesh);
                     exp.mesh.geometry.dispose();
                     exp.mesh.material.dispose();
@@ -112,7 +119,6 @@ create(position, multiplicador = 1.0) {
                 continue;
             }
 
-            // Lógica para o Fogo
             exp.life -= deltaTime;
 
             if (exp.life <= 0) {
@@ -125,14 +131,12 @@ create(position, multiplicador = 1.0) {
 
             const progress = 1 - (exp.life / exp.maxLife);
             const currentFrame = Math.min(this.totalFrames - 1, Math.floor(progress * this.totalFrames));
-            
             const col = currentFrame % this.spriteColumns;
             const row = Math.floor(currentFrame / this.spriteColumns);
-            
-            exp.sprite.material.map.offset.set(
-                col / this.spriteColumns, 
-                1 - (row + 1) / this.spriteRows
-            );
+
+            const texture = exp.sprite.material.map;
+            texture.offset.set(col / this.spriteColumns, 1 - (row + 1) / this.spriteRows);
+            texture.needsUpdate = true;
         }
     }
 }

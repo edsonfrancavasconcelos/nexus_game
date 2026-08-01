@@ -110,7 +110,7 @@ function updateResourceHUD() {
 
     const pdcBar = document.getElementById('pdc-load-bar');
     if (pdcBar) {
-        const pdcProgress = Math.max(0, Math.min(1, (player.pdcBurstCount || 0) / Math.max(player.maxPdcBursts || 1, 1)));
+        const pdcProgress = player.maxPdcBursts === Infinity ? 1 : Math.max(0, Math.min(1, (player.pdcBurstCount || 0) / Math.max(player.maxPdcBursts || 1, 1)));
         pdcBar.style.width = `${pdcProgress * 100}%`;
     }
 }
@@ -277,10 +277,6 @@ function animate() {
     requestAnimationFrame(animate);
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
- if (naveMae && naveMae.isActive) {
-    naveMae.update(deltaTime, player.mesh?.position, laserManager, explosionManager, player);
-}
-
     if (currentState !== GAME_STATE.PLAYING) {
         renderer.render(scene, camera);
         return;
@@ -311,6 +307,9 @@ function animate() {
         return;
     }
 
+    const currentLevel = progressionManager.getLevel();
+    window.currentLevel = currentLevel;
+
     // Input
     const keyboardInput = inputManager.update();
     const input = {
@@ -318,7 +317,7 @@ function animate() {
         y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
     };
 
-    player.update(input, deltaTime, enemyManager, handlePlayerHit);
+    player.update(input, deltaTime, enemyManager, handlePlayerHit, handleEnemyScore);
 
     if (spaceEnvironment) {
         spaceEnvironment.update(
@@ -348,7 +347,6 @@ function animate() {
     updateCamera();
 
     // ====================== PROGRESSÃO DE NÍVEL (sempre a cada 10.000 pontos) ======================
-    const currentLevel = progressionManager.getLevel();
     const targetLevel = Math.floor(score / 10000) + 1;
 
     if (targetLevel > currentLevel) {
@@ -396,12 +394,7 @@ if (
 
     // ====================== ATUALIZAÇÃO DO BOSS ======================
     if (boss) {
-        if (boss.mesh && !boss.isActive && boss.ativarNave) {
-            const escala = progressionManager.getBossScale ? progressionManager.getBossScale() : 1;
-            boss.ativarNave(currentLevel, escala);
-        }
-
-       boss.update(deltaTime, player.mesh?.position, laserManager, explosionManager, player);
+        boss.update(deltaTime, player.mesh?.position, laserManager, explosionManager, player, enemyManager, soundManager);
 
         // Boss destruído
         if (boss.hp <= 0 || (boss.isActive === false && boss.isAlive === false)) {
@@ -414,9 +407,8 @@ if (
             lastBossLevel = -1;
             window.__NAVE_MAE_ATIVA = null;
 
-            if (window.__BOSS_SPAWNED_LEVELS) {
-                window.__BOSS_SPAWNED_LEVELS.delete(currentLevel);
-            }
+            // Não remove o registro de spawn: o boss deve aparecer apenas uma vez por jogo.
+            // Assim evitamos que o mesmo nível volte a spawnar a Nave Mãe infinitamente.
 
             // Volta os inimigos normais no nível atual
             enemyManager.clearAllEnemies();
