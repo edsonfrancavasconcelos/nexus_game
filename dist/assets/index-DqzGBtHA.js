@@ -3150,8 +3150,8 @@ class Player {
     this.wingVacuum = [];
   }
   _createNavigationLights() {
-    const bottomLight = new PointLight(11206655, 120, 60);
-    bottomLight.position.set(0, -2.5, -4);
+    const bottomLight = new PointLight(11206655, 180, 100);
+    bottomLight.position.set(0, 0, 0);
     this.shipModel.add(bottomLight);
     this.fuselageLight = bottomLight;
   }
@@ -3318,9 +3318,9 @@ class Player {
     if (this.fuselageLight) {
       this.firingLightPulse -= dt * 3.5;
       this.firingLightPulse = Math.max(0, this.firingLightPulse);
-      const pulseIntensity = 120 + this.firingLightPulse * 180;
+      const pulseIntensity = 180 + this.firingLightPulse * 280;
       this.fuselageLight.intensity = pulseIntensity;
-      this.fuselageLight.distance = 60 + this.firingLightPulse * 40;
+      this.fuselageLight.distance = 100 + this.firingLightPulse * 60;
     }
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
