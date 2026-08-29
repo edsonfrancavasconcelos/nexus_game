@@ -16,6 +16,7 @@ export class Player {
         this.isFiring = false;
         this.isPaused = false;
         this.collisionCooldown = 0;
+        this.firingLightPulse = 0;
         
         this.isRolling = false;
         this.rollTimer = 0;
@@ -164,6 +165,7 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
 }
 
     _firePDCShot(targetPos, cannon) {
+        this.firingLightPulse = Math.max(this.firingLightPulse, 0.8);
         const bullet = new THREE.Mesh(this.pdcBulletGeo, this.pdcBulletMat);
         const spawnPos = new THREE.Vector3();
         cannon.container.getWorldPosition(spawnPos);
@@ -187,6 +189,8 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         console.log('🚫 LaserManager sem createMissile');
         return false;
     }
+
+    this.firingLightPulse = Math.max(this.firingLightPulse, 1.2);
 
     // Garante que a matriz do mundo está atualizada
     this.mesh.updateMatrixWorld(true);
@@ -321,28 +325,7 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
 
     _createWingVacuum() {
         if (!this.shipModel) return;
-
-        const cavityMat = new THREE.MeshBasicMaterial({
-            color: 0x04070d,
-            transparent: true,
-            opacity: 0.96,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        });
-
-        const cavityConfigs = [
-            { x: -6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: -0.18 },
-            { x: 6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: 0.18 }
-        ];
-
-        this.wingVacuum = cavityConfigs.map((cfg) => {
-            const cavity = new THREE.Mesh(new THREE.BoxGeometry(cfg.sx, cfg.sy, cfg.sz), cavityMat.clone());
-            cavity.position.set(cfg.x, cfg.y, cfg.z);
-            cavity.rotation.z = cfg.rotZ;
-            cavity.renderOrder = 5;
-            this.shipModel.add(cavity);
-            return cavity;
-        });
+        this.wingVacuum = [];
     }
 
     _createNavigationLights() {
@@ -439,6 +422,7 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         const now = Date.now();
         if (now - this.lastShotTime < this.fireRate) return;
         this.lastShotTime = now;
+        this.firingLightPulse = Math.max(this.firingLightPulse, 1.0);
         this.mesh.updateMatrixWorld();
         this.shipModel.updateMatrixWorld();
         const direction = new THREE.Vector3(0, 0, 1);
@@ -531,6 +515,15 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         if (this.isFiring) this._shoot();
         this._updatePDC(enemyManager, dt, onEnemyDestroyed);
         this._emitHeatWash();
+        
+        // 5. ATUALIZAR ILUMINAÇÃO DA FUSELAGEM
+        if (this.fuselageLight) {
+            this.firingLightPulse -= dt * 3.5;
+            this.firingLightPulse = Math.max(0, this.firingLightPulse);
+            const pulseIntensity = 120 + this.firingLightPulse * 180;
+            this.fuselageLight.intensity = pulseIntensity;
+            this.fuselageLight.distance = 60 + this.firingLightPulse * 40;
+        }
 
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];

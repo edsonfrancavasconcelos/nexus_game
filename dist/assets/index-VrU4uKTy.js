@@ -1,4 +1,4 @@
-import { ap as Vector3, an as TrianglesDrawMode, al as TriangleFanDrawMode, am as TriangleStripDrawMode, J as Loader, K as LoaderUtils, F as FileLoader, S as MeshPhysicalMaterial, ao as Vector2, i as Color, H as LinearSRGBColorSpace, a8 as SRGBColorSpace, ae as SpotLight, a1 as PointLight, D as DirectionalLight, O as Matrix4, p as InstancedMesh, a5 as Quaternion, o as InstancedBufferAttribute, _ as Object3D, aj as TextureLoader, I as ImageBitmapLoader, e as BufferAttribute, q as InterleavedBuffer, z as LinearMipmapLinearFilter, W as NearestMipmapLinearFilter, E as LinearMipmapNearestFilter, X as NearestMipmapNearestFilter, y as LinearFilter, V as NearestFilter, a7 as RepeatWrapping, U as MirroredRepeatWrapping, g as ClampToEdgeWrapping, a3 as PointsMaterial, M as Material, v as LineBasicMaterial, T as MeshStandardMaterial, m as DoubleSide, Q as MeshBasicMaterial, a4 as PropertyBinding, f as BufferGeometry, ab as SkinnedMesh, P as Mesh, x as LineSegments, L as Line, w as LineLoop, a2 as Points, G as Group, a0 as PerspectiveCamera, N as MathUtils, $ as OrthographicCamera, aa as Skeleton, b as AnimationClip, B as Bone, t as InterpolateDiscrete, u as InterpolateLinear, r as InterleavedBufferAttribute, ai as Texture, aq as VectorKeyframeTrack, Z as NumberKeyframeTrack, a6 as QuaternionKeyframeTrack, j as ColorManagement, n as FrontSide, s as Interpolant, c as Box3, ac as Sphere, ad as SphereGeometry, Y as NormalBlending, A as AdditiveBlending, l as CylinderGeometry, d as BoxGeometry, k as ConeGeometry, ak as TorusGeometry, ag as SpriteMaterial, af as Sprite, ah as TetrahedronGeometry, C as CanvasTexture, R as MeshPhongMaterial, a as AmbientLight, a9 as Scene, ar as WebGLRenderer, h as Clock } from "./three-BhUUiGHT.js";
+import { ap as Vector3, an as TrianglesDrawMode, al as TriangleFanDrawMode, am as TriangleStripDrawMode, J as Loader, K as LoaderUtils, F as FileLoader, S as MeshPhysicalMaterial, ao as Vector2, i as Color, H as LinearSRGBColorSpace, a8 as SRGBColorSpace, ae as SpotLight, a1 as PointLight, D as DirectionalLight, O as Matrix4, p as InstancedMesh, a5 as Quaternion, o as InstancedBufferAttribute, _ as Object3D, aj as TextureLoader, I as ImageBitmapLoader, e as BufferAttribute, q as InterleavedBuffer, z as LinearMipmapLinearFilter, W as NearestMipmapLinearFilter, E as LinearMipmapNearestFilter, X as NearestMipmapNearestFilter, y as LinearFilter, V as NearestFilter, a7 as RepeatWrapping, U as MirroredRepeatWrapping, g as ClampToEdgeWrapping, a3 as PointsMaterial, M as Material, v as LineBasicMaterial, T as MeshStandardMaterial, m as DoubleSide, Q as MeshBasicMaterial, a4 as PropertyBinding, f as BufferGeometry, ab as SkinnedMesh, P as Mesh, x as LineSegments, L as Line, w as LineLoop, a2 as Points, G as Group, a0 as PerspectiveCamera, N as MathUtils, $ as OrthographicCamera, aa as Skeleton, b as AnimationClip, B as Bone, t as InterpolateDiscrete, u as InterpolateLinear, r as InterleavedBufferAttribute, ai as Texture, aq as VectorKeyframeTrack, Z as NumberKeyframeTrack, a6 as QuaternionKeyframeTrack, j as ColorManagement, n as FrontSide, s as Interpolant, c as Box3, ac as Sphere, ad as SphereGeometry, Y as NormalBlending, A as AdditiveBlending, l as CylinderGeometry, k as ConeGeometry, ak as TorusGeometry, d as BoxGeometry, ag as SpriteMaterial, af as Sprite, ah as TetrahedronGeometry, C as CanvasTexture, R as MeshPhongMaterial, a as AmbientLight, a9 as Scene, ar as WebGLRenderer, h as Clock } from "./three-BhUUiGHT.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -2880,6 +2880,7 @@ class Player {
     this.isFiring = false;
     this.isPaused = false;
     this.collisionCooldown = 0;
+    this.firingLightPulse = 0;
     this.isRolling = false;
     this.rollTimer = 0;
     this.rollDuration = 4;
@@ -3009,6 +3010,7 @@ class Player {
     this._updatePDCProjectiles(enemyManager2, dt, onEnemyDestroyed);
   }
   _firePDCShot(targetPos, cannon) {
+    this.firingLightPulse = Math.max(this.firingLightPulse, 0.8);
     const bullet = new Mesh(this.pdcBulletGeo, this.pdcBulletMat);
     const spawnPos = new Vector3();
     cannon.container.getWorldPosition(spawnPos);
@@ -3033,6 +3035,7 @@ class Player {
       console.log("🚫 LaserManager sem createMissile");
       return false;
     }
+    this.firingLightPulse = Math.max(this.firingLightPulse, 1.2);
     this.mesh.updateMatrixWorld(true);
     if (this.shipModel) this.shipModel.updateMatrixWorld(true);
     const ship = this.shipModel || this.mesh;
@@ -3143,25 +3146,7 @@ class Player {
   }
   _createWingVacuum() {
     if (!this.shipModel) return;
-    const cavityMat = new MeshBasicMaterial({
-      color: 263949,
-      transparent: true,
-      opacity: 0.96,
-      depthWrite: false,
-      side: DoubleSide
-    });
-    const cavityConfigs = [
-      { x: -6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: -0.18 },
-      { x: 6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: 0.18 }
-    ];
-    this.wingVacuum = cavityConfigs.map((cfg) => {
-      const cavity = new Mesh(new BoxGeometry(cfg.sx, cfg.sy, cfg.sz), cavityMat.clone());
-      cavity.position.set(cfg.x, cfg.y, cfg.z);
-      cavity.rotation.z = cfg.rotZ;
-      cavity.renderOrder = 5;
-      this.shipModel.add(cavity);
-      return cavity;
-    });
+    this.wingVacuum = [];
   }
   _createNavigationLights() {
     const bottomLight = new PointLight(11206655, 120, 60);
@@ -3250,6 +3235,7 @@ class Player {
     const now = Date.now();
     if (now - this.lastShotTime < this.fireRate) return;
     this.lastShotTime = now;
+    this.firingLightPulse = Math.max(this.firingLightPulse, 1);
     this.mesh.updateMatrixWorld();
     this.shipModel.updateMatrixWorld();
     const direction = new Vector3(0, 0, 1);
@@ -3328,6 +3314,13 @@ class Player {
     if (this.isFiring) this._shoot();
     this._updatePDC(enemyManager2, dt, onEnemyDestroyed);
     this._emitHeatWash();
+    if (this.fuselageLight) {
+      this.firingLightPulse -= dt * 3.5;
+      this.firingLightPulse = Math.max(0, this.firingLightPulse);
+      const pulseIntensity = 120 + this.firingLightPulse * 180;
+      this.fuselageLight.intensity = pulseIntensity;
+      this.fuselageLight.distance = 60 + this.firingLightPulse * 40;
+    }
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.mesh.position.z += p.speedZ * dt;
