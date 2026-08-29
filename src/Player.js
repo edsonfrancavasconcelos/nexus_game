@@ -18,7 +18,8 @@ export class Player {
         this.collisionCooldown = 0;
         this.firingLightPulse = 0;
         this.fuselageLight = null;
-        
+        this.fuselageLights = [];
+
         this.isRolling = false;
         this.rollTimer = 0;
         this.rollDuration = 4.0;
@@ -41,7 +42,7 @@ export class Player {
         this.thrusterPulse = 0;
 
         this.particles = [];
-        this.particleGeometry = new THREE.SphereGeometry(1.2, 5, 5); 
+        this.particleGeometry = new THREE.SphereGeometry(1.2, 5, 5);
         this.particleMaterial = new THREE.MeshBasicMaterial({
             color: 0xdddddd,
             transparent: true,
@@ -64,11 +65,11 @@ export class Player {
         this.pdcProjectiles = [];
         this.pdcBulletGeo = new THREE.CylinderGeometry(0.35, 0.15, 6.0, 8);
         this.pdcBulletGeo.rotateX(Math.PI / 2);
-        this.pdcBulletMat = new THREE.MeshStandardMaterial({ 
-            color: 0xffff00, 
-            emissive: 0xff4400, 
-            emissiveIntensity: 5.0, 
-            toneMapped: false 
+        this.pdcBulletMat = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            emissive: 0xff4400,
+            emissiveIntensity: 5.0,
+            toneMapped: false
         });
 
         this.pdcCannons = [
@@ -109,7 +110,6 @@ export class Player {
             this.isRolling = true;
             this.rollTimer = 0;
             this.rollDirection = dir || 1;
-            console.log("Direção do Roll definida como:", this.rollDirection);
         }
     }
 
@@ -122,7 +122,7 @@ export class Player {
         };
     }
 
-_updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
+    _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         if (!this.pdcActive || this.pdcBurstCount <= 0) {
             this._updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed);
             return;
@@ -131,39 +131,37 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         let closestEnemy = null;
         let closestDist = Infinity;
 
-    if (enemyManager?.enemies) {
-        enemyManager.enemies.forEach((enemy) => {
-            const dist = this.mesh.position.distanceTo(enemy.position);
-            if (dist < this.pdcRange && dist < closestDist) {
-                closestDist = dist;
-                closestEnemy = enemy;
+        if (enemyManager?.enemies) {
+            enemyManager.enemies.forEach((enemy) => {
+                const dist = this.mesh.position.distanceTo(enemy.position);
+                if (dist < this.pdcRange && dist < closestDist) {
+                    closestDist = dist;
+                    closestEnemy = enemy;
+                }
+            });
+        }
+
+        const boss = window.__NAVE_MAE_ATIVA;
+        if (boss?.isActive && boss?.mesh?.visible) {
+            const distBoss = this.mesh.position.distanceTo(boss.mesh.position);
+            if (distBoss < this.pdcRange && distBoss < closestDist) {
+                closestDist = distBoss;
+                closestEnemy = boss.mesh;
             }
-        });
-    }
-
-    // ===== NOVO: também mira na Nave Mãe =====
-    const boss = window.__NAVE_MAE_ATIVA;
-    if (boss?.isActive && boss?.mesh?.visible) {
-        const distBoss = this.mesh.position.distanceTo(boss.mesh.position);
-        if (distBoss < this.pdcRange && distBoss < closestDist) {
-            closestDist = distBoss;
-            closestEnemy = boss.mesh; // usa o mesh do boss como alvo
         }
-    }
-    // ==========================================
 
-    if (closestEnemy) {
-        const targetPos = new THREE.Vector3();
-        closestEnemy.getWorldPosition(targetPos);
-        this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
-        if (this.pdcTimer >= this.pdcCooldown) {
-            this.pdcBurstCount = Math.max(0, this.pdcBurstCount - 1);
-            this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
-            this.pdcTimer = 0;
+        if (closestEnemy) {
+            const targetPos = new THREE.Vector3();
+            closestEnemy.getWorldPosition(targetPos);
+            this.pdcCannons.forEach(c => c.container.lookAt(targetPos));
+            if (this.pdcTimer >= this.pdcCooldown) {
+                this.pdcBurstCount = Math.max(0, this.pdcBurstCount - 1);
+                this.pdcCannons.forEach(c => this._firePDCShot(targetPos, c));
+                this.pdcTimer = 0;
+            }
         }
+        this._updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed);
     }
-    this._updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed);
-}
 
     _firePDCShot(targetPos, cannon) {
         this.firingLightPulse = Math.max(this.firingLightPulse, 0.8);
@@ -181,59 +179,39 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
 
     togglePDC() { this.pdcActive = !this.pdcActive; return this.pdcActive; }
 
-   fireMissile() {
-    if (this.missileCount <= 0) {
-        console.log('🚫 Sem mísseis');
-        return false;
+    fireMissile() {
+        if (this.missileCount <= 0) return false;
+        if (!this.laserManager || typeof this.laserManager.createMissile !== 'function') return false;
+
+        this.firingLightPulse = Math.max(this.firingLightPulse, 1.2);
+
+        this.mesh.updateMatrixWorld(true);
+        if (this.shipModel) this.shipModel.updateMatrixWorld(true);
+
+        const ship = this.shipModel || this.mesh;
+        const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
+        const spawnPos = noseLocal.clone().applyMatrix4(ship.matrixWorld);
+
+        const missileQuat = new THREE.Quaternion();
+        ship.getWorldQuaternion(missileQuat);
+        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
+        spawnPos.addScaledVector(forward, 14);
+
+        this.missileCount--;
+        this.missileReloadTimer = 0;
+        this.laserManager.createMissile(spawnPos, missileQuat);
+
+        const last = this.laserManager.missiles[this.laserManager.missiles.length - 1];
+        if (last?.mesh) {
+            last.mesh.userData.direction = forward.clone();
+            last.mesh.lookAt(spawnPos.clone().add(forward));
+        }
+
+        if (window.soundManager) {
+            try { window.soundManager.play('missile'); } catch (e) {}
+        }
+        return true;
     }
-    if (!this.laserManager || typeof this.laserManager.createMissile !== 'function') {
-        console.log('🚫 LaserManager sem createMissile');
-        return false;
-    }
-
-    this.firingLightPulse = Math.max(this.firingLightPulse, 1.2);
-
-    // Garante que a matriz do mundo está atualizada
-    this.mesh.updateMatrixWorld(true);
-    if (this.shipModel) this.shipModel.updateMatrixWorld(true);
-
-    const ship = this.shipModel || this.mesh;
-
-    // Posição de saída (nariz da nave)
-    const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
-    const spawnPos = noseLocal.clone().applyMatrix4(ship.matrixWorld);
-
-    // Direção para frente da nave
-    // A nave usa rotation.y = Math.PI e o laser usa +Z local como frente
-    const missileQuat = new THREE.Quaternion();
-    ship.getWorldQuaternion(missileQuat);
-
-    // Direção visual da nave (frente)
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
-
-    // Empurra um pouco para frente para não nascer dentro da nave
-    spawnPos.addScaledVector(forward, 14);
-
-    this.missileCount--;
-    this.missileReloadTimer = 0;
-
-    this.laserManager.createMissile(spawnPos, missileQuat);
-
-    // Garante que o míssil use a mesma direção para frente
-    const last = this.laserManager.missiles[this.laserManager.missiles.length - 1];
-    if (last?.mesh) {
-        last.mesh.userData.direction = forward.clone();
-        // Alinha o modelo do míssil com a direção
-        last.mesh.lookAt(spawnPos.clone().add(forward));
-    }
-
-    if (window.soundManager) {
-        try { window.soundManager.play('missile'); } catch (e) {}
-    }
-
-    console.log('🚀 Míssil disparado | restantes:', this.missileCount);
-    return true;
-}
 
     _updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed = null) {
         const now = Date.now();
@@ -255,16 +233,11 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
                     if (b.mesh.position.distanceTo(e.position) < hitRadius) {
                         const enemyKilled = enemyManager.damageEnemy ? enemyManager.damageEnemy(e, 15, b.mesh.position) : true;
                         if (window.explosionManager) {
-                            if (enemyKilled) {
-                                window.explosionManager.create(b.mesh.position.clone());
-                            } else {
-                                window.explosionManager.create(b.mesh.position.clone(), 0.45);
-                            }
+                            window.explosionManager.create(b.mesh.position.clone(), enemyKilled ? undefined : 0.45);
                         }
                         if (enemyKilled) {
                             this.scene.remove(e);
                             enemyManager.enemies.splice(j, 1);
-
                             if (onEnemyDestroyed) {
                                 const enemyType = e.userData?.type;
                                 const points = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 500 :
@@ -311,8 +284,8 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
             this.shipModel.scale.set(2, 2, 2);
             this.shipModel.traverse((child) => {
                 if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
+                    child.castShadow = false;
+                    child.receiveShadow = false;
                     if (child.material) child.material.precision = "mediump";
                 }
             });
@@ -329,17 +302,27 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         this.wingVacuum = [];
     }
 
-    _createNavigationLights() {
-        const bottomLight = new THREE.PointLight(0xaaffff, 180, 100);
-        bottomLight.position.set(0, 0, 0);
-        this.shipModel.add(bottomLight);
-        this.fuselageLight = bottomLight;
-    }
-
     _createGunPositions() {
         this.gunLeft = new THREE.Vector3(-8.2, 1.6, -7.5);
         this.gunRight = new THREE.Vector3(8.2, 1.6, -7.5);
         this.gunNose = new THREE.Vector3(0, 2.2, -11.0);
+    }
+
+    _createNavigationLights() {
+        const makeLight = (x, y, z) => {
+            const light = new THREE.PointLight(0x66e8ff, 10, 22, 2);
+            light.castShadow = false;
+            light.position.set(x, y, z);
+            this.shipModel.add(light);
+            return light;
+        };
+
+        this.fuselageLights = [
+            makeLight(-8.2, 1.8, -8.7),
+            makeLight(8.2, 1.8, -8.7),
+            makeLight(0, 2.3, -11.8)
+        ];
+        this.fuselageLight = this.fuselageLights[2];
     }
 
     _createPlasmaThrusters() {
@@ -391,7 +374,8 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         ring.position.z = -1.5;
         plumeGroup.add(ring);
 
-        const light = new THREE.PointLight(0x5be8ff, 65, 38, 2);
+        const light = new THREE.PointLight(0x5be8ff, 28, 22, 2);
+        light.castShadow = false;
         light.position.set(0, 0, -1.5);
         plumeGroup.add(light);
 
@@ -448,8 +432,8 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
             thruster.flare.scale.set(0.9, 1.0 + pulseStrength * 0.2, 1.0);
             thruster.core.scale.set(0.9, 1.0 + pulseStrength * 0.2, 1.0);
             thruster.ring.scale.set(0.95 + pulseStrength * 0.16, 0.95 + pulseStrength * 0.16, 1.0);
-            thruster.light.intensity = 42 + pulseStrength * 26;
-            thruster.light.distance = 26 + pulseStrength * 10;
+            thruster.light.intensity = 16 + pulseStrength * 12;
+            thruster.light.distance = 18 + pulseStrength * 6;
             thruster.group.rotation.z = (index === 0 ? -0.08 : 0.08) + Math.sin(Date.now() * 0.004 + index) * 0.05;
         });
 
@@ -473,7 +457,6 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         if (!this.shipModel || this.isPaused) return;
         const dt = Math.min(deltaTime, 0.10);
 
-        // 1. MOVIMENTO
         const acel = 40.0;
         this.velocity.x += (-moveInput.x) * acel * dt;
         this.velocity.y += (moveInput.y) * acel * dt;
@@ -481,10 +464,9 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         this.mesh.position.x += this.velocity.x * dt * 1;
         this.mesh.position.y += this.velocity.y * dt * 1;
 
-        // 2. LÓGICA DE ROTAÇÃO (Centralizada no Pivot)
         if (this.isRolling) {
             this.rollTimer += dt;
-            let progress = Math.min(this.rollTimer / this.rollDuration, 1.0);
+            const progress = Math.min(this.rollTimer / this.rollDuration, 1.0);
             const smoothProgress = progress * progress * (3 - 2 * progress);
             const angle = smoothProgress * (Math.PI * 2) * this.rollDirection;
             this.shipModel.rotation.set(0, Math.PI, angle);
@@ -495,14 +477,12 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
                 this.shipModel.rotation.set(0, Math.PI, 0);
             }
         } else {
-            // Controle normal
             const suavizacao = 0.01;
-             this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.3,suavizacao);
+            this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.3, suavizacao);
             this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.9, suavizacao);
             this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
         }
 
-        // 3. RECARGA DE MÍSSEIS
         if (this.missileCount < this.maxMissiles) {
             this.missileReloadTimer += dt;
             if (this.missileReloadTimer >= this.missileReloadTime) {
@@ -511,26 +491,35 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
             }
         }
 
-        // 4. RESTO DA LÓGICA
         this.mesh.updateMatrixWorld();
         if (this.isFiring) this._shoot();
         this._updatePDC(enemyManager, dt, onEnemyDestroyed);
         this._emitHeatWash();
-        
-        // 5. ATUALIZAR ILUMINAÇÃO DA FUSELAGEM
-        if (this.fuselageLight) {
-            this.firingLightPulse -= dt * 3.5;
-            this.firingLightPulse = Math.max(0, this.firingLightPulse);
-            const pulseIntensity = 180 + this.firingLightPulse * 280;
-            this.fuselageLight.intensity = pulseIntensity;
-            this.fuselageLight.distance = 100 + this.firingLightPulse * 60;
+
+        // ===== AJUSTE AQUI =====
+        const FLASH_INTENSITY = 150;
+        const FLASH_DISTANCE = 80;
+        const IDLE_INTENSITY = 10;
+        // =======================
+
+        this.firingLightPulse = Math.max(0, this.firingLightPulse - dt * 5.5);
+        const pulse = this.firingLightPulse;
+
+        if (this.fuselageLights && this.fuselageLights.length) {
+            for (let i = 0; i < this.fuselageLights.length; i++) {
+                this.fuselageLights[i].intensity = IDLE_INTENSITY + pulse * FLASH_INTENSITY;
+                this.fuselageLights[i].distance = 14 + pulse * FLASH_DISTANCE;
+            }
         }
 
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
             p.mesh.position.z += p.speedZ * dt;
             p.life -= dt * 4.0;
-            if (p.life <= 0) { this.scene.remove(p.mesh); this.particles.splice(i, 1); }
+            if (p.life <= 0) {
+                this.scene.remove(p.mesh);
+                this.particles.splice(i, 1);
+            }
         }
     }
 
