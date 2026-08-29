@@ -14,28 +14,29 @@ export class LaserManager {
         this.soundManager = soundManager; 
         this.lasers = [];
         this.missiles = [];
-        this.laserSpeed = 850.0;
+        this.laserSpeed = 760.0;
+        this.maxLasers = 120;
+        this.maxMissiles = 24;
     }
 
     fire(worldGunPos, direction) {
-        const laserGroup = new THREE.Group();
-        const meshInterno = new THREE.Mesh(LASER_INTERNO_GEO, MAT_CIANO_INTERNO);
-        const meshExterno = new THREE.Mesh(LASER_EXTERNO_GEO, MAT_ESCARLATE_EXTERNO);
-        
-        laserGroup.add(meshInterno);
-        laserGroup.add(meshExterno);
-        laserGroup.position.copy(worldGunPos);
-        laserGroup.lookAt(worldGunPos.clone().add(direction));
+        if (this.lasers.length >= this.maxLasers) return;
 
-        laserGroup.userData = { direction: direction.clone().normalize(), life: 2.0 };
-        
-        this.scene.add(laserGroup);
-        this.lasers.push(laserGroup);
+        const laser = new THREE.Mesh(LASER_INTERNO_GEO, MAT_CIANO_INTERNO);
+        laser.scale.set(1.0, 1.0, 1.0);
+        laser.position.copy(worldGunPos);
+        laser.lookAt(worldGunPos.clone().add(direction));
+        laser.userData = { direction: direction.clone().normalize(), life: 1.8 };
+
+        this.scene.add(laser);
+        this.lasers.push(laser);
 
         if (this.soundManager) this.soundManager.play('laser');
     }
 
     createMissile(position, quaternion) {
+        if (this.missiles.length >= this.maxMissiles) return null;
+
         const bodyGeometry = new THREE.CylinderGeometry(0.55, 0.55, 5.6, 10);
         bodyGeometry.rotateX(Math.PI / 2);
         const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x0f3d1f, toneMapped: false });

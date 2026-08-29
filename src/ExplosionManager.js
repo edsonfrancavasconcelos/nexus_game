@@ -4,8 +4,10 @@ export class ExplosionManager {
     constructor(scene, soundManager, isMobile = false) {
         this.scene = scene;
         this.soundManager = soundManager;
+        this.isMobile = isMobile;
         this.explosions = [];
-        
+        this.maxActiveExplosions = isMobile ? 16 : 28;
+
         this.spriteColumns = 3;
         this.spriteRows = 4;
         this.totalFrames = this.spriteColumns * this.spriteRows;
@@ -18,14 +20,15 @@ export class ExplosionManager {
     }
 
     create(position, multiplicador = 1.0) {
+        if (this.explosions.length > this.maxActiveExplosions) return;
         if (this.soundManager) this.soundManager.play('explosion');
 
         const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
         if (typeof multiplicador === 'object') multiplicador = 1.0;
 
         const distancia = Math.abs(safePosition.z);
-        const escalaBase = 28 * multiplicador;
-        const fatorEscala = escalaBase * (80 / (distancia + 100));
+        const escalaBase = this.isMobile ? 18 : 28;
+        const fatorEscala = (escalaBase * multiplicador) * (80 / (distancia + 100));
 
         const explosionTexture = new THREE.Texture(this.explosionTexture.image);
         explosionTexture.wrapS = THREE.RepeatWrapping;
@@ -48,21 +51,22 @@ export class ExplosionManager {
 
         this.explosions.push({
             sprite: sprite,
-            life: 0.7,
-            maxLife: 0.7
+            life: 0.55,
+            maxLife: 0.55
         });
 
-        this.createDebris(safePosition, 4);
+        this.createDebris(safePosition, this.isMobile ? 2 : 4);
     }
 
     createBigExplosion(position) {
         const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
-        this.create(safePosition, 1.3);
-        this.createDebris(safePosition, 6);
+        this.create(safePosition, this.isMobile ? 1.0 : 1.3);
+        this.createDebris(safePosition, this.isMobile ? 4 : 6);
     }
 
     createDebris(position, count = 5) {
-        for (let i = 0; i < count; i++) {
+        const safeCount = Math.min(count, this.isMobile ? 3 : count);
+        for (let i = 0; i < safeCount; i++) {
             const geometry = new THREE.TetrahedronGeometry(Math.random() * 1 + 0.5);
             const material = new THREE.MeshStandardMaterial({
                 color: 0x666666,
@@ -78,7 +82,7 @@ export class ExplosionManager {
                 Math.random() * 1.2 + 0.4,
                 (Math.random() - 0.5) * 2
             ).normalize();
-            const strength = 18 + Math.random() * 12;
+            const strength = this.isMobile ? 9 + Math.random() * 6 : 18 + Math.random() * 12;
             const velocity = direction.multiplyScalar(strength);
             const rotationSpeed = new THREE.Vector3(
                 Math.random() * 0.05,
@@ -91,7 +95,7 @@ export class ExplosionManager {
                 mesh: debris,
                 velocity: velocity,
                 rotationSpeed: rotationSpeed,
-                life: 1.05
+                life: this.isMobile ? 0.7 : 1.05
             });
         }
     }

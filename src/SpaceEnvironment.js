@@ -21,9 +21,11 @@ const cloudTexture = createCloudTexture();
 
 export class SpaceEnvironment {
     constructor(scene, starCount = 2000, cloudCount = 400) {
+        const isMobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900;
         this.scene = scene;
         this.loader = new GLTFLoader();
         this.planets = [];
+        this.isMobile = isMobile;
         this.ambientLight = null;
         this.currentThemeIndex = 0;
         this.themes = [
@@ -34,15 +36,15 @@ export class SpaceEnvironment {
             { background: 0x06251a, cloud: 0x42d6a4, ambient: 0xc2ffe7 },
             { background: 0x24060a, cloud: 0xff4f7b, ambient: 0xffc0cf }
         ];
-        this.starCount = starCount;
-        this.starPositions = new Float32Array(starCount * 3);
-        this.starColors = new Float32Array(starCount * 3);
-        this.starSizes = new Float32Array(starCount);
-        this.starVelocities = new Float32Array(starCount);
-        this.cloudCount = cloudCount;
-        this.cloudPositions = new Float32Array(cloudCount * 3);
-        this.cloudVelocities = new Float32Array(cloudCount);
-        this.cloudSizes = new Float32Array(cloudCount);
+        this.starCount = this.isMobile ? Math.min(starCount, 900) : starCount;
+        this.cloudCount = this.isMobile ? Math.min(cloudCount, 120) : cloudCount;
+        this.starPositions = new Float32Array(this.starCount * 3);
+        this.starColors = new Float32Array(this.starCount * 3);
+        this.starSizes = new Float32Array(this.starCount);
+        this.starVelocities = new Float32Array(this.starCount);
+        this.cloudPositions = new Float32Array(this.cloudCount * 3);
+        this.cloudVelocities = new Float32Array(this.cloudCount);
+        this.cloudSizes = new Float32Array(this.cloudCount);
 
         this.initParticles();
         this.initEnvironment();

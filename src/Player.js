@@ -35,6 +35,7 @@ export class Player {
         this.thrusters = [];
         this.lastShotTime = 0;
         this.fireRate = 110;
+        this.thrusterPulse = 0;
 
         this.particles = [];
         this.particleGeometry = new THREE.SphereGeometry(1.2, 5, 5); 
@@ -43,6 +44,13 @@ export class Player {
             transparent: true,
             opacity: 0.18,
             blending: THREE.NormalBlending,
+            depthWrite: false
+        });
+        this.thrusterGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x66eaff,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
             depthWrite: false
         });
 
@@ -323,17 +331,60 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
     }
 
     _createPlasmaThrusters() {
-        const coreMat = new THREE.MeshBasicMaterial({ color: 0x66eeff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-        const coreGeo = new THREE.ConeGeometry(0.99, 3.0, 16);
+        const flameMaterial = new THREE.MeshBasicMaterial({
+            color: 0x8fe9ff,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const innerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x33d4ff,
+            transparent: true,
+            opacity: 1,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
         this.thrusterLocalPos = new THREE.Vector3(0, 2.0, -9.8);
-        const core = new THREE.Mesh(coreGeo, coreMat);
-        const light = new THREE.PointLight(0x33ddff, 120, 100);
-        core.position.copy(this.thrusterLocalPos);
-        light.position.copy(this.thrusterLocalPos);
+
+        const plumeGroup = new THREE.Group();
+        plumeGroup.position.copy(this.thrusterLocalPos);
+
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 12), this.thrusterGlowMaterial.clone());
+        glow.scale.set(1.6, 1.4, 2.2);
+        plumeGroup.add(glow);
+
+        const flare = new THREE.Mesh(new THREE.ConeGeometry(0.9, 4.2, 18, 1, true), flameMaterial.clone());
+        flare.rotation.x = Math.PI / 2;
+        flare.position.z = -1.2;
+        plumeGroup.add(flare);
+
+        const core = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 16), innerMaterial.clone());
         core.rotation.x = Math.PI / 2;
-        this.shipModel.add(core);
-        this.shipModel.add(light);
-        this.thrusters.push({ core, light });
+        core.position.z = -0.8;
+        plumeGroup.add(core);
+
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(1.15, 0.12, 8, 20),
+            new THREE.MeshBasicMaterial({
+                color: 0x9eeaff,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            })
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.z = -2.0;
+        plumeGroup.add(ring);
+
+        const light = new THREE.PointLight(0x5be8ff, 110, 60, 2);
+        light.position.set(0, 0, -2);
+        plumeGroup.add(light);
+
+        this.shipModel.add(plumeGroup);
+        this.thrusters.push({ group: plumeGroup, glow, flare, core, ring, light });
     }
 
     _initKeyboard() {
@@ -376,11 +427,33 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         if (!this.mesh || !this.shipModel || !this.thrusterLocalPos) return;
         this.mesh.updateMatrixWorld();
         const worldPos = new THREE.Vector3().copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
-        for (let k = 0; k < 2; k++) {
+
+        const pulseStrength = 0.75 + Math.sin(Date.now() * 0.02) * 0.25;
+        this.thrusters.forEach((thruster, index) => {
+            if (!thruster?.group) return;
+            const t = 0.7 + index * 0.12 + pulseStrength * 0.3;
+            thruster.glow.scale.set(1.4 + pulseStrength * 0.35, 1.2 + pulseStrength * 0.25, 2.0 + pulseStrength * 0.7);
+            thruster.flare.scale.set(1.0, 1.0 + pulseStrength * 0.4, 1.0);
+            thruster.core.scale.set(1.0, 1.0 + pulseStrength * 0.35, 1.0);
+            thruster.ring.scale.set(1.0 + pulseStrength * 0.25, 1.0 + pulseStrength * 0.25, 1.0);
+            thruster.light.intensity = 80 + pulseStrength * 60;
+            thruster.light.distance = 52 + pulseStrength * 18;
+            thruster.group.rotation.z = (index === 0 ? -0.12 : 0.12) + Math.sin(Date.now() * 0.004 + index) * 0.08;
+        });
+
+        if (this.particles.length > 24) return;
+        for (let k = 0; k < 3; k++) {
             const p = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
-            p.position.set(worldPos.x + (Math.random() - 0.5) * 1.5, worldPos.y + (Math.random() - 0.5) * 1.5, worldPos.z);
+            p.position.set(worldPos.x + (Math.random() - 0.5) * 2.2, worldPos.y + (Math.random() - 0.5) * 2, worldPos.z);
+            p.scale.setScalar(0.9 + Math.random() * 1.4);
             this.scene.add(p);
-            this.particles.push({ mesh: p, life: 1.0, speedZ: 180, driftX: (Math.random() - 0.5) * 4, driftY: (Math.random() - 0.5) * 4 });
+            this.particles.push({
+                mesh: p,
+                life: 0.75 + Math.random() * 0.45,
+                speedZ: 200 + Math.random() * 100,
+                driftX: (Math.random() - 0.5) * 4,
+                driftY: (Math.random() - 0.5) * 4
+            });
         }
     }
 

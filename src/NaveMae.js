@@ -23,8 +23,9 @@ export class NaveMae {
         this.spawnTime = 0;
         this.currentInternalScale = 2;
         this.lastFireTime = 0;
-        this.fireRate = 2.2; // segundos entre tiros de boss
+        this.fireRate = 3.2; // segundos entre tiros de boss
         this.bossLaserSound = 'laser_inimigo';
+        this.maxCannonShots = 2;
 
         this.startScale = 45;
         this.maxScale = 350;
@@ -298,7 +299,8 @@ if (player?.pdcProjectiles) {
 
         this.lastFireTime = now;
         const cannonPositions = this._getCannonWorldPositions();
-        cannonPositions.forEach((pos) => {
+        const shots = cannonPositions.slice(0, this.maxCannonShots);
+        shots.forEach((pos) => {
             const fakeEnemy = {
                 position: pos,
                 userData: { type: 'boss', laserSound: this.bossLaserSound }

@@ -18,9 +18,10 @@ export class EnemyManager {
         this.obstacleCollisionBox = new THREE.Box3();
 
         this.waveTimer = 0;
-  this.enemySpeed = 220;
-this.maxEnemiesOnScreen = isMobile ? 12 : 18;  // mais inimigos na tela
-this.waveCooldown = isMobile ? 1.0 : 0.7;      // spawna bem mais rápido
+        this.enemySpeed = 220;
+        this.maxEnemiesOnScreen = isMobile ? 8 : 12;
+        this.waveCooldown = isMobile ? 1.15 : 0.8;
+        this.lastWaveSpawnAt = 0;
 
         // Templates
         this.enemyTemplate = null;
@@ -155,7 +156,11 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
     }
 
     spawnWave(player, currentLevel = 1) {
-        if (!this.enemyTemplate || !player?.mesh || this.enemies.length >= this.maxEnemiesOnScreen) return;
+        if (!this.enemyTemplate || !player?.mesh) return;
+        if (this.enemies.length >= this.maxEnemiesOnScreen) return;
+        const now = performance.now();
+        if (now - this.lastWaveSpawnAt < 120) return;
+        this.lastWaveSpawnAt = now;
 
         const rand = Math.random();
         let selectedTemplate = this.enemyTemplate;
@@ -300,32 +305,34 @@ update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, sound
         // Projéteis inimigos
         const pPos = new THREE.Vector3();
         player.mesh.getWorldPosition(pPos);
-        const playerLasers = laserManager.lasers || [];
-for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
-        const p = this.enemyProjectiles[i];
-        if (!p || !p.mesh) {
-            this.enemyProjectiles.splice(i, 1);
-            continue;
-        }
-        
-        p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
-        p.life -= deltaTime;
+        if (this.enemyProjectiles.length > 0) {
+            for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+                const p = this.enemyProjectiles[i];
+                if (!p || !p.mesh) {
+                    this.enemyProjectiles.splice(i, 1);
+                    continue;
+                }
 
-        if (p.life <= 0 || p.mesh.position.distanceTo(camPosAtual) > 2500) {
-            this.scene.remove(p.mesh);
-            this.enemyProjectiles.splice(i, 1);
-            continue;
-        }
+                p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
+                p.life -= deltaTime;
 
-        if (p.mesh.position.distanceTo(player.mesh.position) < 18) {
-            this.scene.remove(p.mesh);
-            this.enemyProjectiles.splice(i, 1);
-            if (onPlayerHit) onPlayerHit();
+                if (p.life <= 0 || p.mesh.position.distanceTo(camPosAtual) > 2500) {
+                    this.scene.remove(p.mesh);
+                    this.enemyProjectiles.splice(i, 1);
+                    continue;
+                }
+
+                if (p.mesh.position.distanceTo(player.mesh.position) < 18) {
+                    this.scene.remove(p.mesh);
+                    this.enemyProjectiles.splice(i, 1);
+                    if (onPlayerHit) onPlayerHit();
+                }
+            }
         }
-    }
 
         // Atualização dos inimigos
-      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        const maxEnemyLoop = Math.min(this.enemies.length, this.maxEnemiesOnScreen + 4);
+        for (let i = this.enemies.length - 1; i >= 0 && i >= this.enemies.length - maxEnemyLoop; i--) {
         const enemy = this.enemies[i];
         
         // TRAVA DE SEGURANÇA: Se o inimigo não existir, remove do array e pula

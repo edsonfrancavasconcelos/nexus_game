@@ -1,4 +1,4 @@
-import { ao as Vector3, am as TrianglesDrawMode, ak as TriangleFanDrawMode, al as TriangleStripDrawMode, J as Loader, K as LoaderUtils, F as FileLoader, S as MeshPhysicalMaterial, an as Vector2, i as Color, H as LinearSRGBColorSpace, a8 as SRGBColorSpace, ae as SpotLight, a1 as PointLight, D as DirectionalLight, O as Matrix4, p as InstancedMesh, a5 as Quaternion, o as InstancedBufferAttribute, _ as Object3D, aj as TextureLoader, I as ImageBitmapLoader, e as BufferAttribute, q as InterleavedBuffer, z as LinearMipmapLinearFilter, W as NearestMipmapLinearFilter, E as LinearMipmapNearestFilter, X as NearestMipmapNearestFilter, y as LinearFilter, V as NearestFilter, a7 as RepeatWrapping, U as MirroredRepeatWrapping, g as ClampToEdgeWrapping, a3 as PointsMaterial, M as Material, v as LineBasicMaterial, T as MeshStandardMaterial, m as DoubleSide, Q as MeshBasicMaterial, a4 as PropertyBinding, f as BufferGeometry, ab as SkinnedMesh, P as Mesh, x as LineSegments, L as Line, w as LineLoop, a2 as Points, G as Group, a0 as PerspectiveCamera, N as MathUtils, $ as OrthographicCamera, aa as Skeleton, b as AnimationClip, B as Bone, t as InterpolateDiscrete, u as InterpolateLinear, r as InterleavedBufferAttribute, ai as Texture, ap as VectorKeyframeTrack, Z as NumberKeyframeTrack, a6 as QuaternionKeyframeTrack, j as ColorManagement, n as FrontSide, s as Interpolant, c as Box3, ac as Sphere, ad as SphereGeometry, Y as NormalBlending, l as CylinderGeometry, A as AdditiveBlending, k as ConeGeometry, d as BoxGeometry, ag as SpriteMaterial, af as Sprite, ah as TetrahedronGeometry, C as CanvasTexture, R as MeshPhongMaterial, a as AmbientLight, a9 as Scene, aq as WebGLRenderer, h as Clock } from "./three-CgbjQTyu.js";
+import { ap as Vector3, an as TrianglesDrawMode, al as TriangleFanDrawMode, am as TriangleStripDrawMode, J as Loader, K as LoaderUtils, F as FileLoader, S as MeshPhysicalMaterial, ao as Vector2, i as Color, H as LinearSRGBColorSpace, a8 as SRGBColorSpace, ae as SpotLight, a1 as PointLight, D as DirectionalLight, O as Matrix4, p as InstancedMesh, a5 as Quaternion, o as InstancedBufferAttribute, _ as Object3D, aj as TextureLoader, I as ImageBitmapLoader, e as BufferAttribute, q as InterleavedBuffer, z as LinearMipmapLinearFilter, W as NearestMipmapLinearFilter, E as LinearMipmapNearestFilter, X as NearestMipmapNearestFilter, y as LinearFilter, V as NearestFilter, a7 as RepeatWrapping, U as MirroredRepeatWrapping, g as ClampToEdgeWrapping, a3 as PointsMaterial, M as Material, v as LineBasicMaterial, T as MeshStandardMaterial, m as DoubleSide, Q as MeshBasicMaterial, a4 as PropertyBinding, f as BufferGeometry, ab as SkinnedMesh, P as Mesh, x as LineSegments, L as Line, w as LineLoop, a2 as Points, G as Group, a0 as PerspectiveCamera, N as MathUtils, $ as OrthographicCamera, aa as Skeleton, b as AnimationClip, B as Bone, t as InterpolateDiscrete, u as InterpolateLinear, r as InterleavedBufferAttribute, ai as Texture, aq as VectorKeyframeTrack, Z as NumberKeyframeTrack, a6 as QuaternionKeyframeTrack, j as ColorManagement, n as FrontSide, s as Interpolant, c as Box3, ac as Sphere, ad as SphereGeometry, Y as NormalBlending, A as AdditiveBlending, l as CylinderGeometry, k as ConeGeometry, ak as TorusGeometry, d as BoxGeometry, ag as SpriteMaterial, af as Sprite, ah as TetrahedronGeometry, C as CanvasTexture, R as MeshPhongMaterial, a as AmbientLight, a9 as Scene, ar as WebGLRenderer, h as Clock } from "./three-BhUUiGHT.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -2895,6 +2895,7 @@ class Player {
     this.thrusters = [];
     this.lastShotTime = 0;
     this.fireRate = 110;
+    this.thrusterPulse = 0;
     this.particles = [];
     this.particleGeometry = new SphereGeometry(1.2, 5, 5);
     this.particleMaterial = new MeshBasicMaterial({
@@ -2902,6 +2903,13 @@ class Player {
       transparent: true,
       opacity: 0.18,
       blending: NormalBlending,
+      depthWrite: false
+    });
+    this.thrusterGlowMaterial = new MeshBasicMaterial({
+      color: 6744831,
+      transparent: true,
+      opacity: 0.9,
+      blending: AdditiveBlending,
       depthWrite: false
     });
     this.pdcRange = 650;
@@ -3143,17 +3151,52 @@ class Player {
     this.gunNose = new Vector3(0, 2.2, -11);
   }
   _createPlasmaThrusters() {
-    const coreMat = new MeshBasicMaterial({ color: 6745855, transparent: true, blending: AdditiveBlending, depthWrite: false });
-    const coreGeo = new ConeGeometry(0.99, 3, 16);
+    const flameMaterial = new MeshBasicMaterial({
+      color: 9431551,
+      transparent: true,
+      opacity: 0.9,
+      blending: AdditiveBlending,
+      depthWrite: false
+    });
+    const innerMaterial = new MeshBasicMaterial({
+      color: 3396863,
+      transparent: true,
+      opacity: 1,
+      blending: AdditiveBlending,
+      depthWrite: false
+    });
     this.thrusterLocalPos = new Vector3(0, 2, -9.8);
-    const core = new Mesh(coreGeo, coreMat);
-    const light = new PointLight(3399167, 120, 100);
-    core.position.copy(this.thrusterLocalPos);
-    light.position.copy(this.thrusterLocalPos);
+    const plumeGroup = new Group();
+    plumeGroup.position.copy(this.thrusterLocalPos);
+    const glow = new Mesh(new SphereGeometry(1.25, 12, 12), this.thrusterGlowMaterial.clone());
+    glow.scale.set(1.6, 1.4, 2.2);
+    plumeGroup.add(glow);
+    const flare = new Mesh(new ConeGeometry(0.9, 4.2, 18, 1, true), flameMaterial.clone());
+    flare.rotation.x = Math.PI / 2;
+    flare.position.z = -1.2;
+    plumeGroup.add(flare);
+    const core = new Mesh(new ConeGeometry(0.55, 3.2, 16), innerMaterial.clone());
     core.rotation.x = Math.PI / 2;
-    this.shipModel.add(core);
-    this.shipModel.add(light);
-    this.thrusters.push({ core, light });
+    core.position.z = -0.8;
+    plumeGroup.add(core);
+    const ring = new Mesh(
+      new TorusGeometry(1.15, 0.12, 8, 20),
+      new MeshBasicMaterial({
+        color: 10414847,
+        transparent: true,
+        opacity: 0.7,
+        blending: AdditiveBlending,
+        depthWrite: false
+      })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.z = -2;
+    plumeGroup.add(ring);
+    const light = new PointLight(6023423, 110, 60, 2);
+    light.position.set(0, 0, -2);
+    plumeGroup.add(light);
+    this.shipModel.add(plumeGroup);
+    this.thrusters.push({ group: plumeGroup, glow, flare, core, ring, light });
   }
   _initKeyboard() {
     window.addEventListener("keydown", (e) => {
@@ -3198,11 +3241,30 @@ class Player {
     if (!this.mesh || !this.shipModel || !this.thrusterLocalPos) return;
     this.mesh.updateMatrixWorld();
     const worldPos = new Vector3().copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
-    for (let k = 0; k < 2; k++) {
+    const pulseStrength = 0.75 + Math.sin(Date.now() * 0.02) * 0.25;
+    this.thrusters.forEach((thruster, index) => {
+      if (!(thruster == null ? void 0 : thruster.group)) return;
+      thruster.glow.scale.set(1.4 + pulseStrength * 0.35, 1.2 + pulseStrength * 0.25, 2 + pulseStrength * 0.7);
+      thruster.flare.scale.set(1, 1 + pulseStrength * 0.4, 1);
+      thruster.core.scale.set(1, 1 + pulseStrength * 0.35, 1);
+      thruster.ring.scale.set(1 + pulseStrength * 0.25, 1 + pulseStrength * 0.25, 1);
+      thruster.light.intensity = 80 + pulseStrength * 60;
+      thruster.light.distance = 52 + pulseStrength * 18;
+      thruster.group.rotation.z = (index === 0 ? -0.12 : 0.12) + Math.sin(Date.now() * 4e-3 + index) * 0.08;
+    });
+    if (this.particles.length > 24) return;
+    for (let k = 0; k < 3; k++) {
       const p = new Mesh(this.particleGeometry, this.particleMaterial.clone());
-      p.position.set(worldPos.x + (Math.random() - 0.5) * 1.5, worldPos.y + (Math.random() - 0.5) * 1.5, worldPos.z);
+      p.position.set(worldPos.x + (Math.random() - 0.5) * 2.2, worldPos.y + (Math.random() - 0.5) * 2, worldPos.z);
+      p.scale.setScalar(0.9 + Math.random() * 1.4);
       this.scene.add(p);
-      this.particles.push({ mesh: p, life: 1, speedZ: 180, driftX: (Math.random() - 0.5) * 4, driftY: (Math.random() - 0.5) * 4 });
+      this.particles.push({
+        mesh: p,
+        life: 0.75 + Math.random() * 0.45,
+        speedZ: 200 + Math.random() * 100,
+        driftX: (Math.random() - 0.5) * 4,
+        driftY: (Math.random() - 0.5) * 4
+      });
     }
   }
   update(moveInput, deltaTime, enemyManager2, onPlayerHit = null, onEnemyDestroyed = null) {
@@ -3266,9 +3328,9 @@ class Player {
   }
 }
 const LASER_INTERNO_GEO = new BoxGeometry(0.5, 0.5, 14);
-const LASER_EXTERNO_GEO = new BoxGeometry(1.3, 1.3, 14.2);
+new BoxGeometry(1.3, 1.3, 14.2);
 const MAT_CIANO_INTERNO = new MeshBasicMaterial({ color: 65535, toneMapped: false });
-const MAT_ESCARLATE_EXTERNO = new MeshBasicMaterial({
+new MeshBasicMaterial({
   color: 16716083,
   transparent: true,
   opacity: 0.6,
@@ -3281,22 +3343,23 @@ class LaserManager {
     this.soundManager = soundManager2;
     this.lasers = [];
     this.missiles = [];
-    this.laserSpeed = 850;
+    this.laserSpeed = 760;
+    this.maxLasers = 120;
+    this.maxMissiles = 24;
   }
   fire(worldGunPos, direction) {
-    const laserGroup = new Group();
-    const meshInterno = new Mesh(LASER_INTERNO_GEO, MAT_CIANO_INTERNO);
-    const meshExterno = new Mesh(LASER_EXTERNO_GEO, MAT_ESCARLATE_EXTERNO);
-    laserGroup.add(meshInterno);
-    laserGroup.add(meshExterno);
-    laserGroup.position.copy(worldGunPos);
-    laserGroup.lookAt(worldGunPos.clone().add(direction));
-    laserGroup.userData = { direction: direction.clone().normalize(), life: 2 };
-    this.scene.add(laserGroup);
-    this.lasers.push(laserGroup);
+    if (this.lasers.length >= this.maxLasers) return;
+    const laser = new Mesh(LASER_INTERNO_GEO, MAT_CIANO_INTERNO);
+    laser.scale.set(1, 1, 1);
+    laser.position.copy(worldGunPos);
+    laser.lookAt(worldGunPos.clone().add(direction));
+    laser.userData = { direction: direction.clone().normalize(), life: 1.8 };
+    this.scene.add(laser);
+    this.lasers.push(laser);
     if (this.soundManager) this.soundManager.play("laser");
   }
   createMissile(position, quaternion) {
+    if (this.missiles.length >= this.maxMissiles) return null;
     const bodyGeometry = new CylinderGeometry(0.55, 0.55, 5.6, 10);
     bodyGeometry.rotateX(Math.PI / 2);
     const bodyMaterial = new MeshBasicMaterial({ color: 998687, toneMapped: false });
@@ -3419,8 +3482,9 @@ class EnemyManager {
     this.obstacleCollisionBox = new Box3();
     this.waveTimer = 0;
     this.enemySpeed = 220;
-    this.maxEnemiesOnScreen = isMobile ? 12 : 18;
-    this.waveCooldown = isMobile ? 1 : 0.7;
+    this.maxEnemiesOnScreen = isMobile ? 8 : 12;
+    this.waveCooldown = isMobile ? 1.15 : 0.8;
+    this.lastWaveSpawnAt = 0;
     this.enemyTemplate = null;
     this.enemyTemplate5 = null;
     this.enemyTemplate10 = null;
@@ -3529,7 +3593,11 @@ class EnemyManager {
   }
   spawnWave(player2, currentLevel = 1) {
     var _a;
-    if (!this.enemyTemplate || !(player2 == null ? void 0 : player2.mesh) || this.enemies.length >= this.maxEnemiesOnScreen) return;
+    if (!this.enemyTemplate || !(player2 == null ? void 0 : player2.mesh)) return;
+    if (this.enemies.length >= this.maxEnemiesOnScreen) return;
+    const now = performance.now();
+    if (now - this.lastWaveSpawnAt < 120) return;
+    this.lastWaveSpawnAt = now;
     const rand = Math.random();
     let selectedTemplate = this.enemyTemplate;
     let type = "comum";
@@ -3652,27 +3720,29 @@ class EnemyManager {
     }
     const pPos = new Vector3();
     player2.mesh.getWorldPosition(pPos);
-    laserManager2.lasers || [];
-    for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
-      const p = this.enemyProjectiles[i];
-      if (!p || !p.mesh) {
-        this.enemyProjectiles.splice(i, 1);
-        continue;
-      }
-      p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
-      p.life -= deltaTime;
-      if (p.life <= 0 || p.mesh.position.distanceTo(camPosAtual) > 2500) {
-        this.scene.remove(p.mesh);
-        this.enemyProjectiles.splice(i, 1);
-        continue;
-      }
-      if (p.mesh.position.distanceTo(player2.mesh.position) < 18) {
-        this.scene.remove(p.mesh);
-        this.enemyProjectiles.splice(i, 1);
-        if (onPlayerHit) onPlayerHit();
+    if (this.enemyProjectiles.length > 0) {
+      for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+        const p = this.enemyProjectiles[i];
+        if (!p || !p.mesh) {
+          this.enemyProjectiles.splice(i, 1);
+          continue;
+        }
+        p.mesh.position.addScaledVector(p.dir, p.speed * deltaTime);
+        p.life -= deltaTime;
+        if (p.life <= 0 || p.mesh.position.distanceTo(camPosAtual) > 2500) {
+          this.scene.remove(p.mesh);
+          this.enemyProjectiles.splice(i, 1);
+          continue;
+        }
+        if (p.mesh.position.distanceTo(player2.mesh.position) < 18) {
+          this.scene.remove(p.mesh);
+          this.enemyProjectiles.splice(i, 1);
+          if (onPlayerHit) onPlayerHit();
+        }
       }
     }
-    for (let i = this.enemies.length - 1; i >= 0; i--) {
+    const maxEnemyLoop = Math.min(this.enemies.length, this.maxEnemiesOnScreen + 4);
+    for (let i = this.enemies.length - 1; i >= 0 && i >= this.enemies.length - maxEnemyLoop; i--) {
       const enemy = this.enemies[i];
       if (!enemy || !enemy.userData) {
         this.enemies.splice(i, 1);
@@ -3803,7 +3873,9 @@ class ExplosionManager {
   constructor(scene2, soundManager2, isMobile = false) {
     this.scene = scene2;
     this.soundManager = soundManager2;
+    this.isMobile = isMobile;
     this.explosions = [];
+    this.maxActiveExplosions = isMobile ? 16 : 28;
     this.spriteColumns = 3;
     this.spriteRows = 4;
     this.totalFrames = this.spriteColumns * this.spriteRows;
@@ -3814,12 +3886,13 @@ class ExplosionManager {
     this.explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
   }
   create(position, multiplicador = 1) {
+    if (this.explosions.length > this.maxActiveExplosions) return;
     if (this.soundManager) this.soundManager.play("explosion");
     const safePosition = position instanceof Vector3 ? position.clone() : new Vector3(0, 0, 0);
     if (typeof multiplicador === "object") multiplicador = 1;
     const distancia = Math.abs(safePosition.z);
-    const escalaBase = 28 * multiplicador;
-    const fatorEscala = escalaBase * (80 / (distancia + 100));
+    const escalaBase = this.isMobile ? 18 : 28;
+    const fatorEscala = escalaBase * multiplicador * (80 / (distancia + 100));
     const explosionTexture = new Texture(this.explosionTexture.image);
     explosionTexture.wrapS = RepeatWrapping;
     explosionTexture.wrapT = RepeatWrapping;
@@ -3838,18 +3911,19 @@ class ExplosionManager {
     this.scene.add(sprite);
     this.explosions.push({
       sprite,
-      life: 0.7,
-      maxLife: 0.7
+      life: 0.55,
+      maxLife: 0.55
     });
-    this.createDebris(safePosition, 4);
+    this.createDebris(safePosition, this.isMobile ? 2 : 4);
   }
   createBigExplosion(position) {
     const safePosition = position instanceof Vector3 ? position.clone() : new Vector3(0, 0, 0);
-    this.create(safePosition, 1.3);
-    this.createDebris(safePosition, 6);
+    this.create(safePosition, this.isMobile ? 1 : 1.3);
+    this.createDebris(safePosition, this.isMobile ? 4 : 6);
   }
   createDebris(position, count = 5) {
-    for (let i = 0; i < count; i++) {
+    const safeCount = Math.min(count, this.isMobile ? 3 : count);
+    for (let i = 0; i < safeCount; i++) {
       const geometry = new TetrahedronGeometry(Math.random() * 1 + 0.5);
       const material = new MeshStandardMaterial({
         color: 6710886,
@@ -3864,7 +3938,7 @@ class ExplosionManager {
         Math.random() * 1.2 + 0.4,
         (Math.random() - 0.5) * 2
       ).normalize();
-      const strength = 18 + Math.random() * 12;
+      const strength = this.isMobile ? 9 + Math.random() * 6 : 18 + Math.random() * 12;
       const velocity = direction.multiplyScalar(strength);
       const rotationSpeed = new Vector3(
         Math.random() * 0.05,
@@ -3876,7 +3950,7 @@ class ExplosionManager {
         mesh: debris,
         velocity,
         rotationSpeed,
-        life: 1.05
+        life: this.isMobile ? 0.7 : 1.05
       });
     }
   }
@@ -3933,9 +4007,11 @@ new GLTFLoader();
 const cloudTexture = createCloudTexture();
 class SpaceEnvironment {
   constructor(scene2, starCount = 2e3, cloudCount = 400) {
+    const isMobile = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 900;
     this.scene = scene2;
     this.loader = new GLTFLoader();
     this.planets = [];
+    this.isMobile = isMobile;
     this.ambientLight = null;
     this.currentThemeIndex = 0;
     this.themes = [
@@ -3946,15 +4022,15 @@ class SpaceEnvironment {
       { background: 402714, cloud: 4380324, ambient: 12779495 },
       { background: 2360842, cloud: 16732027, ambient: 16761039 }
     ];
-    this.starCount = starCount;
-    this.starPositions = new Float32Array(starCount * 3);
-    this.starColors = new Float32Array(starCount * 3);
-    this.starSizes = new Float32Array(starCount);
-    this.starVelocities = new Float32Array(starCount);
-    this.cloudCount = cloudCount;
-    this.cloudPositions = new Float32Array(cloudCount * 3);
-    this.cloudVelocities = new Float32Array(cloudCount);
-    this.cloudSizes = new Float32Array(cloudCount);
+    this.starCount = this.isMobile ? Math.min(starCount, 900) : starCount;
+    this.cloudCount = this.isMobile ? Math.min(cloudCount, 120) : cloudCount;
+    this.starPositions = new Float32Array(this.starCount * 3);
+    this.starColors = new Float32Array(this.starCount * 3);
+    this.starSizes = new Float32Array(this.starCount);
+    this.starVelocities = new Float32Array(this.starCount);
+    this.cloudPositions = new Float32Array(this.cloudCount * 3);
+    this.cloudVelocities = new Float32Array(this.cloudCount);
+    this.cloudSizes = new Float32Array(this.cloudCount);
     this.initParticles();
     this.initEnvironment();
     this.initPlanets();
@@ -4367,8 +4443,9 @@ class NaveMae {
     this.spawnTime = 0;
     this.currentInternalScale = 2;
     this.lastFireTime = 0;
-    this.fireRate = 2.2;
+    this.fireRate = 3.2;
     this.bossLaserSound = "laser_inimigo";
+    this.maxCannonShots = 2;
     this.startScale = 45;
     this.maxScale = 350;
     this.startZ = -1800;
@@ -4584,7 +4661,8 @@ class NaveMae {
     if (dist > 2200) return;
     this.lastFireTime = now;
     const cannonPositions = this._getCannonWorldPositions();
-    cannonPositions.forEach((pos) => {
+    const shots = cannonPositions.slice(0, this.maxCannonShots);
+    shots.forEach((pos) => {
       const fakeEnemy = {
         position: pos,
         userData: { type: "boss", laserSound: this.bossLaserSound }
@@ -4666,7 +4744,7 @@ const inputManager = new InputManager();
 const scorePopup = new ScorePopup(scene, camera);
 const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice);
-const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 800 : 2e3, isMobileDevice ? 120 : 400);
+const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 700 : 1500, isMobileDevice ? 90 : 220);
 const progressionManager = new ProgressionManager();
 const naveMae = new NaveMae(scene);
 function syncLevelResources() {

@@ -85,7 +85,7 @@ const inputManager = new InputManager();
 const scorePopup = new ScorePopup(scene, camera);
 const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice);
-const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 800 : 2000, isMobileDevice ? 120 : 400);
+const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 700 : 1500, isMobileDevice ? 90 : 220);
 const progressionManager = new ProgressionManager();
 const naveMae = new NaveMae(scene);
 
