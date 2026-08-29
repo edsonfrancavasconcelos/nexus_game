@@ -1,4 +1,4 @@
-import { ap as Vector3, an as TrianglesDrawMode, al as TriangleFanDrawMode, am as TriangleStripDrawMode, J as Loader, K as LoaderUtils, F as FileLoader, S as MeshPhysicalMaterial, ao as Vector2, i as Color, H as LinearSRGBColorSpace, a8 as SRGBColorSpace, ae as SpotLight, a1 as PointLight, D as DirectionalLight, O as Matrix4, p as InstancedMesh, a5 as Quaternion, o as InstancedBufferAttribute, _ as Object3D, aj as TextureLoader, I as ImageBitmapLoader, e as BufferAttribute, q as InterleavedBuffer, z as LinearMipmapLinearFilter, W as NearestMipmapLinearFilter, E as LinearMipmapNearestFilter, X as NearestMipmapNearestFilter, y as LinearFilter, V as NearestFilter, a7 as RepeatWrapping, U as MirroredRepeatWrapping, g as ClampToEdgeWrapping, a3 as PointsMaterial, M as Material, v as LineBasicMaterial, T as MeshStandardMaterial, m as DoubleSide, Q as MeshBasicMaterial, a4 as PropertyBinding, f as BufferGeometry, ab as SkinnedMesh, P as Mesh, x as LineSegments, L as Line, w as LineLoop, a2 as Points, G as Group, a0 as PerspectiveCamera, N as MathUtils, $ as OrthographicCamera, aa as Skeleton, b as AnimationClip, B as Bone, t as InterpolateDiscrete, u as InterpolateLinear, r as InterleavedBufferAttribute, ai as Texture, aq as VectorKeyframeTrack, Z as NumberKeyframeTrack, a6 as QuaternionKeyframeTrack, j as ColorManagement, n as FrontSide, s as Interpolant, c as Box3, ac as Sphere, ad as SphereGeometry, Y as NormalBlending, A as AdditiveBlending, l as CylinderGeometry, k as ConeGeometry, ak as TorusGeometry, d as BoxGeometry, ag as SpriteMaterial, af as Sprite, ah as TetrahedronGeometry, C as CanvasTexture, R as MeshPhongMaterial, a as AmbientLight, a9 as Scene, ar as WebGLRenderer, h as Clock } from "./three-BhUUiGHT.js";
+import { ap as Vector3, an as TrianglesDrawMode, al as TriangleFanDrawMode, am as TriangleStripDrawMode, J as Loader, K as LoaderUtils, F as FileLoader, S as MeshPhysicalMaterial, ao as Vector2, i as Color, H as LinearSRGBColorSpace, a8 as SRGBColorSpace, ae as SpotLight, a1 as PointLight, D as DirectionalLight, O as Matrix4, p as InstancedMesh, a5 as Quaternion, o as InstancedBufferAttribute, _ as Object3D, aj as TextureLoader, I as ImageBitmapLoader, e as BufferAttribute, q as InterleavedBuffer, z as LinearMipmapLinearFilter, W as NearestMipmapLinearFilter, E as LinearMipmapNearestFilter, X as NearestMipmapNearestFilter, y as LinearFilter, V as NearestFilter, a7 as RepeatWrapping, U as MirroredRepeatWrapping, g as ClampToEdgeWrapping, a3 as PointsMaterial, M as Material, v as LineBasicMaterial, T as MeshStandardMaterial, m as DoubleSide, Q as MeshBasicMaterial, a4 as PropertyBinding, f as BufferGeometry, ab as SkinnedMesh, P as Mesh, x as LineSegments, L as Line, w as LineLoop, a2 as Points, G as Group, a0 as PerspectiveCamera, N as MathUtils, $ as OrthographicCamera, aa as Skeleton, b as AnimationClip, B as Bone, t as InterpolateDiscrete, u as InterpolateLinear, r as InterleavedBufferAttribute, ai as Texture, aq as VectorKeyframeTrack, Z as NumberKeyframeTrack, a6 as QuaternionKeyframeTrack, j as ColorManagement, n as FrontSide, s as Interpolant, c as Box3, ac as Sphere, ad as SphereGeometry, Y as NormalBlending, A as AdditiveBlending, l as CylinderGeometry, d as BoxGeometry, k as ConeGeometry, ak as TorusGeometry, ag as SpriteMaterial, af as Sprite, ah as TetrahedronGeometry, C as CanvasTexture, R as MeshPhongMaterial, a as AmbientLight, a9 as Scene, ar as WebGLRenderer, h as Clock } from "./three-BhUUiGHT.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -2893,6 +2893,7 @@ class Player {
     this.rotationSpeed = 8;
     this.velocity = new Vector2(0, 0);
     this.thrusters = [];
+    this.wingVacuum = [];
     this.lastShotTime = 0;
     this.fireRate = 110;
     this.thrusterPulse = 0;
@@ -3134,9 +3135,32 @@ class Player {
         }
       });
       this.mesh.add(this.shipModel);
+      this._createWingVacuum();
       this._createPlasmaThrusters();
       this._createGunPositions();
       this._createNavigationLights();
+    });
+  }
+  _createWingVacuum() {
+    if (!this.shipModel) return;
+    const cavityMat = new MeshBasicMaterial({
+      color: 263949,
+      transparent: true,
+      opacity: 0.96,
+      depthWrite: false,
+      side: DoubleSide
+    });
+    const cavityConfigs = [
+      { x: -6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: -0.18 },
+      { x: 6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: 0.18 }
+    ];
+    this.wingVacuum = cavityConfigs.map((cfg) => {
+      const cavity = new Mesh(new BoxGeometry(cfg.sx, cfg.sy, cfg.sz), cavityMat.clone());
+      cavity.position.set(cfg.x, cfg.y, cfg.z);
+      cavity.rotation.z = cfg.rotZ;
+      cavity.renderOrder = 5;
+      this.shipModel.add(cavity);
+      return cavity;
     });
   }
   _createNavigationLights() {
@@ -3168,32 +3192,32 @@ class Player {
     this.thrusterLocalPos = new Vector3(0, 2, -9.8);
     const plumeGroup = new Group();
     plumeGroup.position.copy(this.thrusterLocalPos);
-    const glow = new Mesh(new SphereGeometry(1.25, 12, 12), this.thrusterGlowMaterial.clone());
-    glow.scale.set(1.6, 1.4, 2.2);
+    const glow = new Mesh(new SphereGeometry(0.9, 10, 10), this.thrusterGlowMaterial.clone());
+    glow.scale.set(1.15, 1, 1.6);
     plumeGroup.add(glow);
-    const flare = new Mesh(new ConeGeometry(0.9, 4.2, 18, 1, true), flameMaterial.clone());
+    const flare = new Mesh(new ConeGeometry(0.6, 2.8, 14, 1, true), flameMaterial.clone());
     flare.rotation.x = Math.PI / 2;
-    flare.position.z = -1.2;
+    flare.position.z = -0.8;
     plumeGroup.add(flare);
-    const core = new Mesh(new ConeGeometry(0.55, 3.2, 16), innerMaterial.clone());
+    const core = new Mesh(new ConeGeometry(0.35, 2.2, 12), innerMaterial.clone());
     core.rotation.x = Math.PI / 2;
-    core.position.z = -0.8;
+    core.position.z = -0.6;
     plumeGroup.add(core);
     const ring = new Mesh(
-      new TorusGeometry(1.15, 0.12, 8, 20),
+      new TorusGeometry(0.8, 0.08, 8, 16),
       new MeshBasicMaterial({
         color: 10414847,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.55,
         blending: AdditiveBlending,
         depthWrite: false
       })
     );
     ring.rotation.x = Math.PI / 2;
-    ring.position.z = -2;
+    ring.position.z = -1.5;
     plumeGroup.add(ring);
-    const light = new PointLight(6023423, 110, 60, 2);
-    light.position.set(0, 0, -2);
+    const light = new PointLight(6023423, 65, 38, 2);
+    light.position.set(0, 0, -1.5);
     plumeGroup.add(light);
     this.shipModel.add(plumeGroup);
     this.thrusters.push({ group: plumeGroup, glow, flare, core, ring, light });
@@ -3241,29 +3265,29 @@ class Player {
     if (!this.mesh || !this.shipModel || !this.thrusterLocalPos) return;
     this.mesh.updateMatrixWorld();
     const worldPos = new Vector3().copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
-    const pulseStrength = 0.75 + Math.sin(Date.now() * 0.02) * 0.25;
+    const pulseStrength = 0.55 + Math.sin(Date.now() * 0.018) * 0.18;
     this.thrusters.forEach((thruster, index) => {
       if (!(thruster == null ? void 0 : thruster.group)) return;
-      thruster.glow.scale.set(1.4 + pulseStrength * 0.35, 1.2 + pulseStrength * 0.25, 2 + pulseStrength * 0.7);
-      thruster.flare.scale.set(1, 1 + pulseStrength * 0.4, 1);
-      thruster.core.scale.set(1, 1 + pulseStrength * 0.35, 1);
-      thruster.ring.scale.set(1 + pulseStrength * 0.25, 1 + pulseStrength * 0.25, 1);
-      thruster.light.intensity = 80 + pulseStrength * 60;
-      thruster.light.distance = 52 + pulseStrength * 18;
-      thruster.group.rotation.z = (index === 0 ? -0.12 : 0.12) + Math.sin(Date.now() * 4e-3 + index) * 0.08;
+      thruster.glow.scale.set(1 + pulseStrength * 0.18, 0.9 + pulseStrength * 0.15, 1.25 + pulseStrength * 0.4);
+      thruster.flare.scale.set(0.9, 1 + pulseStrength * 0.2, 1);
+      thruster.core.scale.set(0.9, 1 + pulseStrength * 0.2, 1);
+      thruster.ring.scale.set(0.95 + pulseStrength * 0.16, 0.95 + pulseStrength * 0.16, 1);
+      thruster.light.intensity = 42 + pulseStrength * 26;
+      thruster.light.distance = 26 + pulseStrength * 10;
+      thruster.group.rotation.z = (index === 0 ? -0.08 : 0.08) + Math.sin(Date.now() * 4e-3 + index) * 0.05;
     });
-    if (this.particles.length > 24) return;
-    for (let k = 0; k < 3; k++) {
+    if (this.particles.length > 18) return;
+    for (let k = 0; k < 2; k++) {
       const p = new Mesh(this.particleGeometry, this.particleMaterial.clone());
-      p.position.set(worldPos.x + (Math.random() - 0.5) * 2.2, worldPos.y + (Math.random() - 0.5) * 2, worldPos.z);
-      p.scale.setScalar(0.9 + Math.random() * 1.4);
+      p.position.set(worldPos.x + (Math.random() - 0.5) * 1.6, worldPos.y + (Math.random() - 0.5) * 1.4, worldPos.z);
+      p.scale.setScalar(0.7 + Math.random() * 0.9);
       this.scene.add(p);
       this.particles.push({
         mesh: p,
-        life: 0.75 + Math.random() * 0.45,
-        speedZ: 200 + Math.random() * 100,
-        driftX: (Math.random() - 0.5) * 4,
-        driftY: (Math.random() - 0.5) * 4
+        life: 0.55 + Math.random() * 0.3,
+        speedZ: 160 + Math.random() * 70,
+        driftX: (Math.random() - 0.5) * 3,
+        driftY: (Math.random() - 0.5) * 3
       });
     }
   }

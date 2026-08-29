@@ -33,6 +33,7 @@ export class Player {
         this.velocity = new THREE.Vector2(0, 0);
 
         this.thrusters = [];
+        this.wingVacuum = [];
         this.lastShotTime = 0;
         this.fireRate = 110;
         this.thrusterPulse = 0;
@@ -311,9 +312,36 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
                 }
             });
             this.mesh.add(this.shipModel);
+            this._createWingVacuum();
             this._createPlasmaThrusters();
             this._createGunPositions();
             this._createNavigationLights();
+        });
+    }
+
+    _createWingVacuum() {
+        if (!this.shipModel) return;
+
+        const cavityMat = new THREE.MeshBasicMaterial({
+            color: 0x04070d,
+            transparent: true,
+            opacity: 0.96,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        const cavityConfigs = [
+            { x: -6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: -0.18 },
+            { x: 6.3, y: 0.5, z: -1.8, sx: 4.8, sy: 1.7, sz: 2.8, rotZ: 0.18 }
+        ];
+
+        this.wingVacuum = cavityConfigs.map((cfg) => {
+            const cavity = new THREE.Mesh(new THREE.BoxGeometry(cfg.sx, cfg.sy, cfg.sz), cavityMat.clone());
+            cavity.position.set(cfg.x, cfg.y, cfg.z);
+            cavity.rotation.z = cfg.rotZ;
+            cavity.renderOrder = 5;
+            this.shipModel.add(cavity);
+            return cavity;
         });
     }
 
@@ -351,36 +379,36 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         const plumeGroup = new THREE.Group();
         plumeGroup.position.copy(this.thrusterLocalPos);
 
-        const glow = new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 12), this.thrusterGlowMaterial.clone());
-        glow.scale.set(1.6, 1.4, 2.2);
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 10), this.thrusterGlowMaterial.clone());
+        glow.scale.set(1.15, 1.0, 1.6);
         plumeGroup.add(glow);
 
-        const flare = new THREE.Mesh(new THREE.ConeGeometry(0.9, 4.2, 18, 1, true), flameMaterial.clone());
+        const flare = new THREE.Mesh(new THREE.ConeGeometry(0.6, 2.8, 14, 1, true), flameMaterial.clone());
         flare.rotation.x = Math.PI / 2;
-        flare.position.z = -1.2;
+        flare.position.z = -0.8;
         plumeGroup.add(flare);
 
-        const core = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 16), innerMaterial.clone());
+        const core = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 12), innerMaterial.clone());
         core.rotation.x = Math.PI / 2;
-        core.position.z = -0.8;
+        core.position.z = -0.6;
         plumeGroup.add(core);
 
         const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(1.15, 0.12, 8, 20),
+            new THREE.TorusGeometry(0.8, 0.08, 8, 16),
             new THREE.MeshBasicMaterial({
                 color: 0x9eeaff,
                 transparent: true,
-                opacity: 0.7,
+                opacity: 0.55,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false
             })
         );
         ring.rotation.x = Math.PI / 2;
-        ring.position.z = -2.0;
+        ring.position.z = -1.5;
         plumeGroup.add(ring);
 
-        const light = new THREE.PointLight(0x5be8ff, 110, 60, 2);
-        light.position.set(0, 0, -2);
+        const light = new THREE.PointLight(0x5be8ff, 65, 38, 2);
+        light.position.set(0, 0, -1.5);
         plumeGroup.add(light);
 
         this.shipModel.add(plumeGroup);
@@ -428,31 +456,30 @@ _updatePDC(enemyManager, dt, onEnemyDestroyed = null) {
         this.mesh.updateMatrixWorld();
         const worldPos = new THREE.Vector3().copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
 
-        const pulseStrength = 0.75 + Math.sin(Date.now() * 0.02) * 0.25;
+        const pulseStrength = 0.55 + Math.sin(Date.now() * 0.018) * 0.18;
         this.thrusters.forEach((thruster, index) => {
             if (!thruster?.group) return;
-            const t = 0.7 + index * 0.12 + pulseStrength * 0.3;
-            thruster.glow.scale.set(1.4 + pulseStrength * 0.35, 1.2 + pulseStrength * 0.25, 2.0 + pulseStrength * 0.7);
-            thruster.flare.scale.set(1.0, 1.0 + pulseStrength * 0.4, 1.0);
-            thruster.core.scale.set(1.0, 1.0 + pulseStrength * 0.35, 1.0);
-            thruster.ring.scale.set(1.0 + pulseStrength * 0.25, 1.0 + pulseStrength * 0.25, 1.0);
-            thruster.light.intensity = 80 + pulseStrength * 60;
-            thruster.light.distance = 52 + pulseStrength * 18;
-            thruster.group.rotation.z = (index === 0 ? -0.12 : 0.12) + Math.sin(Date.now() * 0.004 + index) * 0.08;
+            thruster.glow.scale.set(1.0 + pulseStrength * 0.18, 0.9 + pulseStrength * 0.15, 1.25 + pulseStrength * 0.4);
+            thruster.flare.scale.set(0.9, 1.0 + pulseStrength * 0.2, 1.0);
+            thruster.core.scale.set(0.9, 1.0 + pulseStrength * 0.2, 1.0);
+            thruster.ring.scale.set(0.95 + pulseStrength * 0.16, 0.95 + pulseStrength * 0.16, 1.0);
+            thruster.light.intensity = 42 + pulseStrength * 26;
+            thruster.light.distance = 26 + pulseStrength * 10;
+            thruster.group.rotation.z = (index === 0 ? -0.08 : 0.08) + Math.sin(Date.now() * 0.004 + index) * 0.05;
         });
 
-        if (this.particles.length > 24) return;
-        for (let k = 0; k < 3; k++) {
+        if (this.particles.length > 18) return;
+        for (let k = 0; k < 2; k++) {
             const p = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
-            p.position.set(worldPos.x + (Math.random() - 0.5) * 2.2, worldPos.y + (Math.random() - 0.5) * 2, worldPos.z);
-            p.scale.setScalar(0.9 + Math.random() * 1.4);
+            p.position.set(worldPos.x + (Math.random() - 0.5) * 1.6, worldPos.y + (Math.random() - 0.5) * 1.4, worldPos.z);
+            p.scale.setScalar(0.7 + Math.random() * 0.9);
             this.scene.add(p);
             this.particles.push({
                 mesh: p,
-                life: 0.75 + Math.random() * 0.45,
-                speedZ: 200 + Math.random() * 100,
-                driftX: (Math.random() - 0.5) * 4,
-                driftY: (Math.random() - 0.5) * 4
+                life: 0.55 + Math.random() * 0.3,
+                speedZ: 160 + Math.random() * 70,
+                driftX: (Math.random() - 0.5) * 3,
+                driftY: (Math.random() - 0.5) * 3
             });
         }
     }
