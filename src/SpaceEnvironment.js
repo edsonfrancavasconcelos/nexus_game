@@ -67,6 +67,8 @@ export class SpaceEnvironment {
                 emissive: 0x111111
             });
             const placeholder = new THREE.Mesh(placeholderGeo, placeholderMat);
+            // marca de controle para evitar reaparecimento (loop)
+            placeholder.userData = { done: false, laneIndex: index };
             
             const xPos = lanes[index] + (Math.random() - 0.5) * 700;
             const yPos = -800 + (Math.random() * 1700);
@@ -86,6 +88,21 @@ export class SpaceEnvironment {
                     // Copiar posição do placeholder
                     p.position.copy(placeholder.position);
                     p.visible = placeholder.visible;
+                    p.userData = p.userData || {};
+                    // preserva o estado 'done' do placeholder para evitar reaparecimento
+                    p.userData.done = placeholder.userData?.done || false;
+                    p.userData.laneIndex = placeholder.userData?.laneIndex || index;
+                    // Calcular um raio base do modelo para colisões mais precisas
+                    try {
+                        const box = new THREE.Box3().setFromObject(p);
+                        const sphere = new THREE.Sphere();
+                        box.getBoundingSphere(sphere);
+                        p.userData = p.userData || {};
+                        p.userData.baseRadius = sphere.radius || 50;
+                    } catch (e) {
+                        p.userData = p.userData || {};
+                        p.userData.baseRadius = 50;
+                    }
                     
                     this.scene.add(p);
                     this.scene.remove(placeholder);
@@ -174,15 +191,25 @@ export class SpaceEnvironment {
         // Só aparece no nível 5
         const shouldBeVisible = (currentLevel === 5);
 
-        if (shouldBeVisible) {
+            if (shouldBeVisible) {
+            // Ignora planetas marcados como concluídos
+            if (p.userData?.done) return;
             p.position.z += 80 * deltaTime;
 
-            // Quando passar da nave → some e NÃO reseta (evita o loop)
-            if (p.position.z > 1800) {
+            // Calcular distância Z relativa ao jogador (evita aparecer em cima do jogador)
+            const playerZ = (playerMesh && playerMesh.position) ? playerMesh.position.z : (playerPosition?.z || 0);
+            const relZ = p.position.z - playerZ;
+
+            // Quando passar da nave (relativo) → some e NÃO reseta (evita o loop)
+            if (relZ > 1800) {
                 p.visible = false;
-                // NÃO chama resetPlanetPosition — isso era o que gerava o loop
+                // marca como concluído para nunca mais reaparecer
+                p.userData = p.userData || {};
+                p.userData.done = true;
+                // remover do scene para evitar atualizações desnecessárias
+                try { this.scene.remove(p); } catch (e) {}
             } else {
-                const distZ = Math.abs(p.position.z);
+                const distZ = Math.abs(relZ);
 
                 // Fade in gradual
                 let opacity = 1.0;
@@ -204,7 +231,7 @@ export class SpaceEnvironment {
                     }
                 });
 
-                // Crescimento gradual
+                // Crescimento gradual (baseado na distância relativa ao jogador)
                 let scale;
                 if (distZ > 7500) {
                     scale = 1;
@@ -223,7 +250,38 @@ export class SpaceEnvironment {
 
                 p.scale.set(scale, scale, scale);
 
-                // Colisão
+                // Proteção extra: se o planeta estiver surgindo já sobre a nave,
+                // reposicionar para uma lane lateral e recuar no Z para evitar sobreposição e flicker.
+                if (playerMesh) {
+                    const pdx = playerMesh.position.x - p.position.x;
+                    const pdy = playerMesh.position.y - p.position.y;
+                    const pdz = playerMesh.position.z - p.position.z;
+                    const pDist3 = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz) || 1;
+                    const approxRadius = (p.userData?.baseRadius || 50) * p.scale.x + 150;
+                    if (pDist3 < approxRadius * 0.95 && !p.userData?.repositioned) {
+                        // Marcar para não reposicionar várias vezes
+                        p.userData = p.userData || {};
+                        p.userData.repositioned = true;
+
+                        // Escolher uma lane distante do jogador em X
+                        const lanes = [-4800, -1600, 1600, 4800];
+                        let farthest = lanes[0];
+                        let maxDist = -Infinity;
+                        for (let ln of lanes) {
+                            const d = Math.abs(ln - playerMesh.position.x);
+                            if (d > maxDist) { maxDist = d; farthest = ln; }
+                        }
+
+                        // Posicionar consistentemente bem atrás do jogador para evitar flash
+                        const backZ = (playerMesh.position.z || 0) - (8000 + Math.random() * 2000);
+                        p.position.x = farthest + (Math.random() - 0.5) * 200;
+                        p.position.z = backZ;
+                        // Esconder até que o fade natural traga o planeta
+                        p.visible = false;
+                    }
+                }
+
+                // Colisão (usar distZ relativo)
                 if (playerMesh && distZ < 3500) {
                     this._avoidPlanetCollision(playerMesh, p, soundManager);
                 }
@@ -282,8 +340,10 @@ export class SpaceEnvironment {
         const dist2D = Math.sqrt(dx * dx + dy * dy) || 1;
         const dist3D = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
         
-        const effectiveRadius = planet.scale.x * 0.5 + 150;
-        const detectionRadius = effectiveRadius * 1.3;
+        // Use um raio base calculado a partir do modelo, se disponível
+        const baseRadius = (planet.userData && planet.userData.baseRadius) ? planet.userData.baseRadius : 50;
+        const effectiveRadius = baseRadius * planet.scale.x + 150;
+        const detectionRadius = effectiveRadius * 1.6;
 
         if (dist3D < detectionRadius) {
             // Som apenas uma vez
@@ -294,16 +354,25 @@ export class SpaceEnvironment {
 
             // Se já penetrou, forçar para fora
             if (dist3D < effectiveRadius) {
+                // Empurra a nave para fora favorecendo movimento para o lado ou para cima,
+                // em vez de colocá-la exatamente na superfície radial.
                 const escapeDir = new THREE.Vector3(dx, dy, dz).normalize();
-                playerMesh.position.copy(planet.position.clone().addScaledVector(escapeDir, effectiveRadius + 50));
+                // Se a nave estiver muito alinhada verticalmente, priorizar empurrar para cima/baixo
+                const verticalBias = Math.abs(dy) < effectiveRadius * 0.6 ? (playerMesh.position.y < planet.position.y ? 1.6 : -1.6) : 1.0;
+                const biasedDir = new THREE.Vector3(escapeDir.x * 0.7, escapeDir.y * verticalBias, escapeDir.z * 0.9).normalize();
+                playerMesh.position.copy(planet.position.clone().addScaledVector(biasedDir, effectiveRadius + 120));
                 return;
             }
             
             // Caso contrário, push suave
-            const pushForce = Math.max(1, (detectionRadius - dist3D) / (detectionRadius - effectiveRadius) * 8);
+            let pushForce = Math.max(0.5, (detectionRadius - dist3D) / (detectionRadius - effectiveRadius) * 6);
+
+            // Se a nave estiver muito centrada verticalmente, incentive passar por cima
+            const centeredVertically = Math.abs(dy) < effectiveRadius * 0.5;
+            const signY = (playerMesh.position.y < planet.position.y) ? 1 : -1;
             const pushX = (dx / dist3D) * pushForce * 0.6;
-            const pushY = (dy / dist3D) * pushForce * 1.2;
-            const pushZ = (dz / dist3D) * pushForce * 0.8;
+            const pushY = (dy / dist3D) * pushForce * (centeredVertically ? (1.8 * signY) : 1.0);
+            const pushZ = (dz / dist3D) * pushForce * 0.7;
 
             playerMesh.position.x += pushX;
             playerMesh.position.y += pushY;

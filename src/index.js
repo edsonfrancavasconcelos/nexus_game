@@ -32,6 +32,21 @@ let isBossFight = false;
 
 const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const isCoarsePointer = matchMedia('(pointer: coarse)').matches;
+const getViewportState = () => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const portrait = height > width;
+    const isMobile = isMobileDevice || isCoarsePointer || width < 900;
+
+    return {
+        width,
+        height,
+        portrait,
+        isMobile,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, isMobile ? 1.2 : 1.5)
+    };
+};
 
 // ====================== THREE.JS ======================
 const scene = new THREE.Scene();
@@ -45,8 +60,17 @@ const renderer = new THREE.WebGLRenderer({
     antialias: false,
     powerPreference: "high-performance"
 });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(isMobileDevice ? 1 : Math.min(window.devicePixelRatio, 1.5));
+
+const applyViewportSettings = () => {
+    const viewport = getViewportState();
+    document.body.dataset.orientation = viewport.portrait ? 'portrait' : 'landscape';
+    camera.aspect = viewport.width / viewport.height;
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(viewport.pixelRatio);
+    renderer.setSize(viewport.width, viewport.height, false);
+};
+
+applyViewportSettings();
 document.body.appendChild(renderer.domElement);
 
 // ====================== INSTÂNCIAS ======================
@@ -574,8 +598,5 @@ window.addEventListener('DOMContentLoaded', () => {
     initGame().then(() => animate());
 });
 
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window.addEventListener('resize', applyViewportSettings);
+window.addEventListener('orientationchange', applyViewportSettings);

@@ -3974,6 +3974,7 @@ class SpaceEnvironment {
         emissive: 1118481
       });
       const placeholder = new Mesh(placeholderGeo, placeholderMat);
+      placeholder.userData = { done: false, laneIndex: index };
       const xPos = lanes[index] + (Math.random() - 0.5) * 700;
       const yPos = -800 + Math.random() * 1700;
       placeholder.position.set(xPos, yPos, -6e3 - Math.random() * 2e3);
@@ -3983,10 +3984,24 @@ class SpaceEnvironment {
       this.loader.load(
         path,
         (gltf) => {
+          var _a, _b;
           const p = gltf.scene;
           console.log(`✅ Planeta carregado: ${path} (índice ${index})`);
           p.position.copy(placeholder.position);
           p.visible = placeholder.visible;
+          p.userData = p.userData || {};
+          p.userData.done = ((_a = placeholder.userData) == null ? void 0 : _a.done) || false;
+          p.userData.laneIndex = ((_b = placeholder.userData) == null ? void 0 : _b.laneIndex) || index;
+          try {
+            const box = new Box3().setFromObject(p);
+            const sphere = new Sphere();
+            box.getBoundingSphere(sphere);
+            p.userData = p.userData || {};
+            p.userData.baseRadius = sphere.radius || 50;
+          } catch (e) {
+            p.userData = p.userData || {};
+            p.userData.baseRadius = 50;
+          }
           this.scene.add(p);
           this.scene.remove(placeholder);
           const idx = this.planets.indexOf(placeholder);
@@ -4079,13 +4094,23 @@ class SpaceEnvironment {
   }
   update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager2 = null) {
     this.planets.forEach((p, index) => {
+      var _a, _b, _c;
       const shouldBeVisible = currentLevel === 5;
       if (shouldBeVisible) {
+        if ((_a = p.userData) == null ? void 0 : _a.done) return;
         p.position.z += 80 * deltaTime;
-        if (p.position.z > 1800) {
+        const playerZ = playerMesh && playerMesh.position ? playerMesh.position.z : (playerPosition == null ? void 0 : playerPosition.z) || 0;
+        const relZ = p.position.z - playerZ;
+        if (relZ > 1800) {
           p.visible = false;
+          p.userData = p.userData || {};
+          p.userData.done = true;
+          try {
+            this.scene.remove(p);
+          } catch (e) {
+          }
         } else {
-          const distZ = Math.abs(p.position.z);
+          const distZ = Math.abs(relZ);
           let opacity = 1;
           if (distZ > 8e3) {
             opacity = 0;
@@ -4118,6 +4143,31 @@ class SpaceEnvironment {
             scale = 150 + (200 - 150) * progress;
           }
           p.scale.set(scale, scale, scale);
+          if (playerMesh) {
+            const pdx = playerMesh.position.x - p.position.x;
+            const pdy = playerMesh.position.y - p.position.y;
+            const pdz = playerMesh.position.z - p.position.z;
+            const pDist3 = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz) || 1;
+            const approxRadius = (((_b = p.userData) == null ? void 0 : _b.baseRadius) || 50) * p.scale.x + 150;
+            if (pDist3 < approxRadius * 0.95 && !((_c = p.userData) == null ? void 0 : _c.repositioned)) {
+              p.userData = p.userData || {};
+              p.userData.repositioned = true;
+              const lanes = [-4800, -1600, 1600, 4800];
+              let farthest = lanes[0];
+              let maxDist = -Infinity;
+              for (let ln of lanes) {
+                const d = Math.abs(ln - playerMesh.position.x);
+                if (d > maxDist) {
+                  maxDist = d;
+                  farthest = ln;
+                }
+              }
+              const backZ = (playerMesh.position.z || 0) - (8e3 + Math.random() * 2e3);
+              p.position.x = farthest + (Math.random() - 0.5) * 200;
+              p.position.z = backZ;
+              p.visible = false;
+            }
+          }
           if (playerMesh && distZ < 3500) {
             this._avoidPlanetCollision(playerMesh, p, soundManager2);
           }
@@ -4169,8 +4219,9 @@ class SpaceEnvironment {
     const dy = playerMesh.position.y - planet.position.y;
     const dz = playerMesh.position.z - planet.position.z;
     const dist3D = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-    const effectiveRadius = planet.scale.x * 0.5 + 150;
-    const detectionRadius = effectiveRadius * 1.3;
+    const baseRadius = planet.userData && planet.userData.baseRadius ? planet.userData.baseRadius : 50;
+    const effectiveRadius = baseRadius * planet.scale.x + 150;
+    const detectionRadius = effectiveRadius * 1.6;
     if (dist3D < detectionRadius) {
       if (soundManager2 && !((_a = playerMesh.userData) == null ? void 0 : _a.planetSoundPlayed)) {
         soundManager2.play("meteoro");
@@ -4178,13 +4229,17 @@ class SpaceEnvironment {
       }
       if (dist3D < effectiveRadius) {
         const escapeDir = new Vector3(dx, dy, dz).normalize();
-        playerMesh.position.copy(planet.position.clone().addScaledVector(escapeDir, effectiveRadius + 50));
+        const verticalBias = Math.abs(dy) < effectiveRadius * 0.6 ? playerMesh.position.y < planet.position.y ? 1.6 : -1.6 : 1;
+        const biasedDir = new Vector3(escapeDir.x * 0.7, escapeDir.y * verticalBias, escapeDir.z * 0.9).normalize();
+        playerMesh.position.copy(planet.position.clone().addScaledVector(biasedDir, effectiveRadius + 120));
         return;
       }
-      const pushForce = Math.max(1, (detectionRadius - dist3D) / (detectionRadius - effectiveRadius) * 8);
+      let pushForce = Math.max(0.5, (detectionRadius - dist3D) / (detectionRadius - effectiveRadius) * 6);
+      const centeredVertically = Math.abs(dy) < effectiveRadius * 0.5;
+      const signY = playerMesh.position.y < planet.position.y ? 1 : -1;
       const pushX = dx / dist3D * pushForce * 0.6;
-      const pushY = dy / dist3D * pushForce * 1.2;
-      const pushZ = dz / dist3D * pushForce * 0.8;
+      const pushY = dy / dist3D * pushForce * (centeredVertically ? 1.8 * signY : 1);
+      const pushZ = dz / dist3D * pushForce * 0.7;
       playerMesh.position.x += pushX;
       playerMesh.position.y += pushY;
       playerMesh.position.z += pushZ;
@@ -4569,6 +4624,20 @@ let boss = null;
 let isBossFight = false;
 const GAME_STATE = { PLAYING: "playing", PAUSED: "paused" };
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const isCoarsePointer = matchMedia("(pointer: coarse)").matches;
+const getViewportState = () => {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const portrait = height > width;
+  const isMobile = isMobileDevice || isCoarsePointer || width < 900;
+  return {
+    width,
+    height,
+    portrait,
+    isMobile,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, isMobile ? 1.2 : 1.5)
+  };
+};
 const scene = new Scene();
 scene.background = new Color(65795);
 const camera = new PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 5e4);
@@ -4578,8 +4647,15 @@ const renderer = new WebGLRenderer({
   antialias: false,
   powerPreference: "high-performance"
 });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(isMobileDevice ? 1 : Math.min(window.devicePixelRatio, 1.5));
+const applyViewportSettings = () => {
+  const viewport = getViewportState();
+  document.body.dataset.orientation = viewport.portrait ? "portrait" : "landscape";
+  camera.aspect = viewport.width / viewport.height;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(viewport.pixelRatio);
+  renderer.setSize(viewport.width, viewport.height, false);
+};
+applyViewportSettings();
 document.body.appendChild(renderer.domElement);
 const soundManager = new SoundManager();
 window.soundManager = soundManager;
@@ -4991,8 +5067,5 @@ window.addEventListener("DOMContentLoaded", () => {
   syncLevelResources();
   initGame().then(() => animate());
 });
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window.addEventListener("resize", applyViewportSettings);
+window.addEventListener("orientationchange", applyViewportSettings);
