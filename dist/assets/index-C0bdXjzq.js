@@ -2881,6 +2881,7 @@ class Player {
     this.isPaused = false;
     this.collisionCooldown = 0;
     this.firingLightPulse = 0;
+    this.fuselageLight = null;
     this.isRolling = false;
     this.rollTimer = 0;
     this.rollDuration = 4;
