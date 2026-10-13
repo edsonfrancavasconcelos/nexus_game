@@ -53,7 +53,7 @@ export class SoundManager {
         this.sounds['nave_pass_6'] = this.sounds.nave_pass_6;
 
         Object.values(this.sounds).forEach(sound => {
-            if (sound) sound.preload = 'auto';
+            if (sound) sound.preload = 'none';
         });
 
         this.lastLaserTime = 0;
@@ -73,13 +73,6 @@ export class SoundManager {
             nave_pass_5: 1,
             nave_pass_6: 1
         };
-    }
-
-    init() {
-        console.log('🔊 Inicializando todos os sons do jogo...');
-        Object.values(this.sounds).forEach(sound => {
-            if (sound) sound.load();
-        });
     }
 
     startShipEngine() {

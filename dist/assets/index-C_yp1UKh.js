@@ -136,7 +136,7 @@ class SoundManager {
     this.sounds["nave_pass_5"] = this.sounds.nave_pass_5;
     this.sounds["nave_pass_6"] = this.sounds.nave_pass_6;
     Object.values(this.sounds).forEach((sound) => {
-      if (sound) sound.preload = "auto";
+      if (sound) sound.preload = "none";
     });
     this.lastLaserTime = 0;
     this.lastPdcTime = 0;
@@ -155,12 +155,6 @@ class SoundManager {
       nave_pass_5: 1,
       nave_pass_6: 1
     };
-  }
-  init() {
-    console.log("🔊 Inicializando todos os sons do jogo...");
-    Object.values(this.sounds).forEach((sound) => {
-      if (sound) sound.load();
-    });
   }
   startShipEngine() {
     const engine = this.sounds["nave"];
@@ -2882,6 +2876,7 @@ class Player {
     this.collisionCooldown = 0;
     this.firingLightPulse = 0;
     this.fuselageLight = null;
+    this.fuselageLights = [];
     this.isRolling = false;
     this.rollTimer = 0;
     this.rollDuration = 4;
@@ -2961,7 +2956,6 @@ class Player {
       this.isRolling = true;
       this.rollTimer = 0;
       this.rollDirection = dir || 1;
-      console.log("Direção do Roll definida como:", this.rollDirection);
     }
   }
   getAmmoStatus() {
@@ -3028,14 +3022,8 @@ class Player {
     return this.pdcActive;
   }
   fireMissile() {
-    if (this.missileCount <= 0) {
-      console.log("🚫 Sem mísseis");
-      return false;
-    }
-    if (!this.laserManager || typeof this.laserManager.createMissile !== "function") {
-      console.log("🚫 LaserManager sem createMissile");
-      return false;
-    }
+    if (this.missileCount <= 0) return false;
+    if (!this.laserManager || typeof this.laserManager.createMissile !== "function") return false;
     this.firingLightPulse = Math.max(this.firingLightPulse, 1.2);
     this.mesh.updateMatrixWorld(true);
     if (this.shipModel) this.shipModel.updateMatrixWorld(true);
@@ -3060,7 +3048,6 @@ class Player {
       } catch (e) {
       }
     }
-    console.log("🚀 Míssil disparado | restantes:", this.missileCount);
     return true;
   }
   _updatePDCProjectiles(enemyManager2, dt, onEnemyDestroyed = null) {
@@ -3083,11 +3070,7 @@ class Player {
           if (b.mesh.position.distanceTo(e.position) < hitRadius) {
             const enemyKilled = enemyManager2.damageEnemy ? enemyManager2.damageEnemy(e, 15, b.mesh.position) : true;
             if (window.explosionManager) {
-              if (enemyKilled) {
-                window.explosionManager.create(b.mesh.position.clone());
-              } else {
-                window.explosionManager.create(b.mesh.position.clone(), 0.45);
-              }
+              window.explosionManager.create(b.mesh.position.clone(), enemyKilled ? void 0 : 0.45);
             }
             if (enemyKilled) {
               this.scene.remove(e);
@@ -3133,8 +3116,8 @@ class Player {
       this.shipModel.scale.set(2, 2, 2);
       this.shipModel.traverse((child) => {
         if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
+          child.castShadow = false;
+          child.receiveShadow = false;
           if (child.material) child.material.precision = "mediump";
         }
       });
@@ -3149,16 +3132,25 @@ class Player {
     if (!this.shipModel) return;
     this.wingVacuum = [];
   }
-  _createNavigationLights() {
-    const bottomLight = new PointLight(11206655, 180, 100);
-    bottomLight.position.set(0, 0, 0);
-    this.shipModel.add(bottomLight);
-    this.fuselageLight = bottomLight;
-  }
   _createGunPositions() {
     this.gunLeft = new Vector3(-8.2, 1.6, -7.5);
     this.gunRight = new Vector3(8.2, 1.6, -7.5);
     this.gunNose = new Vector3(0, 2.2, -11);
+  }
+  _createNavigationLights() {
+    const makeLight = (x, y, z) => {
+      const light = new PointLight(6744319, 10, 22, 2);
+      light.castShadow = false;
+      light.position.set(x, y, z);
+      this.shipModel.add(light);
+      return light;
+    };
+    this.fuselageLights = [
+      makeLight(-8.2, 1.8, -8.7),
+      makeLight(8.2, 1.8, -8.7),
+      makeLight(0, 2.3, -11.8)
+    ];
+    this.fuselageLight = this.fuselageLights[2];
   }
   _createPlasmaThrusters() {
     const flameMaterial = new MeshBasicMaterial({
@@ -3202,7 +3194,8 @@ class Player {
     ring.rotation.x = Math.PI / 2;
     ring.position.z = -1.5;
     plumeGroup.add(ring);
-    const light = new PointLight(6023423, 65, 38, 2);
+    const light = new PointLight(6023423, 28, 22, 2);
+    light.castShadow = false;
     light.position.set(0, 0, -1.5);
     plumeGroup.add(light);
     this.shipModel.add(plumeGroup);
@@ -3259,8 +3252,8 @@ class Player {
       thruster.flare.scale.set(0.9, 1 + pulseStrength * 0.2, 1);
       thruster.core.scale.set(0.9, 1 + pulseStrength * 0.2, 1);
       thruster.ring.scale.set(0.95 + pulseStrength * 0.16, 0.95 + pulseStrength * 0.16, 1);
-      thruster.light.intensity = 42 + pulseStrength * 26;
-      thruster.light.distance = 26 + pulseStrength * 10;
+      thruster.light.intensity = 16 + pulseStrength * 12;
+      thruster.light.distance = 18 + pulseStrength * 6;
       thruster.group.rotation.z = (index === 0 ? -0.08 : 0.08) + Math.sin(Date.now() * 4e-3 + index) * 0.05;
     });
     if (this.particles.length > 18) return;
@@ -3289,7 +3282,7 @@ class Player {
     this.mesh.position.y += this.velocity.y * dt * 1;
     if (this.isRolling) {
       this.rollTimer += dt;
-      let progress = Math.min(this.rollTimer / this.rollDuration, 1);
+      const progress = Math.min(this.rollTimer / this.rollDuration, 1);
       const smoothProgress = progress * progress * (3 - 2 * progress);
       const angle = smoothProgress * (Math.PI * 2) * this.rollDirection;
       this.shipModel.rotation.set(0, Math.PI, angle);
@@ -3315,12 +3308,16 @@ class Player {
     if (this.isFiring) this._shoot();
     this._updatePDC(enemyManager2, dt, onEnemyDestroyed);
     this._emitHeatWash();
-    if (this.fuselageLight) {
-      this.firingLightPulse -= dt * 3.5;
-      this.firingLightPulse = Math.max(0, this.firingLightPulse);
-      const pulseIntensity = 180 + this.firingLightPulse * 280;
-      this.fuselageLight.intensity = pulseIntensity;
-      this.fuselageLight.distance = 100 + this.firingLightPulse * 60;
+    const FLASH_INTENSITY = 150;
+    const FLASH_DISTANCE = 80;
+    const IDLE_INTENSITY = 10;
+    this.firingLightPulse = Math.max(0, this.firingLightPulse - dt * 5.5);
+    const pulse = this.firingLightPulse;
+    if (this.fuselageLights && this.fuselageLights.length) {
+      for (let i = 0; i < this.fuselageLights.length; i++) {
+        this.fuselageLights[i].intensity = IDLE_INTENSITY + pulse * FLASH_INTENSITY;
+        this.fuselageLights[i].distance = 14 + pulse * FLASH_DISTANCE;
+      }
     }
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -4719,8 +4716,8 @@ let isGameStarted = false;
 let boss = null;
 let isBossFight = false;
 const GAME_STATE = { PLAYING: "playing", PAUSED: "paused" };
-const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 const isCoarsePointer = matchMedia("(pointer: coarse)").matches;
+const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || isCoarsePointer || window.innerWidth < 900;
 const getViewportState = () => {
   const width = window.innerWidth;
   const height = window.innerHeight;
@@ -4840,66 +4837,6 @@ window.showLevelUp = function(level, message) {
   document.body.appendChild(card);
   setTimeout(() => card.remove(), 5e3);
 };
-let joystickActive = false;
-let joystickBase = null;
-let joystickThumb = null;
-function createVirtualJoystick() {
-  const container = document.createElement("div");
-  container.id = "virtual-joystick";
-  container.style.cssText = `
-        position: fixed; bottom: 40px; left: 40px; width: 140px; height: 140px;
-        border: 5px solid rgba(0,255,255,0.5); border-radius: 50%;
-        background: rgba(0,40,80,0.3); z-index: 10000; touch-action: none; display: none;
-    `;
-  const thumb = document.createElement("div");
-  thumb.style.cssText = `
-        position: absolute; width: 55px; height: 55px; background: #00ffff;
-        border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        box-shadow: 0 0 25px #00ffff;
-    `;
-  container.appendChild(thumb);
-  document.body.appendChild(container);
-  joystickBase = container;
-  joystickThumb = thumb;
-  if ("ontouchstart" in window) joystickBase.style.display = "block";
-  setupJoystickEvents();
-}
-function setupJoystickEvents() {
-  if (!joystickBase) return;
-  joystickBase.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    joystickActive = true;
-    handleJoystick(e.touches[0]);
-  });
-  document.addEventListener("touchmove", (e) => {
-    if (joystickActive) {
-      e.preventDefault();
-      handleJoystick(e.touches[0]);
-    }
-  }, { passive: false });
-  document.addEventListener("touchend", () => {
-    if (!joystickActive) return;
-    joystickActive = false;
-    joystickThumb.style.transform = "translate(-50%, -50%)";
-    window.moveInput.x = 0;
-    window.moveInput.y = 0;
-  });
-}
-function handleJoystick(touch) {
-  if (!touch || !joystickBase) return;
-  const rect = joystickBase.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  let dx = touch.clientX - cx;
-  let dy = touch.clientY - cy;
-  const dist = Math.min(55, Math.hypot(dx, dy));
-  const angle = Math.atan2(dy, dx);
-  dx = Math.cos(angle) * dist;
-  dy = Math.sin(angle) * dist;
-  joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
-  window.moveInput.x = dx / 55;
-  window.moveInput.y = dy / 55;
-}
 const handleEnemyScore = (pts, hitPosition) => {
   score += pts;
   updateHUD();
@@ -4932,11 +4869,8 @@ function updateCamera() {
 function animate() {
   var _a;
   requestAnimationFrame(animate);
+  if (currentState !== GAME_STATE.PLAYING) return;
   const deltaTime = Math.min(clock.getDelta(), 0.1);
-  if (currentState !== GAME_STATE.PLAYING) {
-    renderer.render(scene, camera);
-    return;
-  }
   if (!isGameStarted) {
     countdown -= deltaTime;
     const display = document.getElementById("countdown-display");
@@ -5061,7 +4995,6 @@ function setupNexusSelector() {
 }
 async function initGame() {
   await enemyManager.init();
-  createVirtualJoystick();
   setupNexusSelector();
 }
 function startGame() {
@@ -5109,7 +5042,6 @@ window.addEventListener("DOMContentLoaded", () => {
   const handleStart = async (e) => {
     if (e) e.preventDefault();
     if (!audioInitialized) {
-      await soundManager.init();
       audioInitialized = true;
     }
     soundManager.startShipEngine();

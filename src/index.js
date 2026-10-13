@@ -31,8 +31,10 @@ let boss = null;
 let isBossFight = false;
 
 const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
-const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 const isCoarsePointer = matchMedia('(pointer: coarse)').matches;
+const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+    || isCoarsePointer
+    || window.innerWidth < 900;
 const getViewportState = () => {
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -180,82 +182,6 @@ window.showLevelUp = function (level, message) {
     setTimeout(() => card.remove(), 5000);
 };
 
-// ====================== JOYSTICK ======================
-let joystickActive = false;
-let joystickBase = null;
-let joystickThumb = null;
-
-function createVirtualJoystick() {
-    const container = document.createElement('div');
-    container.id = 'virtual-joystick';
-    container.style.cssText = `
-        position: fixed; bottom: 40px; left: 40px; width: 140px; height: 140px;
-        border: 5px solid rgba(0,255,255,0.5); border-radius: 50%;
-        background: rgba(0,40,80,0.3); z-index: 10000; touch-action: none; display: none;
-    `;
-
-    const thumb = document.createElement('div');
-    thumb.style.cssText = `
-        position: absolute; width: 55px; height: 55px; background: #00ffff;
-        border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        box-shadow: 0 0 25px #00ffff;
-    `;
-
-    container.appendChild(thumb);
-    document.body.appendChild(container);
-
-    joystickBase = container;
-    joystickThumb = thumb;
-
-    if ('ontouchstart' in window) joystickBase.style.display = 'block';
-    setupJoystickEvents();
-}
-
-function setupJoystickEvents() {
-    if (!joystickBase) return;
-
-    joystickBase.addEventListener('touchstart', e => {
-        e.preventDefault();
-        joystickActive = true;
-        handleJoystick(e.touches[0]);
-    });
-
-    document.addEventListener('touchmove', e => {
-        if (joystickActive) {
-            e.preventDefault();
-            handleJoystick(e.touches[0]);
-        }
-    }, { passive: false });
-
-    document.addEventListener('touchend', () => {
-        if (!joystickActive) return;
-        joystickActive = false;
-        joystickThumb.style.transform = 'translate(-50%, -50%)';
-        window.moveInput.x = 0;
-        window.moveInput.y = 0;
-    });
-}
-
-function handleJoystick(touch) {
-    if (!touch || !joystickBase) return;
-
-    const rect = joystickBase.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-
-    let dx = touch.clientX - cx;
-    let dy = touch.clientY - cy;
-    const dist = Math.min(55, Math.hypot(dx, dy));
-    const angle = Math.atan2(dy, dx);
-
-    dx = Math.cos(angle) * dist;
-    dy = Math.sin(angle) * dist;
-
-    joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
-    window.moveInput.x = dx / 55;
-    window.moveInput.y = dy / 55;
-}
-
 // ====================== SCORE / HIT ======================
 const handleEnemyScore = (pts, hitPosition) => {
     score += pts;
@@ -299,12 +225,8 @@ function updateCamera() {
 // ====================== ANIMATE ======================
 function animate() {
     requestAnimationFrame(animate);
+    if (currentState !== GAME_STATE.PLAYING) return;
     const deltaTime = Math.min(clock.getDelta(), 0.1);
-
-    if (currentState !== GAME_STATE.PLAYING) {
-        renderer.render(scene, camera);
-        return;
-    }
 
     // Countdown inicial
     if (!isGameStarted) {
@@ -471,7 +393,6 @@ function setupNexusSelector() {
 
 async function initGame() {
     await enemyManager.init();
-    createVirtualJoystick();
     setupNexusSelector();
 }
 
@@ -533,7 +454,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const handleStart = async (e) => {
         if (e) e.preventDefault();
         if (!audioInitialized) {
-            await soundManager.init();
             audioInitialized = true;
         }
         soundManager.startShipEngine();
