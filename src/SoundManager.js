@@ -59,6 +59,7 @@ export class SoundManager {
         this.lastLaserTime = 0;
         this.lastPdcTime = 0;
         this.activeCloneCount = {};
+        this.pool = {};
         this.maxCloneCount = {
             explosion: 3,
             enemyLaser: 4,
@@ -141,8 +142,10 @@ export class SoundManager {
         if (activeClones >= maxClones) return;
 
         this.activeCloneCount[soundKey] = activeClones + 1;
-        const soundClone = baseSound.cloneNode(true);
+        const pool = this.pool[soundKey] || (this.pool[soundKey] = []);
+        const soundClone = pool.pop() || baseSound.cloneNode(true);
         soundClone.loop = false;
+        soundClone.currentTime = 0;
 
         // Volumes específicos
         if (soundKey.includes('laser')) {
@@ -155,24 +158,17 @@ export class SoundManager {
             soundClone.volume = 0.35;
         }
 
-        const cleanupClone = () => {
-            if (this.activeCloneCount[soundKey] > 0) {
-                this.activeCloneCount[soundKey] -= 1;
-            }
-            soundClone.remove();
-        };
-
         let cleanupCalled = false;
         const safeCleanup = () => {
             if (cleanupCalled) return;
             cleanupCalled = true;
-            cleanupClone();
+            soundClone.onended = null;
+            if (this.activeCloneCount[soundKey] > 0) this.activeCloneCount[soundKey] -= 1;
+            // Reaproveita o elemento <audio> em vez de recriar (evita GC e novo parse/decodificação)
+            if (pool.length < 6) pool.push(soundClone);
         };
 
         soundClone.onended = safeCleanup;
-        soundClone.play().catch(() => safeCleanup());
-
-        // Fallback para liberar caso o onended não seja disparado
-        setTimeout(safeCleanup, 3500);
+        soundClone.play().catch(safeCleanup);
     }
 }

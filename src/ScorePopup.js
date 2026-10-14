@@ -5,28 +5,31 @@ export class ScorePopup {
         this.scene = scene;
         this.camera = camera;
         this.popups = [];
+        this.pool = [];
+        this._v = new THREE.Vector3();
     }
 
     show(points, position) {
-        const scoreElement = document.createElement('div');
         const isMobile = window.innerWidth < 900;
-
-        scoreElement.className = 'score-popup';
+        let scoreElement = this.pool.pop();
+        if (!scoreElement) {
+            scoreElement = document.createElement('div');
+            scoreElement.className = 'score-popup';
+            Object.assign(scoreElement.style, {
+                position: 'absolute',
+                left: '0',
+                top: '0',
+                color: '#ffff00',
+                fontWeight: 'bold',
+                textShadow: '0 0 8px #ff0000',
+                pointerEvents: 'none',
+                zIndex: '100',
+                whiteSpace: 'nowrap',
+                willChange: 'transform, opacity'
+            });
+        }
         scoreElement.textContent = `+${points}`;
-        
-        // Estilização básica via JS (pode mover para o CSS se preferir)
-        Object.assign(scoreElement.style, {
-            position: 'absolute',
-            color: '#ffff00',
-            fontSize: isMobile ? '18px' : '24px',
-            fontWeight: 'bold',
-            textShadow: '0 0 8px #ff0000',
-            pointerEvents: 'none',
-            zIndex: '100',
-            whiteSpace: 'nowrap',
-            transition: 'opacity 0.1s linear' // Deixa o sumiço suave
-        });
-
+        scoreElement.style.fontSize = isMobile ? '18px' : '24px';
         document.body.appendChild(scoreElement);
 
         this.popups.push({
@@ -51,20 +54,19 @@ export class ScorePopup {
             // Remove se o tempo acabar
             if (p.life <= 0) {
                 if (p.element.parentNode) p.element.remove();
+                this.pool.push(p.element);
                 this.popups.splice(i, 1);
                 continue;
             }
 
             // Atualiza posição na tela (Projeção 3D -> 2D)
-            const vector = p.position.clone().project(this.camera);
+            const vector = this._v.copy(p.position).project(this.camera);
             const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
             const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
 
-            // Aplica posição ao DOM
-            p.element.style.left = `${x}px`;
-            p.element.style.top = `${y}px`;
+            // transform/opacity são compostos na GPU (sem relayout)
             p.element.style.opacity = Math.max(0, p.life / 1.8);
-            p.element.style.transform = `scale(${1 + (1.8 - p.life) * 0.15})`;
+            p.element.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${1 + (1.8 - p.life) * 0.15})`;
         }
     }
 }

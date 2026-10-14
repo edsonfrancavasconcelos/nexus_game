@@ -10,6 +10,8 @@ import { SpaceEnvironment } from './SpaceEnvironment.js';
 import { ProgressionManager } from './ProgressionManager.js';
 import { getLevelData } from './getLevelData.js';
 import { NaveMae } from './NaveMae.js';
+import { PerfMonitor } from './PerfMonitor.js';
+import { detectQualityProfile } from './QualityProfile.js';
 
 window.moveInput = { x: 0, y: 0 };
 
@@ -35,6 +37,7 @@ const isCoarsePointer = matchMedia('(pointer: coarse)').matches;
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
     || isCoarsePointer
     || window.innerWidth < 900;
+const quality = detectQualityProfile(isMobileDevice);
 const getViewportState = () => {
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -46,7 +49,7 @@ const getViewportState = () => {
         height,
         portrait,
         isMobile,
-        pixelRatio: Math.min(window.devicePixelRatio || 1, isMobile ? 1.2 : 1.5)
+        pixelRatio: Math.min(window.devicePixelRatio || 1, quality.maxPixelRatio)
     };
 };
 
@@ -54,26 +57,35 @@ const getViewportState = () => {
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x010103);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 50000);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, quality.far);
 camera.position.set(0, 5, 55);
 
 const clock = new THREE.Clock();
 const renderer = new THREE.WebGLRenderer({
     antialias: false,
-    powerPreference: "high-performance"
+    powerPreference: isMobileDevice ? "default" : "high-performance"
 });
 
+let resizeTimer = null;
+let dynamicPixelRatio = null;
 const applyViewportSettings = () => {
     const viewport = getViewportState();
     document.body.dataset.orientation = viewport.portrait ? 'portrait' : 'landscape';
     camera.aspect = viewport.width / viewport.height;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(viewport.pixelRatio);
+    renderer.setPixelRatio(dynamicPixelRatio ? Math.min(dynamicPixelRatio, viewport.pixelRatio) : viewport.pixelRatio);
     renderer.setSize(viewport.width, viewport.height, false);
 };
 
 applyViewportSettings();
 document.body.appendChild(renderer.domElement);
+
+const perfMonitor = new PerfMonitor(renderer, scene, {
+    isMobile: isMobileDevice,
+    minPixelRatio: quality.minPixelRatio,
+    maxPixelRatio: getViewportState().pixelRatio,
+    onScaleChange: (ratio) => { dynamicPixelRatio = ratio; applyViewportSettings(); }
+});
 
 // ====================== INSTÂNCIAS ======================
 const soundManager = new SoundManager();
@@ -82,12 +94,14 @@ window.soundManager = soundManager;
 const laserManager = new LaserManager(scene, soundManager);
 const explosionManager = new ExplosionManager(scene, soundManager, isMobileDevice);
 window.explosionManager = explosionManager;
+explosionManager.maxActiveExplosions = quality.maxExplosions;
 
 const inputManager = new InputManager();
 const scorePopup = new ScorePopup(scene, camera);
 const player = new Player(scene, laserManager, explosionManager);
 const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice);
-const spaceEnvironment = new SpaceEnvironment(scene, isMobileDevice ? 700 : 1500, isMobileDevice ? 90 : 220);
+enemyManager.maxEnemiesOnScreen = quality.maxEnemies;
+const spaceEnvironment = new SpaceEnvironment(scene, quality.stars, quality.clouds);
 const progressionManager = new ProgressionManager();
 const naveMae = new NaveMae(scene);
 
@@ -97,47 +111,56 @@ function syncLevelResources() {
     updateResourceHUD();
 }
 
+const _domCache = new Map();
+const $id = (id) => {
+    let el = _domCache.get(id);
+    if (!el) { el = document.getElementById(id); if (el) _domCache.set(id, el); }
+    return el;
+};
+const _hudLast = {};
+const setText = (el, key, value) => {
+    if (!el || _hudLast[key] === value) return;
+    _hudLast[key] = value;
+    el.textContent = value;
+};
+const setStyle = (el, key, prop, value) => {
+    if (!el || _hudLast[key] === value) return;
+    _hudLast[key] = value;
+    el.style[prop] = value;
+};
+
 function updateHUD() {
-    const scoreVal = document.getElementById('score-val');
-    if (scoreVal) scoreVal.textContent = score.toString().padStart(7, '0');
+    setText($id('score-val'), 'score', score.toString().padStart(7, '0'));
     updateLevelProgressHUD();
 }
 
 function updateLevelHUD() {
-    const levelVal = document.getElementById('level-val');
-    if (levelVal) levelVal.textContent = progressionManager.getLevel();
+    setText($id('level-val'), 'level', progressionManager.getLevel());
 }
 
 function updateLevelProgressHUD() {
     const progress = progressionManager.getProgressPercent();
-    const bar = document.getElementById('level-progress-bar');
-    const label = document.getElementById('level-progress-label');
-
-    if (bar) bar.style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
-    if (label) label.textContent = `${Math.round(progress * 100)}%`;
+    setStyle($id('level-progress-bar'), 'lpb', 'width', `${Math.max(0, Math.min(100, progress * 100))}%`);
+    setText($id('level-progress-label'), 'lpl', `${Math.round(progress * 100)}%`);
 }
 
 function updateResourceHUD() {
-    const missileVal = document.getElementById('missile-val');
-    const pdcVal = document.getElementById('pdc-val');
-    const chanceVal = document.getElementById('chance-val');
-
     const ammo = player.getAmmoStatus();
-    if (missileVal) missileVal.textContent = ammo.missiles;
-    if (pdcVal) pdcVal.textContent = ammo.pdcBursts;
-    if (chanceVal) chanceVal.textContent = progressionManager.getChancesLeft();
+    setText($id('missile-val'), 'missile', ammo.missiles);
+    setText($id('pdc-val'), 'pdc', ammo.pdcBursts);
+    setText($id('chance-val'), 'chance', progressionManager.getChancesLeft());
 
-    const chargeBar = document.getElementById('missile-load-bar');
+    const chargeBar = $id('missile-load-bar');
     if (chargeBar) {
         const progress = Math.max(0, Math.min(1, ammo.missileReloadProgress));
-        chargeBar.style.width = `${progress * 100}%`;
-        chargeBar.style.opacity = ammo.missiles >= ammo.missileMax ? '0.4' : '1';
+        setStyle(chargeBar, 'mlb', 'width', `${Math.round(progress * 100)}%`);
+        setStyle(chargeBar, 'mlbo', 'opacity', ammo.missiles >= ammo.missileMax ? '0.4' : '1');
     }
 
-    const pdcBar = document.getElementById('pdc-load-bar');
+    const pdcBar = $id('pdc-load-bar');
     if (pdcBar) {
         const pdcProgress = player.maxPdcBursts === Infinity ? 1 : Math.max(0, Math.min(1, (player.pdcBurstCount || 0) / Math.max(player.maxPdcBursts || 1, 1)));
-        pdcBar.style.width = `${pdcProgress * 100}%`;
+        setStyle(pdcBar, 'plb', 'width', `${pdcProgress * 100}%`);
     }
 }
 
@@ -203,29 +226,36 @@ const handlePlayerHit = () => {
     updateResourceHUD();
 };
 
+const _camOffset = new THREE.Vector3();
+const _camTarget = new THREE.Vector3();
+const _camLook = new THREE.Vector3();
+const _camLookDelta = new THREE.Vector3(0, 2, -5);
+
 function updateCamera() {
     if (!player.shipModel) return;
 
-    const baseOffset = new THREE.Vector3(0, 8, 75);
     const pitchInfluence = player.shipModel.rotation.x * 0.15;
     const rollInfluence = player.shipModel.rotation.z * 0.1;
 
-    const offset = baseOffset.clone();
-    offset.y += Math.sin(pitchInfluence) * 8;
-    offset.z -= Math.cos(pitchInfluence) * 8;
-    offset.x += Math.sin(rollInfluence) * 6;
+    _camOffset.set(0, 8, 75);
+    _camOffset.y += Math.sin(pitchInfluence) * 8;
+    _camOffset.z -= Math.cos(pitchInfluence) * 8;
+    _camOffset.x += Math.sin(rollInfluence) * 6;
 
-    const targetPos = player.shipModel.position.clone().add(offset);
-    camera.position.lerp(targetPos, 0.08);
+    _camTarget.copy(player.shipModel.position).add(_camOffset);
+    camera.position.lerp(_camTarget, 0.08);
 
-    const lookAtTarget = player.shipModel.position.clone().add(new THREE.Vector3(0, 2, -5));
-    camera.lookAt(lookAtTarget);
+    _camLook.copy(player.shipModel.position).add(_camLookDelta);
+    camera.lookAt(_camLook);
 }
 
 // ====================== ANIMATE ======================
+let wasPlaying = false;
+let lastCountdownShown = null;
 function animate() {
     requestAnimationFrame(animate);
-    if (currentState !== GAME_STATE.PLAYING) return;
+    if (currentState !== GAME_STATE.PLAYING) { wasPlaying = false; return; }
+    if (!wasPlaying) { clock.getDelta(); wasPlaying = true; }
     const deltaTime = Math.min(clock.getDelta(), 0.1);
 
     // Countdown inicial
@@ -234,7 +264,10 @@ function animate() {
         const display = document.getElementById('countdown-display');
         if (display) {
             const num = Math.ceil(countdown);
-            display.innerText = num > 0 ? num : '';
+            if (num !== lastCountdownShown) {
+                lastCountdownShown = num;
+                display.innerText = num > 0 ? num : '';
+            }
             if (num <= 0) {
                 isGameStarted = true;
                 display.style.display = 'none';
@@ -255,6 +288,7 @@ function animate() {
 
     const currentLevel = progressionManager.getLevel();
     window.currentLevel = currentLevel;
+    if (currentLevel >= 45) naveMae.preload?.();
 
     // Input
     const keyboardInput = inputManager.update();
@@ -363,6 +397,7 @@ if (
     }
 
     renderer.render(scene, camera);
+    perfMonitor.tick(deltaTime);
 }
 
 // ====================== SETUP ======================
@@ -518,5 +553,16 @@ window.addEventListener('DOMContentLoaded', () => {
     initGame().then(() => animate());
 });
 
-window.addEventListener('resize', applyViewportSettings);
-window.addEventListener('orientationchange', applyViewportSettings);
+const debouncedViewport = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(applyViewportSettings, 120);
+};
+window.addEventListener('resize', debouncedViewport);
+window.addEventListener('orientationchange', debouncedViewport);
+
+// Pausa automaticamente em segundo plano (economiza bateria/CPU) e descarta o delta acumulado ao voltar
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && currentState === GAME_STATE.PLAYING) {
+        currentState = GAME_STATE.PAUSED;
+    }
+});

@@ -25,6 +25,7 @@ export class SpaceEnvironment {
         this.scene = scene;
         this.loader = new GLTFLoader();
         this.planets = [];
+        this._pendingLoads = [];
         this.isMobile = isMobile;
         this.ambientLight = null;
         this.currentThemeIndex = 0;
@@ -80,12 +81,11 @@ export class SpaceEnvironment {
             this.scene.add(placeholder);
             this.planets.push(placeholder);
             
-            // Tentar carregar o modelo real
-            this.loader.load(
+            // Carrega o modelo real sob demanda (perto do nível 5)
+            this._pendingLoads.push(() => this.loader.load(
                 path, 
                 (gltf) => {
                     const p = gltf.scene;
-                    console.log(`✅ Planeta carregado: ${path} (índice ${index})`);
 
                     // Copiar posição do placeholder
                     p.position.copy(placeholder.position);
@@ -119,8 +119,14 @@ export class SpaceEnvironment {
                 (error) => {
                     console.error(`❌ Erro ao carregar ${path}:`, error);
                 }
-            );
+            ));
         });
+    }
+
+    _loadPlanetModels() {
+        const pending = this._pendingLoads;
+        this._pendingLoads = [];
+        pending.forEach((fn) => fn());
     }
 
     initParticles() {
@@ -132,7 +138,6 @@ export class SpaceEnvironment {
         }
         this.starGeometry.setAttribute('position', new THREE.BufferAttribute(this.starPositions, 3));
         this.starGeometry.setAttribute('color', new THREE.BufferAttribute(this.starColors, 3));
-        this.starGeometry.setAttribute('size', new THREE.BufferAttribute(this.starSizes, 1));
         const starMaterial = new THREE.PointsMaterial({ size: 2.0, vertexColors: true, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, sizeAttenuation: true });
         this.stars = new THREE.Points(this.starGeometry, starMaterial);
         this.scene.add(this.stars);
@@ -189,6 +194,7 @@ export class SpaceEnvironment {
     }
 
     update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager = null) {
+    if (currentLevel >= 4 && this._pendingLoads.length) this._loadPlanetModels();
     this.planets.forEach((p, index) => {
         // Só aparece no nível 5
         const shouldBeVisible = (currentLevel === 5);
@@ -225,13 +231,16 @@ export class SpaceEnvironment {
                     }
                 }
 
-                // Aplicar opacidade
-                p.traverse((child) => {
-                    if (child.isMesh && child.material) {
-                        child.material.transparent = true;
-                        child.material.opacity = opacity;
-                    }
-                });
+                // Aplicar opacidade (só quando muda, evita traverse por frame)
+                if (p.userData._op !== opacity) {
+                    p.userData._op = opacity;
+                    p.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.transparent = true;
+                            child.material.opacity = opacity;
+                        }
+                    });
+                }
 
                 // Crescimento gradual (baseado na distância relativa ao jogador)
                 let scale;

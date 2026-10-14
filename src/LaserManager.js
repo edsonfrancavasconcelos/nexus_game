@@ -2,11 +2,19 @@ import * as THREE from 'three';
 
 // CONFIGURAÇÃO DOS LASERS
 const LASER_INTERNO_GEO = new THREE.BoxGeometry(0.5, 0.5, 14); 
-const LASER_EXTERNO_GEO = new THREE.BoxGeometry(1.3, 1.3, 14.2); 
 const MAT_CIANO_INTERNO = new THREE.MeshBasicMaterial({ color: 0x00ffff, toneMapped: false });
-const MAT_ESCARLATE_EXTERNO = new THREE.MeshBasicMaterial({ 
-    color: 0xff1133, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, toneMapped: false 
-});
+
+// Recursos de míssil compartilhados por todas as instâncias (nunca descartados)
+const MISSILE_BODY_GEO = new THREE.CylinderGeometry(0.55, 0.55, 5.6, 10).rotateX(Math.PI / 2);
+const MISSILE_BAND_GEO = new THREE.CylinderGeometry(0.58, 0.58, 0.7, 10);
+const MISSILE_TIP_GEO = new THREE.ConeGeometry(0.65, 1.7, 10);
+const MISSILE_GLOW_GEO = new THREE.SphereGeometry(0.22, 8, 8);
+const MISSILE_BODY_MAT = new THREE.MeshBasicMaterial({ color: 0x0f3d1f, toneMapped: false });
+const MISSILE_BAND_MAT = new THREE.MeshBasicMaterial({ color: 0x39ff14, toneMapped: false });
+const MISSILE_TIP_MAT = new THREE.MeshBasicMaterial({ color: 0x9dff57, toneMapped: false });
+const MISSILE_GLOW_MAT = new THREE.MeshBasicMaterial({ color: 0x00ffa8, toneMapped: false });
+const _aim = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
 
 export class LaserManager {
     constructor(scene, soundManager) {
@@ -17,16 +25,22 @@ export class LaserManager {
         this.laserSpeed = 760.0;
         this.maxLasers = 120;
         this.maxMissiles = 24;
+        this.missilePool = [];
+        this.laserPool = [];
     }
 
     fire(worldGunPos, direction) {
         if (this.lasers.length >= this.maxLasers) return;
 
-        const laser = new THREE.Mesh(LASER_INTERNO_GEO, MAT_CIANO_INTERNO);
-        laser.scale.set(1.0, 1.0, 1.0);
+        let laser = this.laserPool.pop();
+        if (!laser) {
+            laser = new THREE.Mesh(LASER_INTERNO_GEO, MAT_CIANO_INTERNO);
+            laser.userData = { direction: new THREE.Vector3(), life: 0 };
+        }
         laser.position.copy(worldGunPos);
-        laser.lookAt(worldGunPos.clone().add(direction));
-        laser.userData = { direction: direction.clone().normalize(), life: 1.8 };
+        laser.lookAt(_aim.copy(worldGunPos).add(direction));
+        laser.userData.direction.copy(direction).normalize();
+        laser.userData.life = 1.8;
 
         this.scene.add(laser);
         this.lasers.push(laser);
@@ -37,43 +51,26 @@ export class LaserManager {
     createMissile(position, quaternion) {
         if (this.missiles.length >= this.maxMissiles) return null;
 
-        const bodyGeometry = new THREE.CylinderGeometry(0.55, 0.55, 5.6, 10);
-        bodyGeometry.rotateX(Math.PI / 2);
-        const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x0f3d1f, toneMapped: false });
+        let missile = this.missilePool.pop();
+        if (!missile) {
+            missile = new THREE.Mesh(MISSILE_BODY_GEO, MISSILE_BODY_MAT);
+            missile.add(new THREE.Mesh(MISSILE_BAND_GEO, MISSILE_BAND_MAT));
 
-        const missile = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            const tip = new THREE.Mesh(MISSILE_TIP_GEO, MISSILE_TIP_MAT);
+            tip.rotation.x = Math.PI / 2;
+            tip.position.set(0, 0, 3.15);
+            missile.add(tip);
 
-        const band = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.58, 0.58, 0.7, 10),
-            new THREE.MeshBasicMaterial({ color: 0x39ff14, toneMapped: false })
-        );
-        missile.add(band);
+            const rearGlow = new THREE.Mesh(MISSILE_GLOW_GEO, MISSILE_GLOW_MAT);
+            rearGlow.position.set(0, 0, -2.8);
+            missile.add(rearGlow);
 
-        const tip = new THREE.Mesh(
-            new THREE.ConeGeometry(0.65, 1.7, 10),
-            new THREE.MeshBasicMaterial({ color: 0x9dff57, toneMapped: false })
-        );
-        tip.rotation.x = Math.PI / 2;
-        tip.position.set(0, 0, 3.15);
-        missile.add(tip);
-
-        const rearGlow = new THREE.Mesh(
-            new THREE.SphereGeometry(0.22, 10, 10),
-            new THREE.MeshBasicMaterial({ color: 0x00ffa8, toneMapped: false })
-        );
-        rearGlow.position.set(0, 0, -2.8);
-        missile.add(rearGlow);
-
-        const missileLight = new THREE.PointLight(0x66ff33, 3.5, 30);
-        missileLight.position.set(0, 0, 0);
-        missile.add(missileLight);
+            missile.userData = { direction: new THREE.Vector3() };
+        }
 
         missile.position.copy(position);
-        missile.quaternion.copy(quaternion);       
-        missile.scale.set(1, 1, 1); // Garanta escala 1        
-        missile.userData = {
-            direction: new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize()
-        };
+        missile.quaternion.copy(quaternion);
+        missile.userData.direction.set(0, 0, 1).applyQuaternion(quaternion).normalize();
         this.scene.add(missile);
         this.missiles.push({ mesh: missile, speed: 620.0, life: 5.0 });
     }
@@ -89,7 +86,7 @@ export class LaserManager {
 
         if (laser.userData.life <= 0) {
             this.scene.remove(laser);
-            laser.traverse(child => { if (child.geometry) child.geometry.dispose(); });
+            this.laserPool.push(laser);
             this.lasers.splice(i, 1);
         }
     }
@@ -97,8 +94,8 @@ export class LaserManager {
     // Atualizar Mísseis
    for (let i = this.missiles.length - 1; i >= 0; i--) {
     const m = this.missiles[i];  
-   const forward = (m.mesh.userData?.direction || new THREE.Vector3(0, 0, -1)).clone().normalize();
-m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
+    const forward = _fwd.copy(m.mesh.userData.direction);
+    m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
   
 
     let hitEnemy = false;
@@ -154,14 +151,5 @@ m.mesh.position.addScaledVector(forward, m.speed * deltaTime);
 // Método auxiliar para manter o código limpo
 disposeMissile(mesh) {
     this.scene.remove(mesh);
-    if (mesh.geometry) mesh.geometry.dispose();
-    if (mesh.material) {
-        Array.isArray(mesh.material) 
-            ? mesh.material.forEach(mat => mat.dispose()) 
-            : mesh.material.dispose();
-    }
-    // Remove filhos (como a faixa preta) para limpar memória
-    mesh.traverse(child => {
-        if (child.geometry) child.geometry.dispose();
-    });
+    if (!this.missilePool.includes(mesh)) this.missilePool.push(mesh);
 }}

@@ -17,6 +17,37 @@ export class ExplosionManager {
         this.explosionTexture.wrapS = THREE.RepeatWrapping;
         this.explosionTexture.wrapT = THREE.RepeatWrapping;
         this.explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
+
+        this.spritePool = [];
+        this.debrisPool = [];
+        this.debrisGeometry = new THREE.TetrahedronGeometry(1);
+        this.debrisMaterial = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.88, metalness: 0.12 });
+        this._dir = new THREE.Vector3();
+    }
+
+    _acquireSprite() {
+        let sprite = this.spritePool.pop();
+        if (!sprite) {
+            // clone() compartilha a mesma imagem/upload de GPU; só o offset UV é por sprite
+            const map = this.explosionTexture.clone();
+            map.repeat.copy(this.explosionTexture.repeat);
+            const mat = new THREE.SpriteMaterial({
+                map,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            sprite = new THREE.Sprite(mat);
+            sprite.frustumCulled = true;
+        }
+        return sprite;
+    }
+
+    _acquireDebris() {
+        let mesh = this.debrisPool.pop();
+        if (!mesh) mesh = new THREE.Mesh(this.debrisGeometry, this.debrisMaterial);
+        return mesh;
     }
 
     create(position, multiplicador = 1.0) {
@@ -30,21 +61,8 @@ export class ExplosionManager {
         const escalaBase = this.isMobile ? 18 : 28;
         const fatorEscala = (escalaBase * multiplicador) * (80 / (distancia + 100));
 
-        const explosionTexture = new THREE.Texture(this.explosionTexture.image);
-        explosionTexture.wrapS = THREE.RepeatWrapping;
-        explosionTexture.wrapT = THREE.RepeatWrapping;
-        explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);
-        explosionTexture.needsUpdate = true;
-
-        const mat = new THREE.SpriteMaterial({
-            map: explosionTexture,
-            transparent: true,
-            opacity: 0.7,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
-
-        const sprite = new THREE.Sprite(mat);
+        const sprite = this._acquireSprite();
+        sprite.material.map.offset.set(0, 1 - 1 / this.spriteRows);
         sprite.position.copy(safePosition);
         sprite.scale.set(fatorEscala, fatorEscala, 1);
         this.scene.add(sprite);
@@ -67,23 +85,19 @@ export class ExplosionManager {
     createDebris(position, count = 5) {
         const safeCount = Math.min(count, this.isMobile ? 3 : count);
         for (let i = 0; i < safeCount; i++) {
-            const geometry = new THREE.TetrahedronGeometry(Math.random() * 1 + 0.5);
-            const material = new THREE.MeshStandardMaterial({
-                color: 0x666666,
-                roughness: 0.88,
-                metalness: 0.12
-            });
-            const debris = new THREE.Mesh(geometry, material);
+            const debris = this._acquireDebris();
             debris.position.copy(position);
+            debris.rotation.set(0, 0, 0);
+            debris.scale.setScalar(Math.random() * 1 + 0.5);
             this.scene.add(debris);
 
-            const direction = new THREE.Vector3(
+            const direction = this._dir.set(
                 (Math.random() - 0.5) * 2,
                 Math.random() * 1.2 + 0.4,
                 (Math.random() - 0.5) * 2
             ).normalize();
             const strength = this.isMobile ? 9 + Math.random() * 6 : 18 + Math.random() * 12;
-            const velocity = direction.multiplyScalar(strength);
+            const velocity = direction.clone().multiplyScalar(strength);
             const rotationSpeed = new THREE.Vector3(
                 Math.random() * 0.05,
                 Math.random() * 0.05,
@@ -116,8 +130,7 @@ export class ExplosionManager {
 
                 if (exp.life <= 0 || exp.mesh.position.length() > 4500) {
                     this.scene.remove(exp.mesh);
-                    exp.mesh.geometry.dispose();
-                    exp.mesh.material.dispose();
+                    this.debrisPool.push(exp.mesh);
                     this.explosions.splice(i, 1);
                 }
                 continue;
@@ -127,8 +140,7 @@ export class ExplosionManager {
 
             if (exp.life <= 0) {
                 this.scene.remove(exp.sprite);
-                exp.sprite.material.map.dispose();
-                exp.sprite.material.dispose();
+                this.spritePool.push(exp.sprite);
                 this.explosions.splice(i, 1);
                 continue;
             }
@@ -140,7 +152,6 @@ export class ExplosionManager {
 
             const texture = exp.sprite.material.map;
             texture.offset.set(col / this.spriteColumns, 1 - (row + 1) / this.spriteRows);
-            texture.needsUpdate = true;
         }
     }
 }

@@ -5,7 +5,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    minify: false, // <-- ADICIONE ISSO
+    minify: 'esbuild',
     rollupOptions: {
       output: {
         manualChunks: {

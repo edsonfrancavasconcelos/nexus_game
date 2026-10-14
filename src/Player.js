@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
+const _pDir = new THREE.Vector3();
+const _pQuat = new THREE.Quaternion();
+const _pWorld = new THREE.Vector3();
+const _pMove = new THREE.Vector3();
+const _pLook = new THREE.Vector3();
+
 export class Player {
     constructor(scene, laserManager) {
         this.scene = scene;
@@ -42,6 +48,7 @@ export class Player {
         this.thrusterPulse = 0;
 
         this.particles = [];
+        this._particlePool = [];
         this.particleGeometry = new THREE.SphereGeometry(1.2, 5, 5);
         this.particleMaterial = new THREE.MeshBasicMaterial({
             color: 0xdddddd,
@@ -218,11 +225,11 @@ export class Player {
         for (let i = this.pdcProjectiles.length - 1; i >= 0; i--) {
             const b = this.pdcProjectiles[i];
             const elapsed = (now - b.startTime) * 0.04;
-            const moveDir = b.dir.clone().multiplyScalar(2000 * dt);
+            const moveDir = _pMove.copy(b.dir).multiplyScalar(2000 * dt);
             b.mesh.position.add(moveDir);
             b.mesh.position.x += Math.sin(elapsed * 8 + b.offset) * 3.0 * dt * 5;
             b.mesh.position.y += Math.cos(elapsed * 8 + b.offset) * 3.0 * dt * 5;
-            b.mesh.lookAt(b.mesh.position.clone().add(b.dir));
+            b.mesh.lookAt(_pLook.copy(b.mesh.position).add(b.dir));
             let hit = false;
             if (enemyManager?.enemies) {
                 for (let j = enemyManager.enemies.length - 1; j >= 0; j--) {
@@ -410,22 +417,23 @@ export class Player {
         this.firingLightPulse = Math.max(this.firingLightPulse, 1.0);
         this.mesh.updateMatrixWorld();
         this.shipModel.updateMatrixWorld();
-        const direction = new THREE.Vector3(0, 0, 1);
-        const modelQuaternion = new THREE.Quaternion();
-        this.shipModel.getWorldQuaternion(modelQuaternion);
-        direction.applyQuaternion(modelQuaternion).normalize();
-        [this.gunLeft, this.gunRight, this.gunNose].forEach(localPos => {
-            const worldPos = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().multiplyMatrices(this.shipModel.matrixWorld, new THREE.Matrix4().setPosition(localPos)));
-            this.laserManager.fire(worldPos, direction);
-        });
+        const direction = _pDir.set(0, 0, 1);
+        this.shipModel.getWorldQuaternion(_pQuat);
+        direction.applyQuaternion(_pQuat).normalize();
+        const guns = this._guns || (this._guns = [this.gunLeft, this.gunRight, this.gunNose]);
+        for (let g = 0; g < guns.length; g++) {
+            _pWorld.copy(guns[g]).applyMatrix4(this.shipModel.matrixWorld);
+            this.laserManager.fire(_pWorld, direction);
+        }
     }
 
     _emitHeatWash() {
         if (!this.mesh || !this.shipModel || !this.thrusterLocalPos) return;
         this.mesh.updateMatrixWorld();
-        const worldPos = new THREE.Vector3().copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
+        const worldPos = _pWorld.copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
+        const nowMs = performance.now();
 
-        const pulseStrength = 0.55 + Math.sin(Date.now() * 0.018) * 0.18;
+        const pulseStrength = 0.55 + Math.sin(nowMs * 0.018) * 0.18;
         this.thrusters.forEach((thruster, index) => {
             if (!thruster?.group) return;
             thruster.glow.scale.set(1.0 + pulseStrength * 0.18, 0.9 + pulseStrength * 0.15, 1.25 + pulseStrength * 0.4);
@@ -434,12 +442,12 @@ export class Player {
             thruster.ring.scale.set(0.95 + pulseStrength * 0.16, 0.95 + pulseStrength * 0.16, 1.0);
             thruster.light.intensity = 16 + pulseStrength * 12;
             thruster.light.distance = 18 + pulseStrength * 6;
-            thruster.group.rotation.z = (index === 0 ? -0.08 : 0.08) + Math.sin(Date.now() * 0.004 + index) * 0.05;
+            thruster.group.rotation.z = (index === 0 ? -0.08 : 0.08) + Math.sin(nowMs * 0.004 + index) * 0.05;
         });
 
         if (this.particles.length > 18) return;
         for (let k = 0; k < 2; k++) {
-            const p = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
+            const p = this._particlePool.pop() || new THREE.Mesh(this.particleGeometry, this.particleMaterial);
             p.position.set(worldPos.x + (Math.random() - 0.5) * 1.6, worldPos.y + (Math.random() - 0.5) * 1.4, worldPos.z);
             p.scale.setScalar(0.7 + Math.random() * 0.9);
             this.scene.add(p);
@@ -518,6 +526,7 @@ export class Player {
             p.life -= dt * 4.0;
             if (p.life <= 0) {
                 this.scene.remove(p.mesh);
+                this._particlePool.push(p.mesh);
                 this.particles.splice(i, 1);
             }
         }

@@ -4,6 +4,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const ENEMY_LASER_GEO = new THREE.CylinderGeometry(0.4, 0.4, 8, 4);
 ENEMY_LASER_GEO.rotateX(Math.PI / 2);
 const ENEMY_LASER_MAT = new THREE.MeshBasicMaterial({ color: 0xff2233, toneMapped: false });
+const _eSide = new THREE.Vector3();
+const _eUp = new THREE.Vector3(0, 1, 0);
+const _eDesired = new THREE.Vector3();
+const _eAim = new THREE.Vector3();
 
 export class EnemyManager {
     constructor(scene, camera, scorePopup, isMobile = false) {
@@ -76,27 +80,30 @@ export class EnemyManager {
     }
 
     _addLocalGlow(model, color = 0xffaa66, intensity = 1.2, distance = 240, emissiveIntensity = 0.45) {
+        // Materiais "brilhantes" são criados uma única vez por material original e compartilhados;
+        // a PointLight por meteoro foi removida (cada luz dinâmica recompila shaders e encarece todos os fragmentos).
+        if (!this._glowCache) this._glowCache = new Map();
         model.traverse((child) => {
             if (!child.isMesh || !child.material) return;
 
             const materials = Array.isArray(child.material) ? child.material : [child.material];
             const enhancedMaterials = materials.map((material) => {
-                const nextMaterial = material.clone();
-                if (nextMaterial.emissive) {
-                    nextMaterial.emissive = new THREE.Color(color);
-                    nextMaterial.emissiveIntensity = emissiveIntensity;
+                const key = `${material.uuid}_${color}_${emissiveIntensity}`;
+                let nextMaterial = this._glowCache.get(key);
+                if (!nextMaterial) {
+                    nextMaterial = material.clone();
+                    if (nextMaterial.emissive) {
+                        nextMaterial.emissive = new THREE.Color(color);
+                        nextMaterial.emissiveIntensity = emissiveIntensity;
+                    }
+                    this._glowCache.set(key, nextMaterial);
                 }
-                nextMaterial.needsUpdate = true;
                 return nextMaterial;
             });
 
             child.material = Array.isArray(child.material) ? enhancedMaterials : enhancedMaterials[0];
         });
-
-        const glow = new THREE.PointLight(color, intensity, distance);
-        glow.position.set(0, 0, 0);
-        model.add(glow);
-        return glow;
+        return null;
     }
 
     _styleAsteroidModel(model) {
@@ -272,8 +279,9 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
         };
 
         enemy.lookAt(camPos);
+        // Frustum culling ativo (exceto malhas com esqueleto, cujo bounding box não acompanha a pose)
         enemy.traverse((child) => { 
-            if (child.isMesh) child.frustumCulled = false; 
+            if (child.isMesh) child.frustumCulled = !!child.isSkinnedMesh ? false : true; 
         });
 
         this.scene.add(enemy);
@@ -282,7 +290,7 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
 
 update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, soundManager, currentLevel = 1, onPlayerHit = null) {
     if (!player?.mesh || !deltaTime) return;
-
+    this._frameId = (this._frameId || 0) + 1;
     const camPosAtual = new THREE.Vector3();
     this.camera.getWorldPosition(camPosAtual);
 
@@ -363,18 +371,19 @@ if (!data.moveDir || data.moveDir.lengthSq() < 0.0001) {
 }
 
 // Leve oscilação lateral (só pra não ir 100% reto)
-const side = new THREE.Vector3()
-    .crossVectors(data.moveDir.clone().normalize(), new THREE.Vector3(0, 1, 0))
-    .normalize();
+const side = _eSide.crossVectors(data.moveDir, _eUp);
 
 if (side.lengthSq() < 0.001) {
     side.set(1, 0, 0);
+} else {
+    side.normalize();
 }
 
-const wander = Math.sin(Date.now() * 0.0007 + data.wanderSeed) * 0.12;
+const nowMs = performance.now();
+const wander = Math.sin(nowMs * 0.0007 + data.wanderSeed) * 0.12;
 
 // Direção desejada = sempre para frente + leve desvio lateral
-const desiredDir = data.moveDir.clone().normalize();
+const desiredDir = _eDesired.copy(data.moveDir).normalize();
 desiredDir.addScaledVector(side, wander);
 desiredDir.y += wander * 0.15;
 desiredDir.normalize();
@@ -387,9 +396,8 @@ data.moveDir.normalize();
 enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
 
 // Mira visualmente no jogador (só rotação, não muda o caminho)
-const aimTarget = pPos.clone().add(
-    new THREE.Vector3(0, Math.sin(Date.now() * 0.001 + data.wanderSeed) * 0.8, 0)
-);
+const aimTarget = _eAim.copy(pPos);
+aimTarget.y += Math.sin(nowMs * 0.001 + data.wanderSeed) * 0.8;
 enemy.lookAt(aimTarget);
 
 // Som de passagem
@@ -466,8 +474,13 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
             const obstacleType = obstacle?.userData?.type;
             if (obstacleType !== 'asteroide' && obstacleType !== 'meteoro') continue;
 
-            obstacle.updateMatrixWorld(true);
-            const obstacleBox = this.obstacleCollisionBox.setFromObject(obstacle);
+            const cached = obstacle.userData._box;
+            if (!cached || obstacle.userData._boxFrame !== this._frameId) {
+                obstacle.updateMatrixWorld(true);
+                obstacle.userData._box = (cached || new THREE.Box3()).setFromObject(obstacle);
+                obstacle.userData._boxFrame = this._frameId;
+            }
+            const obstacleBox = obstacle.userData._box;
 
             if (enemyBox.intersectsBox(obstacleBox)) {
                 enemy.position.copy(previousPosition);

@@ -38,9 +38,15 @@ export class NaveMae {
         ];
 
         this.loader = new GLTFLoader();
+        this._preloaded = false;
+    }
+
+    // Assets do boss (~16 MB) só são baixados perto do nível 50
+    preload() {
+        if (this._preloaded || window.__NAVE_MAE_ATIVA !== this) return;
+        this._preloaded = true;
         this.textureLoader = new THREE.TextureLoader();
         this.fogoTexture = this.textureLoader.load('/assets/img/fire_prev.png');
-
         this._loadModel();
         this._loadExplosionModel();
     }
@@ -105,12 +111,17 @@ export class NaveMae {
         this.mesh.position.set(0, 50, this.startZ);
         this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
     } else {
-        setTimeout(() => {
-            if (this.mesh) {
-                if (!this.mesh.parent) this.scene.add(this.mesh);
-                this.mesh.visible = true;
-                this.mesh.position.set(0, 50, this.startZ);
-                this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
+        this.preload();
+        let tries = 0;
+        const wait = setInterval(() => {
+            if (this.mesh || ++tries > 120) {
+                clearInterval(wait);
+                if (this.mesh && this.isAlive) {
+                    if (!this.mesh.parent) this.scene.add(this.mesh);
+                    this.mesh.visible = true;
+                    this.mesh.position.set(0, 50, this.startZ);
+                    this.mesh.scale.set(this.startScale, this.startScale, this.startScale);
+                }
             }
         }, 500);
     }
