@@ -1,5 +1,6 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import { awardPoints } from './Scoring.js';
+import { Afterburner } from './Afterburner.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const _pDir = new THREE.Vector3();
@@ -42,29 +43,12 @@ export class Player {
         this.rotationSpeed = 8.0;
         this.velocity = new THREE.Vector2(0, 0);
 
-        this.thrusters = [];
+        this.afterburner = null;
+        this.thrusterLocalPos = null;
         this.wingVacuum = [];
         this.lastShotTime = 0;
         this.fireRate = 110;
         this.thrusterPulse = 0;
-
-        this.particles = [];
-        this._particlePool = [];
-        this.particleGeometry = new THREE.SphereGeometry(1.2, 5, 5);
-        this.particleMaterial = new THREE.MeshBasicMaterial({
-            color: 0xdddddd,
-            transparent: true,
-            opacity: 0.18,
-            blending: THREE.NormalBlending,
-            depthWrite: false
-        });
-        this.thrusterGlowMaterial = new THREE.MeshBasicMaterial({
-            color: 0x66eaff,
-            transparent: true,
-            opacity: 0.9,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
 
         this.pdcRange = 650;
         this.pdcCooldown = 0.12;
@@ -327,63 +311,21 @@ export class Player {
     }
 
     _createPlasmaThrusters() {
-        const flameMaterial = new THREE.MeshBasicMaterial({
-            color: 0x8fe9ff,
-            transparent: true,
-            opacity: 0.9,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
-        const innerMaterial = new THREE.MeshBasicMaterial({
-            color: 0x33d4ff,
-            transparent: true,
-            opacity: 1,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
-
         this.thrusterLocalPos = new THREE.Vector3(0, 2.0, -9.8);
-
-        const plumeGroup = new THREE.Group();
-        plumeGroup.position.copy(this.thrusterLocalPos);
-
-        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 10), this.thrusterGlowMaterial.clone());
-        glow.scale.set(1.15, 1.0, 1.6);
-        plumeGroup.add(glow);
-
-        const flare = new THREE.Mesh(new THREE.ConeGeometry(0.6, 2.8, 14, 1, true), flameMaterial.clone());
-        flare.rotation.x = Math.PI / 2;
-        flare.position.z = -0.8;
-        plumeGroup.add(flare);
-
-        const core = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 12), innerMaterial.clone());
-        core.rotation.x = Math.PI / 2;
-        core.position.z = -0.6;
-        plumeGroup.add(core);
-
-        const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(0.8, 0.08, 8, 16),
-            new THREE.MeshBasicMaterial({
-                color: 0x9eeaff,
-                transparent: true,
-                opacity: 0.55,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
-            })
-        );
-        ring.rotation.x = Math.PI / 2;
-        ring.position.z = -1.5;
-        plumeGroup.add(ring);
-
-        const light = new THREE.PointLight(0x5be8ff, 28, 22, 2);
-        light.castShadow = false;
-        light.position.set(0, 0, -1.5);
-        plumeGroup.add(light);
-
-        this.shipModel.add(plumeGroup);
-        this.thrusters.push({ group: plumeGroup, glow, flare, core, ring, light });
+        const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        this.afterburner = new Afterburner(this.shipModel, this.thrusterLocalPos, { mobile });
     }
 
+    setThrusterActive(active) {
+        this.afterburner?.setActive(active);
+    }
+
+    _updateAfterburner(dt, moveInput) {
+        if (!this.afterburner) return;
+        const speed = Math.min(1, this.velocity.length() / 5);
+        const input = Math.min(1, Math.hypot(moveInput.x, moveInput.y));
+        this.afterburner.update(dt, 0.35 + 0.65 * Math.max(speed, input) + (this.isFiring ? 0.05 : 0));
+    }
     _initKeyboard() {
         window.addEventListener('keydown', (e) => {
             if (e.code === 'KeyF' || e.code === 'Space') this.isFiring = true;
@@ -418,40 +360,6 @@ export class Player {
         for (let g = 0; g < guns.length; g++) {
             _pWorld.copy(guns[g]).applyMatrix4(this.shipModel.matrixWorld);
             this.laserManager.fire(_pWorld, direction);
-        }
-    }
-
-    _emitHeatWash() {
-        if (!this.mesh || !this.shipModel || !this.thrusterLocalPos) return;
-        this.mesh.updateMatrixWorld();
-        const worldPos = _pWorld.copy(this.thrusterLocalPos).applyMatrix4(this.shipModel.matrixWorld);
-        const nowMs = performance.now();
-
-        const pulseStrength = 0.55 + Math.sin(nowMs * 0.018) * 0.18;
-        this.thrusters.forEach((thruster, index) => {
-            if (!thruster?.group) return;
-            thruster.glow.scale.set(1.0 + pulseStrength * 0.18, 0.9 + pulseStrength * 0.15, 1.25 + pulseStrength * 0.4);
-            thruster.flare.scale.set(0.9, 1.0 + pulseStrength * 0.2, 1.0);
-            thruster.core.scale.set(0.9, 1.0 + pulseStrength * 0.2, 1.0);
-            thruster.ring.scale.set(0.95 + pulseStrength * 0.16, 0.95 + pulseStrength * 0.16, 1.0);
-            thruster.light.intensity = 16 + pulseStrength * 12;
-            thruster.light.distance = 18 + pulseStrength * 6;
-            thruster.group.rotation.z = (index === 0 ? -0.08 : 0.08) + Math.sin(nowMs * 0.004 + index) * 0.05;
-        });
-
-        if (this.particles.length > 18) return;
-        for (let k = 0; k < 2; k++) {
-            const p = this._particlePool.pop() || new THREE.Mesh(this.particleGeometry, this.particleMaterial);
-            p.position.set(worldPos.x + (Math.random() - 0.5) * 1.6, worldPos.y + (Math.random() - 0.5) * 1.4, worldPos.z);
-            p.scale.setScalar(0.7 + Math.random() * 0.9);
-            this.scene.add(p);
-            this.particles.push({
-                mesh: p,
-                life: 0.55 + Math.random() * 0.3,
-                speedZ: 160 + Math.random() * 70,
-                driftX: (Math.random() - 0.5) * 3,
-                driftY: (Math.random() - 0.5) * 3
-            });
         }
     }
 
@@ -496,7 +404,7 @@ export class Player {
         this.mesh.updateMatrixWorld();
         if (this.isFiring) this._shoot();
         this._updatePDC(enemyManager, dt, onEnemyDestroyed);
-        this._emitHeatWash();
+        this._updateAfterburner(dt, moveInput);
 
         // ===== AJUSTE AQUI =====
         const FLASH_INTENSITY = 150;
@@ -511,17 +419,6 @@ export class Player {
             for (let i = 0; i < this.fuselageLights.length; i++) {
                 this.fuselageLights[i].intensity = IDLE_INTENSITY + pulse * FLASH_INTENSITY;
                 this.fuselageLights[i].distance = 14 + pulse * FLASH_DISTANCE;
-            }
-        }
-
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            p.mesh.position.z += p.speedZ * dt;
-            p.life -= dt * 4.0;
-            if (p.life <= 0) {
-                this.scene.remove(p.mesh);
-                this._particlePool.push(p.mesh);
-                this.particles.splice(i, 1);
             }
         }
     }
