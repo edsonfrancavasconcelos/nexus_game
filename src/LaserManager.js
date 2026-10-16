@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { awardPoints } from './Scoring.js';
+import { awardPoints, explosionSizeFor } from './Scoring.js';
 
 // CONFIGURAÇÃO DOS LASERS
 const LASER_INTERNO_GEO = new THREE.BoxGeometry(0.5, 0.5, 14); 
@@ -117,6 +117,7 @@ export class LaserManager {
                     if (destroyed) {
                         explosionManager.create(hitPoint, {
                             kind: 'missile',
+                            scale: explosionSizeFor(enemyType),
                             flashColor: 0xd8ffb8,
                             lightColor: 0x66ff33,
                             lightIntensity: 2600,

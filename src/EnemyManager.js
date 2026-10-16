@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { awardPoints } from './Scoring.js';
+import { awardPoints, explosionSizeFor } from './Scoring.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const ENEMY_LASER_GEO = new THREE.CylinderGeometry(0.4, 0.4, 8, 4);
@@ -443,7 +443,7 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
 // Explosão e remoção
         if (foiAtingidoPorLaser) {
             if (soundManager) soundManager.play('explosao_inimiga');
-            if (explosionManager) explosionManager.create(pontoDoImpactoReal, currentLevel >= 50 ? 2.5 : 1.0);
+            if (explosionManager) explosionManager.create(pontoDoImpactoReal, (currentLevel >= 50 ? 2.5 : 1.0) * explosionSizeFor(data.type));
             
             awardPoints(enemy, 'laser', pontoDoImpactoReal);
             

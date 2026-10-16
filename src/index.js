@@ -95,6 +95,7 @@ window.soundManager = soundManager;
 const laserManager = new LaserManager(scene, soundManager);
 const explosionManager = new ExplosionManager(scene, soundManager, isMobileDevice);
 window.explosionManager = explosionManager;
+explosionManager.camera = camera;
 explosionManager.maxActiveExplosions = quality.maxExplosions;
 
 const inputManager = new InputManager();

@@ -27,3 +27,9 @@ export function awardPoints(enemy, weaponType, hitPoint = null, typeOverride = n
     if (scoreHandler) scoreHandler(points, position, weaponType);
     return points;
 }
+
+// Escala relativa da explosão conforme o porte do inimigo.
+const EXPLOSION_SIZE = { drone: 0.9, comum: 1.0, roblox: 1.15, nave_inim_5: 1.3, nave_inim_10: 1.5, nave_inim_15: 1.7, asteroide: 1.6, meteoro: 1.6 };
+export function explosionSizeFor(type) {
+    return EXPLOSION_SIZE[type] ?? 1.0;
+}

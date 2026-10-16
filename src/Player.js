@@ -1,5 +1,5 @@
 ﻿import * as THREE from 'three';
-import { awardPoints } from './Scoring.js';
+import { awardPoints, explosionSizeFor } from './Scoring.js';
 import { Afterburner } from './Afterburner.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -225,7 +225,7 @@ export class Player {
                     if (b.mesh.position.distanceTo(e.position) < hitRadius) {
                         const enemyKilled = enemyManager.damageEnemy ? enemyManager.damageEnemy(e, 15, b.mesh.position) : true;
                         if (window.explosionManager) {
-                            window.explosionManager.create(b.mesh.position.clone(), enemyKilled ? undefined : 0.45);
+                            window.explosionManager.create(b.mesh.position.clone(), enemyKilled ? explosionSizeFor(e.userData?.type) : 0.45);
                         }
                         if (enemyKilled) {
                             this.scene.remove(e);
