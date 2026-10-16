@@ -215,7 +215,7 @@ export class Player {
         }
 
         if (window.soundManager) {
-            try { window.soundManager.play('missile'); } catch (e) {}
+            window.soundManager.play('playerShot');
         }
         return true;
     }

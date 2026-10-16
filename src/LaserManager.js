@@ -45,7 +45,7 @@ export class LaserManager {
         this.scene.add(laser);
         this.lasers.push(laser);
 
-        if (this.soundManager) this.soundManager.play('laser');
+        if (this.soundManager) this.soundManager.play('playerShot');
     }
 
     createMissile(position, quaternion) {

@@ -431,6 +431,16 @@ async function initGame() {
     setupNexusSelector();
 }
 
+function toggleGamePause() {
+    const willPause = currentState === GAME_STATE.PLAYING;
+    currentState = willPause ? GAME_STATE.PAUSED : GAME_STATE.PLAYING;
+    if (willPause) {
+        soundManager.stopShipEngine();
+    } else if (audioInitialized) {
+        soundManager.startShipEngine();
+    }
+}
+
 function startGame() {
     if (currentState === GAME_STATE.PLAYING) return;
 
@@ -527,16 +537,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const btnPause = document.getElementById('btnPause');
     if (btnPause) {
-        btnPause.addEventListener('click', () => {
-            currentState = (currentState === GAME_STATE.PLAYING)
-                ? GAME_STATE.PAUSED
-                : GAME_STATE.PLAYING;
-        });
+        btnPause.addEventListener('click', toggleGamePause);
         btnPause.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            currentState = (currentState === GAME_STATE.PLAYING)
-                ? GAME_STATE.PAUSED
-                : GAME_STATE.PLAYING;
+            toggleGamePause();
         });
     }
 
@@ -563,6 +567,6 @@ window.addEventListener('orientationchange', debouncedViewport);
 // Pausa automaticamente em segundo plano (economiza bateria/CPU) e descarta o delta acumulado ao voltar
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && currentState === GAME_STATE.PLAYING) {
-        currentState = GAME_STATE.PAUSED;
+        toggleGamePause();
     }
 });
