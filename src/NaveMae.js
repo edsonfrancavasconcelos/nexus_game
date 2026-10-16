@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { awardPoints } from './Scoring.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export class NaveMae {
@@ -89,6 +90,7 @@ export class NaveMae {
     }
 
   ativarNave(nivel) {
+    this.__scoreAwarded = false;
     this.isAlive = true;
     this.isActive = true;
 
@@ -175,6 +177,7 @@ export class NaveMae {
 explode(hitPoint = null, explosionManager = null) {
     this.isAlive = false;
     this.isActive = false;
+    awardPoints(this, 'boss', hitPoint || this.mesh?.position?.clone() || null, 'boss');
     if (explosionManager && hitPoint) {
         explosionManager.create(hitPoint, {
             kind: 'boss',

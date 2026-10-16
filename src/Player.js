@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { awardPoints } from './Scoring.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const _pDir = new THREE.Vector3();
@@ -245,13 +246,7 @@ export class Player {
                         if (enemyKilled) {
                             this.scene.remove(e);
                             enemyManager.enemies.splice(j, 1);
-                            if (onEnemyDestroyed) {
-                                const enemyType = e.userData?.type;
-                                const points = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 500 :
-                                               (enemyType === 'drone' ? 250 :
-                                               (enemyType === 'roblox' ? 150 : 100));
-                                onEnemyDestroyed(points, b.mesh.position.clone());
-                            }
+                            awardPoints(e, 'pdc', b.mesh.position.clone());
                         }
                         hit = true;
                         break;
@@ -268,7 +263,6 @@ export class Player {
                     if (window.explosionManager) {
                         if (bossDestroyed) {
                             window.explosionManager.createBigExplosion(b.mesh.position.clone());
-                            if (onEnemyDestroyed) onEnemyDestroyed(5000, b.mesh.position.clone());
                         } else {
                             window.explosionManager.create(b.mesh.position.clone(), 0.75);
                         }

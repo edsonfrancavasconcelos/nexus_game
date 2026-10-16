@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { setScoreHandler } from './Scoring.js';
 import { ScorePopup } from './ScorePopup.js';
 import { SoundManager } from './SoundManager.js';
 import { InputManager } from './InputManager.js';
@@ -206,8 +207,11 @@ window.showLevelUp = function (level, message) {
 };
 
 // ====================== SCORE / HIT ======================
+let enemiesDestroyed = 0;
 const handleEnemyScore = (pts, hitPosition) => {
     score += pts;
+    enemiesDestroyed++;
+    window.enemiesDestroyed = enemiesDestroyed;
     updateHUD();
 
     // Progressão principal pelo score (a cada 10.000)
@@ -225,6 +229,7 @@ const handlePlayerHit = () => {
     progressionManager.loseChance();
     updateResourceHUD();
 };
+setScoreHandler(handleEnemyScore, scorePopup);
 
 const _camOffset = new THREE.Vector3();
 const _camTarget = new THREE.Vector3();
@@ -447,6 +452,8 @@ function startGame() {
     countdown = 5;
     isGameStarted = false;
     score = 0;
+    enemiesDestroyed = 0;
+    window.enemiesDestroyed = 0;
     lastBossLevel = -1;
     boss = null;
     isBossFight = false;

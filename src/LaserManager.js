@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { awardPoints } from './Scoring.js';
 
 // CONFIGURAÇÃO DOS LASERS
 const LASER_INTERNO_GEO = new THREE.BoxGeometry(0.5, 0.5, 14); 
@@ -127,8 +128,7 @@ export class LaserManager {
                 }
 
                 if (destroyed) {
-                    const points = (enemyType === 'meteoro' || enemyType === 'asteroide') ? 500 : (enemyType === 'drone' ? 250 : (enemyType === 'roblox' ? 150 : 100));
-                    if (onEnemyDestroyed) onEnemyDestroyed(points, hitPoint);
+                    awardPoints(enemy, 'missile', hitPoint);
                     enemyManager.scene.remove(enemy);
                     enemyManager.enemies.splice(j, 1);
                 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { awardPoints } from './Scoring.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const ENEMY_LASER_GEO = new THREE.CylinderGeometry(0.4, 0.4, 8, 4);
@@ -444,8 +445,7 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
             if (soundManager) soundManager.play('explosao_inimiga');
             if (explosionManager) explosionManager.create(pontoDoImpactoReal, currentLevel >= 50 ? 2.5 : 1.0);
             
-            let pontos = (data.type === 'meteoro' || data.type === 'asteroide') ? 500 : (data.type === 'drone' ? 300 : 1000);
-            if (onScoreIncrease) onScoreIncrease(pontos, pontoDoImpactoReal);
+            awardPoints(enemy, 'laser', pontoDoImpactoReal);
             
             this.scene.remove(enemy);
             this.enemies.splice(i, 1);
@@ -516,10 +516,6 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
         enemy.userData.hp = (enemy.userData.hp || 1) - damage;
 
         if (enemy.userData.hp <= 0) {
-            let pontos = (enemy.userData.type === 'meteoro' || enemy.userData.type === 'asteroide') ? 500 : 
-                        (enemy.userData.type === 'drone' ? 250 : (enemy.userData.type === 'roblox' ? 150 : 100));
-            
-            if (this.scorePopup && hitPoint) this.scorePopup.show(pontos, hitPoint);
             return true;
         }
         return false;

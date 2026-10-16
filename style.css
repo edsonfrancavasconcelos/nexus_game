@@ -1163,3 +1163,36 @@ canvas {
         right: max(8px, env(safe-area-inset-right)) !important;
     }
 }
+
+/* ==================== PAUSA ACIMA DO PDC ====================
+   O botão de pausa acompanha o PDC: mesmo eixo vertical (centralizado),
+   logo acima dele, respeitando as safe areas. */
+:root {
+    --pdc-w: 70px;
+    --pdc-r: 40px;
+    --pdc-b: 220px;
+    --pause-w: 55px;
+    --pause-gap: 15px;
+    --safe-r: env(safe-area-inset-right, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 768px) {
+    :root { --pdc-w: 55px; --pdc-r: 20px; --pdc-b: 160px; --pause-w: 44px; --pause-gap: 10px; }
+}
+
+@media (orientation: portrait) and (max-width: 768px) {
+    :root { --pdc-b: calc(max(16px, var(--safe-b)) + 145px); }
+}
+
+@media (orientation: landscape) and (max-width: 900px) and (max-height: 500px) {
+    :root { --pdc-w: 46px; --pdc-r: 12px; --pdc-b: calc(max(10px, var(--safe-b)) + 118px); --pause-w: 40px; --pause-gap: 8px; }
+}
+
+#btnPause {
+    top: auto !important;
+    width: var(--pause-w) !important;
+    height: var(--pause-w) !important;
+    bottom: calc(var(--pdc-b) + var(--pdc-w) + var(--pause-gap)) !important;
+    right: calc(max(var(--pdc-r), var(--safe-r)) + (var(--pdc-w) - var(--pause-w)) / 2) !important;
+}
