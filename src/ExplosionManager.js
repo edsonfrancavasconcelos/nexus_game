@@ -33,7 +33,7 @@ export class ExplosionManager {
         this.sparks = [];
         this.sparkPool = [];
         for (let i = 0; i < this.maxSparks; i++) {
-            this.sparkPool.push({ pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, maxLife: 1, len: 1, thick: 1 });
+            this.sparkPool.push({ pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, maxLife: 1, len: 1, thick: 1, r: 1, g: 1, b: 1 });
         }
         const sparkGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 3, 1, true);
         sparkGeo.rotateX(Math.PI / 2);
@@ -97,6 +97,8 @@ export class ExplosionManager {
     }
 
     _spawnSparks(position, count, speed, size) {
+        const tint = this._sparkTint || (this._sparkTint = new THREE.Color());
+        tint.setHex(this._sparkColor ?? 0xffa52f);
         for (let i = 0; i < count; i++) {
             const sp = this.sparkPool.pop();
             if (!sp) return;
@@ -106,6 +108,9 @@ export class ExplosionManager {
             sp.maxLife = sp.life = 0.3 + Math.random() * 0.35;
             sp.len = size * (0.6 + Math.random() * 0.9);
             sp.thick = size * 0.045;
+            sp.r = tint.r;
+            sp.g = tint.g;
+            sp.b = tint.b;
             this.sparks.push(sp);
         }
     }
@@ -134,7 +139,7 @@ export class ExplosionManager {
             d.scale.set(sp.thick, sp.thick, sp.len * (0.4 + 0.6 * t));
             d.updateMatrix();
             mesh.setMatrixAt(n, d.matrix);
-            mesh.setColorAt(n, this._color.setRGB(1.0 * t, (0.45 + 0.45 * t) * t, 0.12 * t));
+            mesh.setColorAt(n, this._color.setRGB(sp.r * t, sp.g * t, sp.b * t));
             n++;
         }
         mesh.count = n;
@@ -171,8 +176,10 @@ export class ExplosionManager {
     // multiplicador: número (tamanho relativo) ou { kind: 'missile' | 'boss' }.
     // Acertos leves (<= 0.75) usam só o núcleo; mortes ganham flash, onda e faíscas.
     create(position, multiplicador = 1.0) {
+        let visualOptions = null;
         let kindBoost = 1.0;
         if (multiplicador && typeof multiplicador === 'object') {
+            visualOptions = multiplicador;
             kindBoost = (multiplicador.kind === 'boss' ? 2.4 : multiplicador.kind === 'missile' ? 1.35 : 1.0) * (multiplicador.scale ?? 1);
             multiplicador = 1.0;
         }
@@ -192,6 +199,7 @@ export class ExplosionManager {
 
         const sprite = this._acquireSprite();
         sprite.material.map.offset.set(0, 1 - 1 / this.spriteRows);
+        sprite.material.color.setHex(visualOptions?.kind === 'plasma' ? (visualOptions.flashColor ?? 0x70dfff) : 0xffffff);
         sprite.material.opacity = 1;
         sprite.position.copy(safePosition);
         sprite.scale.set(size * 0.6, size * 0.6, 1);
@@ -200,9 +208,11 @@ export class ExplosionManager {
         const exp = { sprite, life: 0.7, maxLife: 0.7, size, flash: null, ring: null };
 
         if (!isHit) {
+            this._sparkColor = visualOptions?.kind === 'plasma' ? (visualOptions.lightColor ?? 0x24cfff) : 0xffa52f;
             const flash = this._acquireFxSprite(this.glowTexture);
             flash.position.copy(safePosition);
             flash.scale.set(size * 0.5, size * 0.5, 1);
+            flash.material.color.setHex(visualOptions?.kind === 'plasma' ? (visualOptions.lightColor ?? 0x24cfff) : 0xffffff);
             flash.material.opacity = 1;
             this.scene.add(flash);
             exp.flash = flash;
@@ -210,6 +220,7 @@ export class ExplosionManager {
             const ring = this._acquireFxSprite(this.ringTexture);
             ring.position.copy(safePosition);
             ring.scale.set(size * 0.3, size * 0.3, 1);
+            ring.material.color.setHex(visualOptions?.kind === 'plasma' ? (visualOptions.flashColor ?? 0x70dfff) : 0xffffff);
             ring.material.opacity = 0.9;
             this.scene.add(ring);
             exp.ring = ring;
@@ -217,6 +228,7 @@ export class ExplosionManager {
             const sparkCount = Math.min(Math.round((this.isMobile ? 8 : 14) * Math.min(multiplicador, 2.5)), this.isMobile ? 18 : 40);
             this._spawnSparks(safePosition, sparkCount, size * 5.5, Math.max(size * 0.28, 2));
         } else {
+            this._sparkColor = visualOptions?.kind === 'plasma' ? (visualOptions.lightColor ?? 0x24cfff) : 0xffa52f;
             this._spawnSparks(safePosition, this.isMobile ? 3 : 5, size * 4, Math.max(size * 0.22, 1.5));
         }
 

@@ -8,6 +8,21 @@ const _pQuat = new THREE.Quaternion();
 const _pWorld = new THREE.Vector3();
 const _pMove = new THREE.Vector3();
 const _pLook = new THREE.Vector3();
+const _pSpawn = new THREE.Vector3();
+const PDC_POOL_SIZE = 32;
+const PDC_BULLET_GEO = new THREE.CylinderGeometry(0.32, 0.22, 6.0, 8).rotateX(Math.PI / 2);
+const PDC_CORE_GEO = new THREE.CylinderGeometry(0.11, 0.11, 6.8, 6).rotateX(Math.PI / 2);
+const PDC_GLOW_GEO = new THREE.CylinderGeometry(0.62, 0.62, 5.0, 8, 1, true).rotateX(Math.PI / 2);
+const PDC_BULLET_MAT = new THREE.MeshBasicMaterial({ color: 0x00bfff, toneMapped: false });
+const PDC_CORE_MAT = new THREE.MeshBasicMaterial({ color: 0xeaffff, toneMapped: false });
+const PDC_GLOW_MAT = new THREE.MeshBasicMaterial({
+    color: 0x1e8fff,
+    transparent: true,
+    opacity: 0.55,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false
+});
 
 export class Player {
     constructor(scene, laserManager) {
@@ -55,14 +70,10 @@ export class Player {
         this.pdcTimer = 0;
         this.pdcProjectileLife = 1.2;
         this.pdcProjectiles = [];
-        this.pdcBulletGeo = new THREE.CylinderGeometry(0.35, 0.15, 6.0, 8);
-        this.pdcBulletGeo.rotateX(Math.PI / 2);
-        this.pdcBulletMat = new THREE.MeshStandardMaterial({
-            color: 0xffff00,
-            emissive: 0xff4400,
-            emissiveIntensity: 5.0,
-            toneMapped: false
-        });
+        this.pdcProjectilePool = [];
+        for (let i = 0; i < PDC_POOL_SIZE; i++) {
+            this.pdcProjectilePool.push(this._createPDCProjectile());
+        }
 
         this.pdcCannons = [
             { container: new THREE.Group(), offset: new THREE.Vector3(-3.5, 4.5, -3) },
@@ -157,16 +168,32 @@ export class Player {
 
     _firePDCShot(targetPos, cannon) {
         this.firingLightPulse = Math.max(this.firingLightPulse, 0.8);
-        const bullet = new THREE.Mesh(this.pdcBulletGeo, this.pdcBulletMat);
-        const spawnPos = new THREE.Vector3();
+        const projectile = this.pdcProjectilePool.pop() || this._createPDCProjectile();
+        const bullet = projectile.mesh;
+        const spawnPos = _pSpawn;
         cannon.container.getWorldPosition(spawnPos);
         bullet.position.copy(spawnPos);
         const spread = 0.26;
         bullet.rotation.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
+        bullet.visible = true;
         this.scene.add(bullet);
         if (window.soundManager) window.soundManager.play('pdc');
-        const dir = new THREE.Vector3().subVectors(targetPos, spawnPos).normalize();
-        this.pdcProjectiles.push({ mesh: bullet, dir: dir, life: this.pdcProjectileLife, startTime: Date.now(), offset: Math.random() * Math.PI * 2 });
+        projectile.dir.subVectors(targetPos, spawnPos).normalize();
+        projectile.life = this.pdcProjectileLife;
+        projectile.startTime = Date.now();
+        projectile.offset = Math.random() * Math.PI * 2;
+        this.pdcProjectiles.push(projectile);
+    }
+
+    _createPDCProjectile() {
+        const mesh = new THREE.Group();
+        mesh.add(
+            new THREE.Mesh(PDC_BULLET_GEO, PDC_BULLET_MAT),
+            new THREE.Mesh(PDC_CORE_GEO, PDC_CORE_MAT),
+            new THREE.Mesh(PDC_GLOW_GEO, PDC_GLOW_MAT)
+        );
+        mesh.visible = false;
+        return { mesh, dir: new THREE.Vector3(), life: 0, startTime: 0, offset: 0 };
     }
 
     togglePDC() { this.pdcActive = !this.pdcActive; return this.pdcActive; }
@@ -225,7 +252,12 @@ export class Player {
                     if (b.mesh.position.distanceTo(e.position) < hitRadius) {
                         const enemyKilled = enemyManager.damageEnemy ? enemyManager.damageEnemy(e, 15, b.mesh.position) : true;
                         if (window.explosionManager) {
-                            window.explosionManager.create(b.mesh.position.clone(), enemyKilled ? explosionSizeFor(e.userData?.type) : 0.45);
+                            window.explosionManager.create(b.mesh.position, {
+                                kind: 'plasma',
+                                scale: enemyKilled ? explosionSizeFor(e.userData?.type) : 0.45,
+                                flashColor: 0xeaffff,
+                                lightColor: 0x24cfff
+                            });
                         }
                         if (enemyKilled) {
                             this.scene.remove(e);
@@ -248,7 +280,12 @@ export class Player {
                         if (bossDestroyed) {
                             window.explosionManager.createBigExplosion(b.mesh.position.clone());
                         } else {
-                            window.explosionManager.create(b.mesh.position.clone(), 0.75);
+                            window.explosionManager.create(b.mesh.position, {
+                                kind: 'plasma',
+                                scale: 0.75,
+                                flashColor: 0xeaffff,
+                                lightColor: 0x24cfff
+                            });
                         }
                     }
                 }
@@ -258,6 +295,8 @@ export class Player {
             if (hit || b.life <= 0 || b.mesh.position.distanceTo(this.mesh.position) > this.pdcRange + 200) {
                 this.scene.remove(b.mesh);
                 this.pdcProjectiles.splice(i, 1);
+                b.mesh.visible = false;
+                this.pdcProjectilePool.push(b);
             }
         }
     }

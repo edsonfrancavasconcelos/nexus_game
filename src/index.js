@@ -197,7 +197,7 @@ const missionBriefings = {
     33: ['CAPÍTULO 3 — CINTURÃO DE ASTEROIDES', 'A NEXUS prepara emboscadas ao longo da rota para o núcleo.'],
     50: ['CAPÍTULO 4 — MUNDO INDUSTRIAL', 'Localize as fábricas de guerra e interrompa a produção de drones.'],
     75: ['CAPÍTULO 5 — CORAÇÃO DA IA', 'A fortaleza da NEXUS está à frente. Defesas orbitais detectadas.'],
-    100: ['CAPÍTULO FINAL — TAPTOR STRIKE', 'A Nave-Mãe protege o núcleo central. Prepare-se para o confronto final.']
+    100: ['CAPÍTULO FINAL — RAPTOR STRIKE', 'A Nave-Mãe protege o núcleo central. Prepare-se para o confronto final.']
 };
 let combatMessageTimer = null;
 let campaignEndingShown = false;
@@ -258,7 +258,7 @@ function chooseCampaignEnding(choice) {
         : 'NEXUS: integração concluída. Novo comandante identificado.';
     result.textContent = choice === 'destroy'
         ? 'As frotas autônomas são desativadas. A humanidade recupera seus mundos e inicia a reconstrução. A galáxia tem uma nova chance de viver em paz.'
-        : 'A guerra termina quando você integra os sistemas da NEXUS ao Taptor Strike TS. A tela escurece. Uma nova ameaça é detectada além da galáxia. Continua...';
+        : 'A guerra termina quando você integra os sistemas da NEXUS ao Raptor Strike TS. A tela escurece. Uma nova ameaça é detectada além da galáxia. Continua...';
     result.hidden = false;
 }
 

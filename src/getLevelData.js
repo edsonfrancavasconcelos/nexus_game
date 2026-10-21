@@ -2,7 +2,7 @@ export function getLevelData(level) {
     if (level >= 100) {
         return {
             chapter: 6,
-            chapterTitle: "Taptor Strike",
+            chapterTitle: "Raptor Strike",
             title: "Núcleo da NEXUS",
             task: "A Nave-Mãe protege o núcleo central. Destrua-a e decida o destino da NEXUS."
         };

@@ -4,7 +4,17 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const ENEMY_LASER_GEO = new THREE.CylinderGeometry(0.4, 0.4, 8, 4);
 ENEMY_LASER_GEO.rotateX(Math.PI / 2);
+const ENEMY_LASER_GLOW_GEO = new THREE.CylinderGeometry(0.9, 0.9, 10, 5, 1, true);
+ENEMY_LASER_GLOW_GEO.rotateX(Math.PI / 2);
 const ENEMY_LASER_MAT = new THREE.MeshBasicMaterial({ color: 0xff2233, toneMapped: false });
+const ENEMY_LASER_GLOW_MAT = new THREE.MeshBasicMaterial({
+    color: 0x9a22ff,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false
+});
 const _eSide = new THREE.Vector3();
 const _eUp = new THREE.Vector3(0, 1, 0);
 const _eDesired = new THREE.Vector3();
@@ -465,7 +475,12 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
 // Explosão e remoção
         if (foiAtingidoPorLaser) {
             if (soundManager) soundManager.play('explosao_inimiga');
-            if (explosionManager) explosionManager.create(pontoDoImpactoReal, (currentLevel >= 50 ? 2.5 : 1.0) * explosionSizeFor(data.type));
+            if (explosionManager) explosionManager.create(pontoDoImpactoReal, {
+                kind: 'plasma',
+                scale: (currentLevel >= 50 ? 2.5 : 1.0) * explosionSizeFor(data.type),
+                flashColor: 0xeaffff,
+                lightColor: 0x24cfff
+            });
             
             awardPoints(enemy, 'laser', pontoDoImpactoReal);
             
@@ -519,7 +534,9 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
         const pPos = new THREE.Vector3();
         player.mesh.getWorldPosition(pPos);
 
-        const laser = new THREE.Mesh(ENEMY_LASER_GEO, ENEMY_LASER_MAT);
+        const laser = new THREE.Group();
+        laser.add(new THREE.Mesh(ENEMY_LASER_GEO, ENEMY_LASER_MAT));
+        laser.add(new THREE.Mesh(ENEMY_LASER_GLOW_GEO, ENEMY_LASER_GLOW_MAT));
         laser.position.copy(enemy.position);
         laser.lookAt(pPos);
         this.scene.add(laser);

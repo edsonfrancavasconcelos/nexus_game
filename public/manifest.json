@@ -1,7 +1,7 @@
 ﻿{
-    "name":  "Nave Espacial - Zona Nexus",
-    "short_name":  "Nexus",
-    "description":  "Jogo de nave espacial em Three.js",
+    "name":  "Nexus Raptor Strike TS",
+    "short_name":  "Nexus Raptor Strike TS",
+    "description":  "Nexus Raptor Strike TS: campanha de combate espacial contra a inteligência artificial NEXUS.",
     "start_url":  "/",
     "display":  "standalone",
     "orientation":  "any",
