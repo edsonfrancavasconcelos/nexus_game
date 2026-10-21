@@ -1196,3 +1196,254 @@ canvas {
     bottom: calc(var(--pdc-b) + var(--pdc-w) + var(--pause-gap)) !important;
     right: calc(max(var(--pdc-r), var(--safe-r)) + (var(--pdc-w) - var(--pause-w)) / 2) !important;
 }
+
+.campaign-intro {
+    margin: 0 auto 22px;
+    max-width: 590px;
+    color: rgba(225, 242, 255, 0.92);
+    font-size: 14px;
+    line-height: 1.55;
+    text-shadow: 0 2px 8px #000;
+}
+
+.campaign-intro p {
+    margin: 8px 0;
+}
+
+.campaign-intro strong {
+    color: #00ffff;
+    letter-spacing: 1px;
+}
+
+.campaign-dossier {
+    width: min(590px, 100%);
+    margin: 0 auto 18px;
+    color: rgba(225, 242, 255, 0.92);
+    text-align: left;
+}
+
+.campaign-dossier summary {
+    width: fit-content;
+    margin: 0 auto;
+    padding: 8px 14px;
+    border: 1px solid rgba(0, 255, 255, 0.55);
+    border-radius: 4px;
+    color: #00ffff;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    list-style-position: inside;
+}
+
+.campaign-chapters {
+    max-height: 28vh;
+    margin-top: 10px;
+    padding: 5px 12px;
+    overflow-y: auto;
+    border-left: 1px solid rgba(0, 255, 255, 0.45);
+    background: rgba(0, 8, 18, 0.55);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.campaign-chapters p {
+    margin: 9px 0;
+}
+
+.campaign-chapters strong {
+    color: #00ffff;
+    letter-spacing: 0.5px;
+}
+
+#damage-flash {
+    position: fixed;
+    inset: 0;
+    z-index: 15000;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 35%, rgba(255, 0, 24, 0.72) 100%);
+}
+
+#damage-flash.active {
+    animation: damageFlash 240ms ease-out;
+}
+
+#combat-message {
+    position: fixed;
+    top: max(8vh, env(safe-area-inset-top));
+    left: 50%;
+    z-index: 14000;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: min(560px, calc(100vw - 32px));
+    padding: 14px 22px;
+    border: 1px solid rgba(0, 255, 255, 0.65);
+    border-left: 3px solid #00ffff;
+    background: linear-gradient(100deg, rgba(2, 18, 34, 0.92), rgba(2, 10, 20, 0.7));
+    color: #effcff;
+    text-align: center;
+    text-shadow: 0 0 12px rgba(0, 255, 255, 0.45);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -18px);
+    transition: opacity 220ms ease, transform 220ms ease;
+}
+
+#combat-message.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+#combat-message.briefing {
+    border-color: rgba(255, 198, 76, 0.78);
+    border-left-color: #ffc64c;
+}
+
+#combat-message-title {
+    color: #00ffff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+#combat-message.briefing #combat-message-title {
+    color: #ffc64c;
+}
+
+#combat-message-body {
+    font-size: clamp(14px, 2.2vw, 18px);
+    font-weight: 600;
+}
+
+@keyframes damageFlash {
+    0% { opacity: 0; }
+    18% { opacity: 0.9; }
+    100% { opacity: 0; }
+}
+
+#campaign-ending {
+    position: fixed;
+    inset: 0;
+    z-index: 25000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: radial-gradient(ellipse at center, rgba(4, 20, 36, 0.91), rgba(0, 0, 0, 0.98));
+    backdrop-filter: blur(8px);
+}
+
+#campaign-ending.visible {
+    display: flex;
+    animation: endingFadeIn 700ms ease-out both;
+}
+
+.campaign-ending-card {
+    width: min(650px, 100%);
+    padding: clamp(22px, 5vw, 44px);
+    border: 1px solid rgba(0, 255, 255, 0.7);
+    background: linear-gradient(145deg, rgba(4, 24, 42, 0.96), rgba(3, 6, 17, 0.97));
+    box-shadow: 0 0 50px rgba(0, 210, 255, 0.14), inset 0 0 35px rgba(0, 210, 255, 0.04);
+    color: #effaff;
+    text-align: center;
+}
+
+.ending-eyebrow {
+    color: #00ffff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 3px;
+}
+
+.campaign-ending-card h2 {
+    margin: 14px 0;
+    color: #fff;
+    font-size: clamp(24px, 5vw, 38px);
+    letter-spacing: 2px;
+    text-shadow: 0 0 18px rgba(0, 255, 255, 0.55);
+}
+
+#campaign-ending-prompt,
+.campaign-ending-result {
+    font-size: clamp(14px, 2.5vw, 18px);
+    line-height: 1.65;
+}
+
+.campaign-ending-choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 26px;
+}
+
+.campaign-ending-choices button {
+    min-height: 48px;
+    padding: 12px 18px;
+    border: 1px solid #00ffff;
+    background: rgba(0, 255, 255, 0.08);
+    color: #00ffff;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 800;
+    letter-spacing: 1px;
+    transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.campaign-ending-choices button:hover,
+.campaign-ending-choices button:focus-visible {
+    transform: translateY(-2px);
+    background: rgba(0, 255, 255, 0.2);
+    color: #fff;
+}
+
+.campaign-ending-result {
+    margin-top: 24px;
+    color: #d8faff;
+}
+
+@keyframes endingFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@media (max-width: 768px) {
+    .menu-content {
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .campaign-intro {
+        max-height: 29vh;
+        margin-bottom: 12px;
+        overflow-y: auto;
+        font-size: 12px;
+        line-height: 1.35;
+        scrollbar-width: thin;
+    }
+
+    .campaign-intro p {
+        margin: 5px 0;
+    }
+
+    .campaign-dossier {
+        margin-bottom: 10px;
+    }
+
+    .campaign-chapters {
+        max-height: 20vh;
+        font-size: 11px;
+    }
+
+    #combat-message {
+        padding: 10px 14px;
+    }
+
+    .campaign-ending-choices {
+        flex-direction: column;
+    }
+}

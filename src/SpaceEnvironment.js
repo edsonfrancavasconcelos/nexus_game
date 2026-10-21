@@ -18,34 +18,53 @@ const loader = new GLTFLoader();
 
 const cloudTexture = createCloudTexture();
 
-function getPlanetScale(distZ) {
-    if (distZ > 7500) return 1;
-    if (distZ > 6000) {
-        const progress = (7500 - distZ) / 1500;
-        return 1 + (30 - 1) * progress;
-    }
-    if (distZ > 3000) {
-        const progress = (6000 - distZ) / 3000;
-        return 30 + (150 - 30) * (progress * progress);
-    }
-    if (distZ < 500) return 200;
-    const progress = (3000 - distZ) / 2500;
-    return 150 + (200 - 150) * progress;
+const PLANET_FOV_HALF_ANGLE = THREE.MathUtils.degToRad(35);
+const PLANET_START_DISTANCE = 15000;
+const PLANET_MIN_DISTANCE = 8000;
+
+function getPlanetHalfWidth(distance) {
+    return distance * Math.tan(PLANET_FOV_HALF_ANGLE) * (window.innerWidth / window.innerHeight);
 }
 
-function getPlanetVisualScale(distZ) {
-    if (distZ > 7500) return 1;
-    if (distZ > 6000) {
-        const progress = THREE.MathUtils.smoothstep((7500 - distZ) / 1500, 0, 1);
-        return 1 + (30 - 1) * progress;
-    }
-    if (distZ > 3000) {
-        const progress = THREE.MathUtils.smoothstep((6000 - distZ) / 3000, 0, 1);
-        return 30 + (150 - 30) * progress;
-    }
-    if (distZ < 500) return 200;
-    const progress = THREE.MathUtils.smoothstep((3000 - distZ) / 2500, 0, 1);
-    return 150 + (200 - 150) * progress;
+function getPlanetVisualScale(baseRadius, distance, initialDistance) {
+    const initialRadius = getPlanetHalfWidth(initialDistance) * 0.035;
+    const approachGrowth = Math.pow(initialDistance / Math.max(distance, PLANET_MIN_DISTANCE), 1.5);
+    return (initialRadius / baseRadius) * approachGrowth;
+}
+
+function preparePlanetRendering(planet) {
+    planet.renderOrder = -100;
+    const materials = [];
+    planet.traverse((child) => {
+        if (!child.isMesh) return;
+        child.renderOrder = -100;
+        const childMaterials = Array.isArray(child.material) ? child.material : [child.material];
+        childMaterials.forEach((material) => {
+            if (!material) return;
+            materials.push({
+                material,
+                opacity: material.opacity,
+                transparent: material.transparent
+            });
+            material.depthTest = true;
+            material.depthWrite = false;
+        });
+    });
+    planet.userData.visualMaterials = materials;
+    planet.userData.visualOpacity = 1;
+}
+
+function setPlanetOpacity(planet, opacity) {
+    if (planet.userData.visualOpacity === opacity) return;
+    planet.userData.visualOpacity = opacity;
+    planet.userData.visualMaterials.forEach(({ material, opacity: baseOpacity, transparent }) => {
+        const nextTransparent = opacity < 1 || transparent;
+        if (material.transparent !== nextTransparent) {
+            material.transparent = nextTransparent;
+            material.needsUpdate = true;
+        }
+        material.opacity = baseOpacity * opacity;
+    });
 }
 
 
@@ -90,69 +109,43 @@ export class SpaceEnvironment {
             '/assets/models/green_planeta.glb'
         ];
 
-        // Criar placeholders enquanto os modelos carregam
-        const lanes = [-4800, -1600, 1600, 4800];
         planetFiles.forEach((path, index) => {
-            // Criar um placeholder simples
             const placeholderGeo = new THREE.SphereGeometry(50, 32, 32);
             const placeholderMat = new THREE.MeshPhongMaterial({ 
                 color: Math.random() * 0xffffff,
                 emissive: 0x111111
             });
             const placeholder = new THREE.Mesh(placeholderGeo, placeholderMat);
-            // marca de controle para evitar reaparecimento (loop)
-            placeholder.userData = { done: false, laneIndex: index };
-            
-            const xPos = lanes[index] + (Math.random() - 0.5) * 700;
-            const yPos = -800 + (Math.random() * 1700);
-            const initialZRandom = Math.random();
-            const collisionZ = -6000 - initialZRandom * 2000;
-            
-            placeholder.position.set(xPos, yPos, collisionZ - 8000);
-            placeholder.visible = true;
-            placeholder.userData.collisionProxy = {
-                position: new THREE.Vector3(xPos, yPos, collisionZ),
-                scale: new THREE.Vector3(1, 1, 1),
-                userData: { baseRadius: 50, repositioned: false, done: false }
-            };
+            placeholder.userData = { laneIndex: index, baseRadius: 50 };
+            this._positionPlanetAtHorizon(placeholder, index);
+            preparePlanetRendering(placeholder);
             this.scene.add(placeholder);
             this.planets.push(placeholder);
             
-            // Carrega o modelo real para manter o planeta visível desde o início.
             this._pendingLoads.push(() => this.loader.load(
                 path, 
                 (gltf) => {
                     const p = gltf.scene;
-
-                    // Copiar posição do placeholder
                     p.position.copy(placeholder.position);
-                    p.visible = placeholder.visible;
-                    p.userData = p.userData || {};
-                    // preserva o estado 'done' do placeholder para evitar reaparecimento
-                    p.userData.done = placeholder.userData?.done || false;
-                    p.userData.laneIndex = placeholder.userData?.laneIndex || index;
-                    p.userData.collisionProxy = placeholder.userData?.collisionProxy;
-                    // Calcular um raio base do modelo para colisões mais precisas
-                    try {
-                        const box = new THREE.Box3().setFromObject(p);
-                        const sphere = new THREE.Sphere();
-                        box.getBoundingSphere(sphere);
-                        p.userData = p.userData || {};
-                        p.userData.baseRadius = sphere.radius || 50;
-                        p.scale.copy(placeholder.scale);
-                        if (p.userData.collisionProxy) {
-                            p.userData.collisionProxy.userData.baseRadius = p.userData.baseRadius;
-                        }
-                    } catch (e) {
-                        p.userData = p.userData || {};
-                        p.userData.baseRadius = 50;
-                        p.scale.copy(placeholder.scale);
-                    }
-                    
+                    const box = new THREE.Box3().setFromObject(p);
+                    const sphere = new THREE.Sphere();
+                    box.getBoundingSphere(sphere);
+                    p.userData = {
+                        ...p.userData,
+                        ...placeholder.userData,
+                        baseRadius: sphere.radius || 50,
+                        transitionPlaceholder: placeholder,
+                        transitionElapsed: 0,
+                        visualOpacity: 1
+                    };
+                    p.scale.copy(placeholder.scale).multiplyScalar(
+                        (placeholder.userData.baseRadius || 50) / (p.userData.baseRadius || 50)
+                    );
+                    p.visible = true;
+                    preparePlanetRendering(p);
+                    setPlanetOpacity(p, 0);
                     this.scene.add(p);
-                    this.scene.remove(placeholder);
-                    
-                    // Substituir na array
+
                     const idx = this.planets.indexOf(placeholder);
                     if (idx !== -1) {
                         this.planets[idx] = p;
@@ -170,6 +163,31 @@ export class SpaceEnvironment {
         const pending = this._pendingLoads;
         this._pendingLoads = [];
         pending.forEach((fn) => fn());
+    }
+
+    _positionPlanetAtHorizon(planet, index, playerPosition = null) {
+        const initialDistance = PLANET_START_DISTANCE;
+        const halfWidth = getPlanetHalfWidth(initialDistance);
+        const halfHeight = initialDistance * Math.tan(PLANET_FOV_HALF_ANGLE);
+        const xOffsets = [-0.34, -0.25, 0.25, 0.34];
+        const yOffsets = [-0.12, 0.12, 0.12, -0.12];
+        const playerX = playerPosition?.x || 0;
+        const playerY = playerPosition?.y || 0;
+        const playerZ = playerPosition?.z || 0;
+        const baseRadius = planet.userData.baseRadius || 50;
+
+        planet.userData.initialDistance = initialDistance;
+        planet.userData.visualOffsetX = xOffsets[index % xOffsets.length] * halfWidth;
+        planet.userData.visualOffsetY = yOffsets[index % yOffsets.length] * halfHeight;
+        planet.userData.done = false;
+        planet.userData.offscreen = false;
+        planet.userData.offscreenElapsed = 0;
+        planet.position.set(
+            playerX + planet.userData.visualOffsetX,
+            playerY + planet.userData.visualOffsetY,
+            playerZ - initialDistance
+        );
+        planet.scale.setScalar(getPlanetVisualScale(baseRadius, initialDistance, initialDistance));
     }
 
     initParticles() {
@@ -239,82 +257,69 @@ export class SpaceEnvironment {
     update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager = null) {
         if (this._pendingLoads.length) this._loadPlanetModels();
         this.planets.forEach((p) => {
-            const collisionProxy = p.userData?.collisionProxy;
-            const playerZ = (playerMesh && playerMesh.position) ? playerMesh.position.z : (playerPosition?.z || 0);
-            if (!p.userData?.done) p.position.z += 80 * deltaTime;
-            const relZ = p.position.z - playerZ;
-
-            // Keep gameplay collisions on their original positions, independently of the distant visuals.
-            if (currentLevel === 5 && collisionProxy && !collisionProxy.userData.done) {
-                collisionProxy.position.z += 80 * deltaTime;
-                const collisionRelZ = collisionProxy.position.z - playerZ;
-
-                if (collisionRelZ > 1800) {
-                    collisionProxy.userData.done = true;
-                } else {
-                    const collisionDistZ = Math.abs(collisionRelZ);
-                    const collisionScale = getPlanetScale(collisionDistZ);
-                    collisionProxy.scale.setScalar(collisionScale);
-
-                    if (playerMesh) {
-                        const pdx = playerMesh.position.x - collisionProxy.position.x;
-                        const pdy = playerMesh.position.y - collisionProxy.position.y;
-                        const pdz = playerMesh.position.z - collisionProxy.position.z;
-                        const pDist3 = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz) || 1;
-                        const approxRadius = (collisionProxy.userData.baseRadius || 50) * collisionProxy.scale.x + 150;
-                        if (pDist3 < approxRadius * 0.95 && !collisionProxy.userData.repositioned) {
-                            collisionProxy.userData.repositioned = true;
-
-                            const lanes = [-4800, -1600, 1600, 4800];
-                            let farthest = lanes[0];
-                            let maxDist = -Infinity;
-                            for (let ln of lanes) {
-                                const d = Math.abs(ln - playerMesh.position.x);
-                                if (d > maxDist) { maxDist = d; farthest = ln; }
-                            }
-
-                            const backZ = (playerMesh.position.z || 0) - (8000 + Math.random() * 2000);
-                            collisionProxy.position.x = farthest + (Math.random() - 0.5) * 200;
-                            collisionProxy.position.z = backZ;
-                        }
-                    }
-
-                    if (playerMesh && collisionDistZ < 3500) {
-                        this._avoidPlanetCollision(playerMesh, collisionProxy, soundManager);
-                    }
-                }
-            }
-
             if (p.userData?.done) return;
 
-            // Finaliza somente depois que o fade de saída estiver completo.
-            if (relZ > 6500) {
-                p.visible = false;
-                p.userData = p.userData || {};
+            const playerX = playerPosition?.x || 0;
+            const playerY = playerPosition?.y || 0;
+            const playerZ = playerPosition?.z || 0;
+            p.position.z = Math.min(
+                p.position.z + 80 * deltaTime,
+                playerZ - PLANET_MIN_DISTANCE
+            );
+
+            const distance = Math.max(PLANET_MIN_DISTANCE, playerZ - p.position.z);
+            const baseRadius = p.userData.baseRadius || 50;
+            p.scale.setScalar(getPlanetVisualScale(
+                baseRadius,
+                distance,
+                p.userData.initialDistance || PLANET_START_DISTANCE
+            ));
+
+            const halfWidth = getPlanetHalfWidth(distance);
+            const radius = baseRadius * p.scale.x;
+            if (distance <= 9000 && !p.userData.offscreen) {
+                const direction = Math.sign(p.userData.visualOffsetX) || 1;
+                const targetOffset = direction * (halfWidth + radius + 400);
+                p.userData.visualOffsetX = THREE.MathUtils.damp(
+                    p.userData.visualOffsetX,
+                    targetOffset,
+                    0.8,
+                    deltaTime
+                );
+            }
+
+            p.position.x = playerX + p.userData.visualOffsetX;
+            p.position.y = playerY + p.userData.visualOffsetY;
+
+            const fullyOutsideView = Math.abs(p.userData.visualOffsetX) - radius > halfWidth;
+            if (fullyOutsideView) {
+                p.userData.offscreen = true;
+                p.userData.offscreenElapsed += deltaTime;
+            }
+            const fadeOpacity = p.userData.offscreen
+                ? 1 - THREE.MathUtils.smoothstep(p.userData.offscreenElapsed, 0, 2.5)
+                : 1;
+
+            let modelOpacity = 1;
+            const transitionPlaceholder = p.userData.transitionPlaceholder;
+            if (transitionPlaceholder) {
+                p.userData.transitionElapsed += deltaTime;
+                modelOpacity = THREE.MathUtils.smoothstep(p.userData.transitionElapsed, 0, 0.8);
+                transitionPlaceholder.position.copy(p.position);
+                transitionPlaceholder.scale.copy(p.scale);
+                setPlanetOpacity(transitionPlaceholder, fadeOpacity * (1 - modelOpacity));
+            }
+            setPlanetOpacity(p, fadeOpacity * modelOpacity);
+
+            if (transitionPlaceholder && modelOpacity >= 1) {
+                this.scene.remove(transitionPlaceholder);
+                p.userData.transitionPlaceholder = null;
+            }
+
+            if (p.userData.offscreenElapsed >= 2.5) {
                 p.userData.done = true;
+                p.visible = false;
                 this.scene.remove(p);
-            } else {
-                const distZ = Math.abs(relZ);
-
-                p.visible = true;
-                const opacity = relZ > 0
-                    ? 1 - THREE.MathUtils.smoothstep(relZ, 0, 6500)
-                    : 1;
-
-                // Aplicar opacidade (só quando muda, evita traverse por frame)
-                if (p.userData._op !== opacity) {
-                    p.userData._op = opacity;
-                    p.traverse((child) => {
-                        if (child.isMesh && child.material) {
-                            child.material.transparent = true;
-                            child.material.opacity = opacity;
-                        }
-                    });
-                }
-
-                // Crescimento gradual (baseado na distância relativa ao jogador)
-                const scale = getPlanetVisualScale(distZ);
-                p.scale.set(scale, scale, scale);
             }
         });
 
@@ -326,12 +331,14 @@ export class SpaceEnvironment {
     }
 
     resetPlanetPosition(planet, index) {
-        planet.position.z = -14000 - Math.random() * 2000;
-        
-        const lanes = [-4800, -1600, 1600, 4800];
-        planet.position.x = lanes[index] + (Math.random() - 0.5) * 700;
-        
-        planet.position.y = -800 + (Math.random() * 1700) - (index * 100);
+        if (planet.userData.transitionPlaceholder) {
+            this.scene.remove(planet.userData.transitionPlaceholder);
+            planet.userData.transitionPlaceholder = null;
+        }
+        this._positionPlanetAtHorizon(planet, index);
+        planet.visible = true;
+        this.scene.add(planet);
+        setPlanetOpacity(planet, 1);
     }
 
     moveParticles(pos, vel, count, points, dt, moveInput, playerPos = null) {
@@ -358,52 +365,4 @@ export class SpaceEnvironment {
         points.geometry.attributes.position.needsUpdate = true;
     }
 
-  
-     _avoidPlanetCollision(playerMesh, planet, soundManager) {
-        const dx = playerMesh.position.x - planet.position.x;
-        const dy = playerMesh.position.y - planet.position.y;
-        const dz = playerMesh.position.z - planet.position.z;
-        const dist2D = Math.sqrt(dx * dx + dy * dy) || 1;
-        const dist3D = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-        
-        // Use um raio base calculado a partir do modelo, se disponível
-        const baseRadius = (planet.userData && planet.userData.baseRadius) ? planet.userData.baseRadius : 50;
-        const effectiveRadius = baseRadius * planet.scale.x + 150;
-        const detectionRadius = effectiveRadius * 1.6;
-
-        if (dist3D < detectionRadius) {
-            // Som apenas uma vez
-            if (soundManager && !playerMesh.userData?.planetSoundPlayed) {
-                soundManager.play('meteoro');
-                playerMesh.userData.planetSoundPlayed = true;
-            }
-
-            // Se já penetrou, forçar para fora
-            if (dist3D < effectiveRadius) {
-                // Empurra a nave para fora favorecendo movimento para o lado ou para cima,
-                // em vez de colocá-la exatamente na superfície radial.
-                const escapeDir = new THREE.Vector3(dx, dy, dz).normalize();
-                // Se a nave estiver muito alinhada verticalmente, priorizar empurrar para cima/baixo
-                const verticalBias = Math.abs(dy) < effectiveRadius * 0.6 ? (playerMesh.position.y < planet.position.y ? 1.6 : -1.6) : 1.0;
-                const biasedDir = new THREE.Vector3(escapeDir.x * 0.7, escapeDir.y * verticalBias, escapeDir.z * 0.9).normalize();
-                playerMesh.position.copy(planet.position.clone().addScaledVector(biasedDir, effectiveRadius + 120));
-                return;
-            }
-            
-            // Caso contrário, push suave
-            let pushForce = Math.max(0.5, (detectionRadius - dist3D) / (detectionRadius - effectiveRadius) * 6);
-
-            // Se a nave estiver muito centrada verticalmente, incentive passar por cima
-            const centeredVertically = Math.abs(dy) < effectiveRadius * 0.5;
-            const signY = (playerMesh.position.y < planet.position.y) ? 1 : -1;
-            const pushX = (dx / dist3D) * pushForce * 0.6;
-            const pushY = (dy / dist3D) * pushForce * (centeredVertically ? (1.8 * signY) : 1.0);
-            const pushZ = (dz / dist3D) * pushForce * 0.7;
-
-            playerMesh.position.x += pushX;
-            playerMesh.position.y += pushY;
-            playerMesh.position.z += pushZ;
-        } else {
-            if (playerMesh.userData) playerMesh.userData.planetSoundPlayed = false;
-        }
-    }}
+}

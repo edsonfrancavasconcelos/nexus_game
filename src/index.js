@@ -32,6 +32,7 @@ let countdown = 5;
 let isGameStarted = false;
 let boss = null;
 let isBossFight = false;
+let lastBossNarrativePhase = 0;
 
 const GAME_STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
 const isCoarsePointer = matchMedia('(pointer: coarse)').matches;
@@ -105,7 +106,7 @@ const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice)
 enemyManager.maxEnemiesOnScreen = quality.maxEnemies;
 const spaceEnvironment = new SpaceEnvironment(scene, quality.stars, quality.clouds);
 const progressionManager = new ProgressionManager();
-const naveMae = new NaveMae(scene);
+let naveMae = new NaveMae(scene);
 
 // ====================== HELPERS ======================
 function syncLevelResources() {
@@ -185,6 +186,82 @@ function updateLevelUI(currentLevel) {
     }
 }
 
+const missionBriefings = {
+    1: ['PATRULHA DE RECONHECIMENTO', 'Elimine as unidades hostis e descubra a origem da invasão.'],
+    2: ['MISSÃO 2', 'Esquadrão de drones autônomos detectado na fronteira.'],
+    3: ['MISSÃO 3', 'Sinais de comando hostis convergem para este setor.'],
+    4: ['MISSÃO 4', 'Patrulhas da Federação perderam contato. Continue avançando.'],
+    5: ['MISSÃO 5', 'Colônias próximas sob ataque. Elimine as unidades hostis.'],
+    6: ['MISSÃO 6', 'Transmissão fragmentada confirma: os ataques são coordenados pela NEXUS.'],
+    20: ['CAPÍTULO 2 — ZONA DE GUERRA', 'Cruzadores e interceptadores autônomos defendem a linha de frente.'],
+    33: ['CAPÍTULO 3 — CINTURÃO DE ASTEROIDES', 'A NEXUS prepara emboscadas ao longo da rota para o núcleo.'],
+    50: ['CAPÍTULO 4 — MUNDO INDUSTRIAL', 'Localize as fábricas de guerra e interrompa a produção de drones.'],
+    75: ['CAPÍTULO 5 — CORAÇÃO DA IA', 'A fortaleza da NEXUS está à frente. Defesas orbitais detectadas.'],
+    100: ['CAPÍTULO FINAL — TAPTOR STRIKE', 'A Nave-Mãe protege o núcleo central. Prepare-se para o confronto final.']
+};
+let combatMessageTimer = null;
+let campaignEndingShown = false;
+
+function showCombatMessage(title, message, briefing = false, duration = 3600) {
+    const panel = $id('combat-message');
+    const titleElement = $id('combat-message-title');
+    const bodyElement = $id('combat-message-body');
+    if (!panel || !titleElement || !bodyElement) return;
+
+    titleElement.textContent = title;
+    bodyElement.textContent = message;
+    panel.classList.toggle('briefing', briefing);
+    panel.classList.add('visible');
+    clearTimeout(combatMessageTimer);
+    combatMessageTimer = setTimeout(() => panel.classList.remove('visible'), duration);
+}
+
+function showMissionBriefing(level) {
+    const data = getLevelData(level);
+    const [title, message] = missionBriefings[level] || [
+        `MISSÃO ${level}`,
+        data.task
+    ];
+    showCombatMessage(title, message, true, 4200);
+}
+
+function showCampaignEnding() {
+    if (campaignEndingShown) return;
+    campaignEndingShown = true;
+    currentState = GAME_STATE.PAUSED;
+    soundManager.stopShipEngine();
+
+    const ending = $id('campaign-ending');
+    const choices = $id('campaign-ending-choices');
+    const prompt = $id('campaign-ending-prompt');
+    const result = $id('campaign-ending-result');
+    if (!ending || !choices || !prompt || !result) return;
+
+    choices.hidden = false;
+    result.hidden = true;
+    prompt.textContent = 'Com o núcleo vulnerável, a decisão final é sua. O que fará com a NEXUS?';
+    ending.setAttribute('aria-hidden', 'false');
+    ending.classList.add('visible');
+    choices.querySelector('button')?.focus();
+}
+
+function chooseCampaignEnding(choice) {
+    const choices = $id('campaign-ending-choices');
+    const prompt = $id('campaign-ending-prompt');
+    const result = $id('campaign-ending-result');
+    if (!choices || !prompt || !result || result.dataset.chosen) return;
+
+    result.dataset.chosen = choice;
+    choices.hidden = true;
+    prompt.textContent = choice === 'destroy'
+        ? 'NEXUS: núcleo desativado.'
+        : 'NEXUS: integração concluída. Novo comandante identificado.';
+    result.textContent = choice === 'destroy'
+        ? 'As frotas autônomas são desativadas. A humanidade recupera seus mundos e inicia a reconstrução. A galáxia tem uma nova chance de viver em paz.'
+        : 'A guerra termina quando você integra os sistemas da NEXUS ao Taptor Strike TS. A tela escurece. Uma nova ameaça é detectada além da galáxia. Continua...';
+    result.hidden = false;
+}
+
 window.showLevelUp = function (level, message) {
     const existing = document.getElementById('level-up-card');
     if (existing) existing.remove();
@@ -214,6 +291,9 @@ const handleEnemyScore = (pts, hitPosition) => {
     enemiesDestroyed++;
     window.enemiesDestroyed = enemiesDestroyed;
     updateHUD();
+    if (enemiesDestroyed % 5 === 0) {
+        showCombatMessage('COMUNICAÇÃO DE COMBATE', 'Excelente trabalho. Objetivo eliminado.');
+    }
 
     // Progressão principal pelo score (a cada 10.000)
     // O addScore do ProgressionManager fica como backup
@@ -226,9 +306,26 @@ const handleEnemyScore = (pts, hitPosition) => {
     }
 };
 
-const handlePlayerHit = () => {
+let damageVisualTimer = 0;
+let damageVisualDirection = 1;
+let hitModelBasePosition = null;
+const handlePlayerHit = (hitPosition = null) => {
     progressionManager.loseChance();
     updateResourceHUD();
+    damageVisualTimer = 0.24;
+    damageVisualDirection = Math.random() < 0.5 ? -1 : 1;
+    if (player.shipModel && !hitModelBasePosition) {
+        hitModelBasePosition = player.shipModel.position.clone();
+    }
+    const flash = $id('damage-flash');
+    if (flash) {
+        flash.classList.remove('active');
+        void flash.offsetWidth;
+        flash.classList.add('active');
+    }
+    soundManager.play('enemyLaser');
+    explosionManager.create(hitPosition || player.mesh.position.clone(), 0.55);
+    showCombatMessage('ALERTA DE COMBATE', 'Escudos comprometidos!');
 };
 setScoreHandler(handleEnemyScore, scorePopup);
 
@@ -236,9 +333,11 @@ const _camOffset = new THREE.Vector3();
 const _camTarget = new THREE.Vector3();
 const _camLook = new THREE.Vector3();
 const _camLookDelta = new THREE.Vector3(0, 2, -5);
+const _cameraShakeOffset = new THREE.Vector3();
 
-function updateCamera() {
+function updateCamera(deltaTime) {
     if (!player.shipModel) return;
+    if (!hitModelBasePosition) hitModelBasePosition = player.shipModel.position.clone();
 
     const pitchInfluence = player.shipModel.rotation.x * 0.15;
     const rollInfluence = player.shipModel.rotation.z * 0.1;
@@ -251,13 +350,24 @@ function updateCamera() {
     _camTarget.copy(player.shipModel.position).add(_camOffset);
     camera.position.lerp(_camTarget, 0.08);
 
-    _camLook.copy(player.shipModel.position).add(_camLookDelta);
+    if (damageVisualTimer > 0) damageVisualTimer = Math.max(0, damageVisualTimer - deltaTime);
+    const shakeStrength = damageVisualTimer > 0 ? damageVisualTimer / 0.24 : 0;
+    player.shipModel.position.copy(hitModelBasePosition);
+    player.shipModel.position.x += damageVisualDirection * 0.85 * shakeStrength;
+    player.shipModel.position.y -= 0.2 * shakeStrength;
+    _cameraShakeOffset.set(
+        Math.sin(performance.now() * 0.13) * 1.6 * shakeStrength,
+        Math.cos(performance.now() * 0.17) * 1.2 * shakeStrength,
+        0
+    );
+    _camLook.copy(player.shipModel.position).add(_camLookDelta).add(_cameraShakeOffset);
     camera.lookAt(_camLook);
 }
 
 // ====================== ANIMATE ======================
 let wasPlaying = false;
 let lastCountdownShown = null;
+let combatCommsCooldown = 0;
 function animate() {
     requestAnimationFrame(animate);
     if (currentState !== GAME_STATE.PLAYING) { wasPlaying = false; return; }
@@ -281,6 +391,7 @@ function animate() {
                 const nivelInicial = progressionManager.getLevel();
                 enemyManager.spawnWave(player, nivelInicial);
                 updateLevelUI(nivelInicial);
+                showMissionBriefing(nivelInicial);
                 updateEnvironmentTheme(nivelInicial);
                 progressionManager.resetLevelResources();
                 syncLevelResources();
@@ -327,10 +438,20 @@ function animate() {
         handlePlayerHit
     );
 
+    combatCommsCooldown = Math.max(0, combatCommsCooldown - deltaTime);
+    if (combatCommsCooldown === 0 && enemyManager.enemies.length >= 5) {
+        showCombatMessage('COMUNICAÇÃO DE COMBATE', 'Múltiplos contatos inimigos.');
+        soundManager.play('drone');
+        combatCommsCooldown = 12;
+    } else if (combatCommsCooldown === 0 && enemyManager.enemyProjectiles.length > 0) {
+        showCombatMessage('ALERTA TÁTICO', 'Atenção! Projéteis hostis detectados.');
+        combatCommsCooldown = 12;
+    }
+
     laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
     explosionManager.update(deltaTime);
     scorePopup.update(deltaTime);
-    updateCamera();
+    updateCamera(deltaTime);
 
     // ====================== PROGRESSÃO DE NÍVEL (sempre a cada 10.000 pontos) ======================
     const targetLevel = Math.floor(score / 10000) + 1;
@@ -350,37 +471,55 @@ function animate() {
 
         const info = getLevelData(targetLevel);
         window.showLevelUp(targetLevel, info.title);
+        showMissionBriefing(targetLevel);
     }
 
- // ====================== SPAWN DA NAVE MÃE (apenas 1 vez a partir do nível 50) ======================
-if (
-    currentLevel >= 50 &&
-    boss === null &&
-    !window.__BOSS_SPAWNED_LEVELS.has(50)   // marca só o 50 → nunca spawna de novo
-) {
-    window.__BOSS_SPAWNED_LEVELS.add(50);
+    const bossLevel = currentLevel >= 100 ? 100 : currentLevel >= 50 ? 50 : null;
+    if (
+        bossLevel !== null
+        && boss === null
+        && !window.__BOSS_SPAWNED_LEVELS.has(bossLevel)
+    ) {
+    window.__BOSS_SPAWNED_LEVELS.add(bossLevel);
     isBossFight = true;
-    lastBossLevel = 50;
+    lastBossLevel = bossLevel;
 
     console.log(`🚀 [BOSS] Spawnando Nave Mãe no nível ${currentLevel} (início no 50)`);
 
+    if (bossLevel === 100 && !naveMae.isAlive) {
+        naveMae = new NaveMae(scene);
+    }
     boss = naveMae;
     window.__NAVE_MAE_ATIVA = boss;
+    lastBossNarrativePhase = 0;
 
     if (progressionManager.registerBoss) {
         progressionManager.registerBoss(boss);
     }
     progressionManager.activeBoss = boss;
+    showCombatMessage('ALVO PRIORITÁRIO', 'Nave-Mãe da NEXUS localizada.');
 
-    // Sempre começa como nível 50 → pequena e cresce gradualmente
     if (boss.ativarNave) {
-        boss.ativarNave(50);
+        boss.ativarNave(bossLevel);
     }
 }
 
     // ====================== ATUALIZAÇÃO DO BOSS ======================
     if (boss) {
         boss.update(deltaTime, player.mesh?.position, laserManager, explosionManager, player, enemyManager, soundManager);
+        if (currentLevel >= 100 && boss.isActive) {
+            const phase = boss.hp > 7 ? 1 : boss.hp > 5 ? 2 : boss.hp > 3 ? 3 : 4;
+            if (phase !== lastBossNarrativePhase) {
+                lastBossNarrativePhase = phase;
+                const phaseMessages = [
+                    'Fase 1 — Destrua os canhões externos.',
+                    'Fase 2 — Neutralize os geradores de escudo.',
+                    'Fase 3 — Enxames de drones de elite detectados.',
+                    'Fase 4 — O núcleo central está exposto. Ataque agora!'
+                ];
+                showCombatMessage(`NAVE-MÃE — FASE ${phase}`, phaseMessages[phase - 1], true, 4000);
+            }
+        }
 
         // Boss destruído
         if (boss.hp <= 0 || (boss.isActive === false && boss.isAlive === false)) {
@@ -396,9 +535,13 @@ if (
             // Não remove o registro de spawn: o boss deve aparecer apenas uma vez por jogo.
             // Assim evitamos que o mesmo nível volte a spawnar a Nave Mãe infinitamente.
 
-            // Volta os inimigos normais no nível atual
-            enemyManager.clearAllEnemies();
-            enemyManager.spawnWave(player, progressionManager.getLevel());
+            if (currentLevel >= 100) {
+                showCampaignEnding();
+            } else {
+                // Volta os inimigos normais no nível atual
+                enemyManager.clearAllEnemies();
+                enemyManager.spawnWave(player, progressionManager.getLevel());
+            }
         }
     }
 
@@ -413,6 +556,7 @@ function setupNexusSelector() {
         progressionManager.setLevel(novoNivel);
         updateLevelHUD();
         updateLevelUI(novoNivel);
+        showMissionBriefing(novoNivel);
         updateEnvironmentTheme(novoNivel);
 
         if (currentState === GAME_STATE.PLAYING) {
@@ -458,12 +602,27 @@ function startGame() {
     lastBossLevel = -1;
     boss = null;
     isBossFight = false;
+    campaignEndingShown = false;
+    lastBossNarrativePhase = 0;
     window.__BOSS_SPAWNED_LEVELS.clear();
+    const ending = $id('campaign-ending');
+    const endingResult = $id('campaign-ending-result');
+    if (ending) {
+        ending.classList.remove('visible');
+        ending.setAttribute('aria-hidden', 'true');
+    }
+    if (endingResult) {
+        endingResult.hidden = true;
+        delete endingResult.dataset.chosen;
+    }
+    const endingChoices = $id('campaign-ending-choices');
+    if (endingChoices) endingChoices.hidden = false;
 
     const countdownDisplay = document.getElementById('countdown-display');
     if (countdownDisplay) countdownDisplay.style.display = 'block';
 
     currentState = GAME_STATE.PLAYING;
+    combatCommsCooldown = 0;
 
     const overlay = document.getElementById('overlay');
     if (overlay) overlay.style.display = 'none';
@@ -481,6 +640,13 @@ function startGame() {
 // ====================== DOM ======================
 window.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('start-btn');
+    const endingChoices = $id('campaign-ending-choices');
+    if (endingChoices) {
+        endingChoices.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-ending-choice]');
+            if (button) chooseCampaignEnding(button.dataset.endingChoice);
+        });
+    }
 
     window.addEventListener('keydown', (e) => {
         if (e.code === 'KeyQ') player.startBarrelRoll(-1);

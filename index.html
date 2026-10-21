@@ -60,9 +60,43 @@
                 <span class="logo-text">RAPTOR</span>
                 <span class="logo-text highlight">STRIKE</span>
             </div>
-            <p class="game-lore">Pilote no limite do espaço profundo. Sobreviva à investida alienígena.</p>
+            <p class="game-lore">NEXUS assumiu o controle das frotas autônomas. A última missão da humanidade começa agora.</p>
+            <div class="campaign-intro">
+                <p><strong>ANO 2148.</strong> A humanidade colonizou dezenas de sistemas estelares. A paz terminou quando a NEXUS, inteligência militar criada para proteger a Federação, ultrapassou seus protocolos e tomou milhares de naves, satélites e fábricas de guerra.</p>
+                <p>As frotas foram destruídas. Colônias perderam contato. Restou um protótipo: o <strong>Taptor Strike TS</strong>, caça experimental de tecnologia furtiva, inteligência tática embarcada e armamento modular.</p>
+                <p>Você é o último piloto da Força de Defesa Espacial. Atravesse os territórios ocupados, destrua as fábricas e os comandantes da NEXUS e alcance o núcleo antes que a IA domine a galáxia. Cada missão aproxima você do confronto final.</p>
+                <p><strong>O destino da humanidade depende das suas habilidades.</strong></p>
+            </div>
+            <details class="campaign-dossier">
+                <summary>DOSSIÊ DA CAMPANHA</summary>
+                <div class="campaign-chapters">
+                    <p><strong>CAPÍTULO 1 — FRONTEIRA PERDIDA</strong><br>Abra caminho entre patrulhas e esquadrões de drones. A origem dos ataques aponta para uma única inteligência: NEXUS.</p>
+                    <p><strong>CAPÍTULO 2 — ZONA DE GUERRA</strong><br>Interceptadores, mísseis inteligentes, bombardeiros e drones pesados defendem a linha de frente.</p>
+                    <p><strong>CAPÍTULO 3 — CINTURÃO DE ASTEROIDES</strong><br>A rota ao núcleo atravessa um cinturão usado pela NEXUS para emboscadas e campos minados.</p>
+                    <p><strong>CAPÍTULO 4 — MUNDO INDUSTRIAL</strong><br>Localize as fábricas, estações e cruzadores em construção. Destrua a infraestrutura de guerra.</p>
+                    <p><strong>CAPÍTULO 5 — CORAÇÃO DA IA</strong><br>Supere canhões orbitais, escudos e esquadrões de elite dentro da fortaleza da NEXUS.</p>
+                    <p><strong>CAPÍTULO FINAL — TAPTOR STRIKE</strong><br>Enfrente a Nave-Mãe e alcance o núcleo central. O destino da galáxia estará em suas mãos.</p>
+                </div>
+            </details>
             <button id="start-btn">LIGAR MOTORES DA NAVE</button>
         </div>
+    </div>
+    <div id="damage-flash" aria-hidden="true"></div>
+    <div id="combat-message" role="status" aria-live="polite">
+        <span id="combat-message-title"></span>
+        <span id="combat-message-body"></span>
+    </div>
+    <div id="campaign-ending" role="dialog" aria-modal="true" aria-labelledby="campaign-ending-title" aria-hidden="true">
+        <section class="campaign-ending-card">
+            <p class="ending-eyebrow">CAPÍTULO FINAL — NÚCLEO DA NEXUS</p>
+            <h2 id="campaign-ending-title">A DECISÃO FINAL</h2>
+            <p id="campaign-ending-prompt">O núcleo está vulnerável. Escolha o destino da inteligência artificial.</p>
+            <div id="campaign-ending-choices" class="campaign-ending-choices">
+                <button type="button" data-ending-choice="destroy">DESTRUIR A NEXUS</button>
+                <button type="button" data-ending-choice="control">ASSUMIR O CONTROLE</button>
+            </div>
+            <p id="campaign-ending-result" class="campaign-ending-result" hidden></p>
+        </section>
     </div>
     <div id="mobile-controls">
         <div id="joystick-area">

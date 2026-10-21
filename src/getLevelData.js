@@ -1,15 +1,56 @@
 export function getLevelData(level) {
-    // 1. Definição dos marcos por intervalos (Prioridade)
-    if (level >= 100) return { title: "Fronteira da Nave-Mãe", task: "Você chegou ao coração inimigo. Destrua a Nave-Mãe para vencer!" };
-    if (level >= 75) return { title: "Setor de Radiação", task: "Escudos críticos! Elimine os inimigos rapidamente." };
-    if (level >= 50) return { title: "Setor de Guerra Alpha", task: "Zona de conflito total. Não pare de atirar." };
-    if (level >= 33) return { title: "Zona de Bloqueio Hostil", task: "Naves pesadas interceptando. Priorize alvos blindados." };
-    if (level >= 20) return { title: "Perímetro Defensivo", task: "Inimigos detectados! Mantenha a velocidade e responda ao fogo." };
-    if (level >= 1) return { title: "Setor de Hostil", task: "Calibre seus canhões e destrua os dróides básicos." };
-
-    // 2. Fallback (Para níveis inferiores a 1)
-    return { 
-        title: "Zona de Patrulha", 
-        task: "Detectada presença inimiga. Limpe o perímetro imediatamente." 
+    if (level >= 100) {
+        return {
+            chapter: 6,
+            chapterTitle: "Taptor Strike",
+            title: "Núcleo da NEXUS",
+            task: "A Nave-Mãe protege o núcleo central. Destrua-a e decida o destino da NEXUS."
+        };
+    }
+    if (level >= 75) {
+        return {
+            chapter: 5,
+            chapterTitle: "Coração da IA",
+            title: "Fortaleza da NEXUS",
+            task: "Atravesse as defesas orbitais e os esquadrões de elite até o núcleo."
+        };
+    }
+    if (level >= 50) {
+        return {
+            chapter: 4,
+            chapterTitle: "Mundo Industrial",
+            title: "Fábricas da NEXUS",
+            task: "A infraestrutura inimiga produz novas frotas. Ataque as defesas industriais."
+        };
+    }
+    if (level >= 33) {
+        return {
+            chapter: 3,
+            chapterTitle: "Cinturão de Asteroides",
+            title: "Rota de Emboscada",
+            task: "A NEXUS usa o cinturão para ocultar suas forças. Mantenha-se alerta."
+        };
+    }
+    if (level >= 20) {
+        return {
+            chapter: 2,
+            chapterTitle: "Zona de Guerra",
+            title: "Linha de Defesa",
+            task: "Interceptadores hostis defendem a linha de frente da NEXUS."
+        };
+    }
+    if (level >= 1) {
+        return {
+            chapter: 1,
+            chapterTitle: "Fronteira Perdida",
+            title: "Colônias da Federação",
+            task: "Elimine as patrulhas e descubra quem coordena a invasão."
+        };
+    }
+    return {
+        chapter: 1,
+        chapterTitle: "Fronteira Perdida",
+        title: "Zona de Patrulha",
+        task: "Presença hostil detectada. Abra caminho pelas linhas inimigas."
     };
 }

@@ -253,9 +253,13 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
 
         const spawnDistance = 2200;
         const centerSpawnPoint = camPos.clone().addScaledVector(camDirection, spawnDistance);
-        const sideChoice = Math.random() < 0.5 ? -1 : 1;
-        const lateralOffset = sideChoice * (400 + Math.random() * 280);
-        const verticalOffset = (Math.random() - 0.5) * 220;
+        const entrySide = Math.floor(Math.random() * 4);
+        const lateralOffset = entrySide < 2
+            ? (entrySide === 0 ? -1 : 1) * (400 + Math.random() * 280)
+            : (Math.random() - 0.5) * 220;
+        const verticalOffset = entrySide >= 2
+            ? (entrySide === 2 ? -1 : 1) * (120 + Math.random() * 140)
+            : (Math.random() - 0.5) * 220;
 
         const finalSpawnPos = centerSpawnPoint.clone()
             .addScaledVector(camRight, lateralOffset)
@@ -400,6 +404,24 @@ enemy.position.addScaledVector(data.moveDir, data.speed * deltaTime);
 const aimTarget = _eAim.copy(pPos);
 aimTarget.y += Math.sin(nowMs * 0.001 + data.wanderSeed) * 0.8;
 enemy.lookAt(aimTarget);
+
+            if (
+                data.type !== 'asteroide'
+                && data.type !== 'meteoro'
+                && !data.playerImpactHandled
+                && enemy.position.distanceToSquared(pPos) < 30 * 30
+            ) {
+                enemy.position.copy(previousPosition);
+                data.moveDir.negate();
+                data.playerImpactHandled = true;
+                const impactPosition = enemy.position.clone();
+                if (onPlayerHit) {
+                    onPlayerHit(impactPosition);
+                } else if (explosionManager) {
+                    explosionManager.create(impactPosition, 0.55);
+                }
+                continue;
+            }
 
 // Som de passagem
 if (soundManager && !data.passSoundPlayed && data.passSound) {
