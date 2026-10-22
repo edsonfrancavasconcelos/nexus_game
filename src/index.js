@@ -308,6 +308,8 @@ const handleEnemyScore = (pts, hitPosition) => {
 
 let damageVisualTimer = 0;
 let damageVisualDirection = 1;
+let cinematicShakeTimer = 0;
+let cinematicShakeStrength = 0;
 let hitModelBasePosition = null;
 const handlePlayerHit = (hitPosition = null) => {
     progressionManager.loseChance();
@@ -324,7 +326,12 @@ const handlePlayerHit = (hitPosition = null) => {
         flash.classList.add('active');
     }
     soundManager.play('enemyLaser');
-    explosionManager.create(hitPosition || player.mesh.position.clone(), 0.55);
+    explosionManager.create(hitPosition || player.mesh.position.clone(), {
+        kind: 'damage',
+        scale: 0.55,
+        flashColor: 0xff3545,
+        lightColor: 0xff1828
+    });
     showCombatMessage('ALERTA DE COMBATE', 'Escudos comprometidos!');
 };
 setScoreHandler(handleEnemyScore, scorePopup);
@@ -334,6 +341,10 @@ const _camTarget = new THREE.Vector3();
 const _camLook = new THREE.Vector3();
 const _camLookDelta = new THREE.Vector3(0, 2, -5);
 const _cameraShakeOffset = new THREE.Vector3();
+explosionManager.onCinematicImpact = (strength) => {
+    cinematicShakeTimer = Math.max(cinematicShakeTimer, 0.28);
+    cinematicShakeStrength = Math.max(cinematicShakeStrength, strength);
+};
 
 function updateCamera(deltaTime) {
     if (!player.shipModel) return;
@@ -351,13 +362,20 @@ function updateCamera(deltaTime) {
     camera.position.lerp(_camTarget, 0.08);
 
     if (damageVisualTimer > 0) damageVisualTimer = Math.max(0, damageVisualTimer - deltaTime);
+    if (cinematicShakeTimer > 0) {
+        cinematicShakeTimer = Math.max(0, cinematicShakeTimer - deltaTime);
+        if (cinematicShakeTimer === 0) cinematicShakeStrength = 0;
+    }
     const shakeStrength = damageVisualTimer > 0 ? damageVisualTimer / 0.24 : 0;
     player.shipModel.position.copy(hitModelBasePosition);
     player.shipModel.position.x += damageVisualDirection * 0.85 * shakeStrength;
     player.shipModel.position.y -= 0.2 * shakeStrength;
+    const impactStrength = cinematicShakeTimer > 0
+        ? (cinematicShakeTimer / 0.28) * cinematicShakeStrength
+        : 0;
     _cameraShakeOffset.set(
-        Math.sin(performance.now() * 0.13) * 1.6 * shakeStrength,
-        Math.cos(performance.now() * 0.17) * 1.2 * shakeStrength,
+        Math.sin(performance.now() * 0.13) * (1.6 * shakeStrength + impactStrength),
+        Math.cos(performance.now() * 0.17) * (1.2 * shakeStrength + impactStrength * 0.72),
         0
     );
     _camLook.copy(player.shipModel.position).add(_camLookDelta).add(_cameraShakeOffset);
@@ -448,7 +466,7 @@ function animate() {
         combatCommsCooldown = 12;
     }
 
-    laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager);
+    laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager, player.mesh.position);
     explosionManager.update(deltaTime);
     scorePopup.update(deltaTime);
     updateCamera(deltaTime);

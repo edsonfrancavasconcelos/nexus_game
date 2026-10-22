@@ -3,6 +3,7 @@ export class SoundManager {
         this.sounds = {
             shipEngine: new Audio('/assets/sounds/nave.mp3'),
             playerShot: new Audio('/assets/sounds/laser.mp3'),
+            missileLaunch: new Audio('/assets/sounds/missil.mp3'),
             pdc: new Audio('/assets/sounds/pdc_shot.mp3'),
             enemyLaser: new Audio('/assets/sounds/laser_inimigo.mp3'),
             explosion: new Audio('/assets/sounds/explosao_inimiga.mp3'),
@@ -19,6 +20,8 @@ export class SoundManager {
 
         this.aliases = {
             missile: 'playerShot',
+            missileEngine: 'shipEngine',
+            missileImpact: 'explosion',
             laser_inimigo: 'enemyLaser',
             laser_inim_6: 'enemyLaser',
             inimiga_passando: 'enemyPass',
@@ -36,8 +39,11 @@ export class SoundManager {
         this.lastPlayTime = new Map();
         this.activeCloneCount = {};
         this.pool = {};
+        this.loopingVoices = new Map();
         this.maxCloneCount = {
             playerShot: 4,
+            missileLaunch: 2,
+            shipEngine: 4,
             pdc: 3,
             explosion: 3,
             enemyLaser: 4,
@@ -66,7 +72,63 @@ export class SoundManager {
         this.sounds.shipEngine?.pause();
     }
 
-    play(name) {
+    startLoop(name, id, options = {}) {
+        if (!name || id === undefined || id === null || this.loopingVoices.has(id)) return;
+        const soundKey = this.aliases[name] || name;
+        const baseSound = this.sounds[soundKey];
+        if (!baseSound) {
+            console.warn(`Som não encontrado: ${name} (tentou chave: ${soundKey})`);
+            return;
+        }
+
+        const maxClones = this.maxCloneCount[soundKey] ?? 3;
+        const activeClones = this.activeCloneCount[soundKey] || 0;
+        if (activeClones >= maxClones) return;
+
+        this.activeCloneCount[soundKey] = activeClones + 1;
+        const pool = this.pool[soundKey] || (this.pool[soundKey] = []);
+        const audio = pool.pop() || baseSound.cloneNode(true);
+        audio.loop = true;
+        audio.currentTime = 0;
+        audio.playbackRate = options.playbackRate ?? 1;
+        const voice = {
+            audio,
+            pool,
+            soundKey,
+            baseVolume: Math.max(0, Math.min(1, options.volume ?? 0.18)),
+            maxDistance: Math.max(1, options.maxDistance ?? 1200)
+        };
+        this.loopingVoices.set(id, voice);
+        audio.volume = voice.baseVolume;
+        audio.onended = () => this.stopLoop(id);
+        audio.play().catch((error) => {
+            console.warn(`Não foi possível iniciar o loop de áudio "${name}":`, error);
+            this.stopLoop(id);
+        });
+    }
+
+    updateLoop(id, distance = 0) {
+        const voice = this.loopingVoices.get(id);
+        if (!voice) return;
+        const attenuation = Math.max(0, 1 - Math.max(0, distance) / voice.maxDistance);
+        voice.audio.volume = voice.baseVolume * attenuation;
+    }
+
+    stopLoop(id) {
+        const voice = this.loopingVoices.get(id);
+        if (!voice) return;
+        this.loopingVoices.delete(id);
+        voice.audio.onended = null;
+        voice.audio.pause();
+        voice.audio.currentTime = 0;
+        voice.audio.loop = false;
+        if (this.activeCloneCount[voice.soundKey] > 0) {
+            this.activeCloneCount[voice.soundKey] -= 1;
+        }
+        if (voice.pool.length < 6) voice.pool.push(voice.audio);
+    }
+
+    play(name, options = null) {
         if (!name) return;
 
         const soundKey = this.aliases[name] || name;
@@ -95,8 +157,11 @@ export class SoundManager {
         const soundClone = pool.pop() || baseSound.cloneNode(true);
         soundClone.loop = false;
         soundClone.currentTime = 0;
+        soundClone.playbackRate = options?.playbackRate ?? 1;
 
-        if (soundKey === 'playerShot' || soundKey.includes('laser')) {
+        if (soundKey === 'missileLaunch') {
+            soundClone.volume = 0.48;
+        } else if (soundKey === 'playerShot' || soundKey.includes('laser')) {
             soundClone.volume = 0.22;
         } else if (soundKey === 'explosion') {
             soundClone.volume = 0.55;
@@ -104,6 +169,9 @@ export class SoundManager {
             soundClone.volume = 0.45;
         } else {
             soundClone.volume = 0.35;
+        }
+        if (options?.volume !== undefined) {
+            soundClone.volume = Math.max(0, Math.min(1, options.volume));
         }
 
         let cleanupCalled = false;

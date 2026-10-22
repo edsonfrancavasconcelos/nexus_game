@@ -187,7 +187,13 @@ export class ExplosionManager {
 
         const isHit = multiplicador <= 0.75;
         if (this.explosions.length > this.maxActiveExplosions) return;
-        if (this.soundManager) this.soundManager.play('explosion');
+        if (this.soundManager) {
+            const sound = visualOptions?.sound ?? 'explosion';
+            this.soundManager.play(sound, sound === 'missileImpact' ? { volume: 0.78 } : null);
+        }
+        if (visualOptions?.kind === 'missile' || visualOptions?.kind === 'boss') {
+            this.onCinematicImpact?.(visualOptions.kind === 'boss' ? 0.62 : 0.42);
+        }
 
         const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
 
@@ -196,10 +202,15 @@ export class ExplosionManager {
         const distCam = this.camera ? this.camera.position.distanceTo(safePosition) : Math.abs(safePosition.z) + 75;
         const escalaBase = Math.min(160, Math.max(40, distCam * 0.085)) * (this.isMobile ? 0.9 : 1);
         const size = Math.min(escalaBase * multiplicador, 420);
+        const isPlasma = visualOptions?.kind === 'plasma';
+        const flashColor = visualOptions?.flashColor
+            ?? (isPlasma ? 0x8cecff : visualOptions?.kind === 'missile' ? 0xffffff : 0xffffff);
+        const lightColor = visualOptions?.lightColor
+            ?? (isPlasma ? 0x24cfff : visualOptions?.kind === 'missile' ? 0xffa947 : 0xffa52f);
 
         const sprite = this._acquireSprite();
         sprite.material.map.offset.set(0, 1 - 1 / this.spriteRows);
-        sprite.material.color.setHex(visualOptions?.kind === 'plasma' ? (visualOptions.flashColor ?? 0x70dfff) : 0xffffff);
+        sprite.material.color.setHex(flashColor);
         sprite.material.opacity = 1;
         sprite.position.copy(safePosition);
         sprite.scale.set(size * 0.6, size * 0.6, 1);
@@ -208,11 +219,11 @@ export class ExplosionManager {
         const exp = { sprite, life: 0.7, maxLife: 0.7, size, flash: null, ring: null };
 
         if (!isHit) {
-            this._sparkColor = visualOptions?.kind === 'plasma' ? (visualOptions.lightColor ?? 0x24cfff) : 0xffa52f;
+            this._sparkColor = lightColor;
             const flash = this._acquireFxSprite(this.glowTexture);
             flash.position.copy(safePosition);
             flash.scale.set(size * 0.5, size * 0.5, 1);
-            flash.material.color.setHex(visualOptions?.kind === 'plasma' ? (visualOptions.lightColor ?? 0x24cfff) : 0xffffff);
+            flash.material.color.setHex(lightColor);
             flash.material.opacity = 1;
             this.scene.add(flash);
             exp.flash = flash;
@@ -220,7 +231,7 @@ export class ExplosionManager {
             const ring = this._acquireFxSprite(this.ringTexture);
             ring.position.copy(safePosition);
             ring.scale.set(size * 0.3, size * 0.3, 1);
-            ring.material.color.setHex(visualOptions?.kind === 'plasma' ? (visualOptions.flashColor ?? 0x70dfff) : 0xffffff);
+            ring.material.color.setHex(flashColor);
             ring.material.opacity = 0.9;
             this.scene.add(ring);
             exp.ring = ring;
@@ -228,7 +239,7 @@ export class ExplosionManager {
             const sparkCount = Math.min(Math.round((this.isMobile ? 8 : 14) * Math.min(multiplicador, 2.5)), this.isMobile ? 18 : 40);
             this._spawnSparks(safePosition, sparkCount, size * 5.5, Math.max(size * 0.28, 2));
         } else {
-            this._sparkColor = visualOptions?.kind === 'plasma' ? (visualOptions.lightColor ?? 0x24cfff) : 0xffa52f;
+            this._sparkColor = lightColor;
             this._spawnSparks(safePosition, this.isMobile ? 3 : 5, size * 4, Math.max(size * 0.22, 1.5));
         }
 
@@ -238,6 +249,7 @@ export class ExplosionManager {
 
     createBigExplosion(position) {
         const safePosition = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(0, 0, 0);
+        this.onCinematicImpact?.(0.72);
         this.create(safePosition, this.isMobile ? 1.8 : 2.2);
         this.createDebris(safePosition, this.isMobile ? 4 : 6);
     }

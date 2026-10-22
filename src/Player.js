@@ -226,9 +226,6 @@ export class Player {
             last.mesh.lookAt(spawnPos.clone().add(forward));
         }
 
-        if (window.soundManager) {
-            window.soundManager.play('playerShot');
-        }
         return true;
     }
 

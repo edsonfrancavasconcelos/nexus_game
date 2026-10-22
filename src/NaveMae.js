@@ -137,7 +137,7 @@ export class NaveMae {
         return Math.min(10, Math.floor((level - 50) / 5) + 1);
     }
 
-    takeDamage(amount, hitPoint = null, explosionManager = null) {
+    takeDamage(amount, hitPoint = null, explosionManager = null, impactSound = 'explosion') {
         if (!this.isAlive || !this.isActive) return false;
         if (Date.now() < this.invulnerableUntil) return false;
 
@@ -160,6 +160,7 @@ export class NaveMae {
         if (explosionManager && hitPoint) {
             explosionManager.create(hitPoint.clone(), {
                 kind: 'boss',
+                sound: impactSound,
                 flashColor: 0xff6600,
                 lightColor: 0xffbb33,
                 lightIntensity: 1800,
@@ -261,7 +262,8 @@ if (laserManager?.missiles) {
 
         if (missile.mesh.position.distanceTo(this.mesh.position) < hitRadius * 1.3) {
             const hitPoint = missile.mesh.position.clone();
-            this.takeDamage(120, hitPoint, explosionManager);
+            if (Date.now() < this.invulnerableUntil) soundManager?.play('missileImpact', { volume: 0.72 });
+            this.takeDamage(120, hitPoint, explosionManager, 'missileImpact');
 
             // Remove o míssil direito
             if (typeof laserManager.disposeMissile === 'function') {
