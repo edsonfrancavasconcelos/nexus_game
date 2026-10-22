@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { markBloom } from './BloomPipeline.js';
 
 // Exaustão de pós-combustão: 3 cones com ShaderMaterial aditivo + um InstancedMesh
 // de riscos alongados. Tudo é criado uma única vez; o update só altera uniforms
@@ -21,7 +22,6 @@ void main() {
 }`;
 
 const FRAG = /* glsl */`
-precision mediump float;
 uniform float uTime;
 uniform float uIntensity;
 uniform float uFalloff;
@@ -112,6 +112,7 @@ export class Afterburner {
         this.streaks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.streaks.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.streakCount * 3), 3);
         this.group.add(this.streaks);
+        markBloom(this.group);
 
         this._state = Array.from({ length: this.streakCount }, () => ({ phase: Math.random(), x: 0, y: 0, speed: 1, len: 1 }));
         this._state.forEach((s) => this._respawn(s));

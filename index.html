@@ -9,12 +9,14 @@
     <meta name="apple-mobile-web-app-title" content="Nexus Raptor Strike TS">
     
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/hud.css">
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/img/icon-192.png">
     <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
     <meta name="theme-color" content="#020208">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body>
@@ -145,9 +147,7 @@
         </button> 
     </div>
 
-    <div id="countdown-display" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); 
-       font-size: 100px; color: #00ffff; font-family: sans-serif; display: none; z-index: 10000; text-shadow: 0 0 20px #000;">
-    </div>
+    <div id="countdown-display"></div>
 
    <script>
     document.addEventListener('DOMContentLoaded', () => {

@@ -12,6 +12,7 @@ import { ProgressionManager } from './ProgressionManager.js';
 import { getLevelData } from './getLevelData.js';
 import { NaveMae } from './NaveMae.js';
 import { PerfMonitor } from './PerfMonitor.js';
+import { BloomPipeline } from './BloomPipeline.js';
 import { detectQualityProfile } from './QualityProfile.js';
 
 window.moveInput = { x: 0, y: 0 };
@@ -77,9 +78,19 @@ const applyViewportSettings = () => {
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(dynamicPixelRatio ? Math.min(dynamicPixelRatio, viewport.pixelRatio) : viewport.pixelRatio);
     renderer.setSize(viewport.width, viewport.height, false);
+    bloomPipeline?.setSize(viewport.width, viewport.height, renderer.getPixelRatio());
 };
 
+let bloomPipeline = null;
 applyViewportSettings();
+if (quality.bloom > 0) {
+    bloomPipeline = new BloomPipeline(renderer, scene, camera, {
+        strength: quality.bloom,
+        resolutionScale: isMobileDevice ? 0.35 : 0.5
+    });
+    applyViewportSettings();
+}
+const renderFrame = () => (bloomPipeline ? bloomPipeline.render() : renderer.render(scene, camera));
 document.body.appendChild(renderer.domElement);
 
 const perfMonitor = new PerfMonitor(renderer, scene, {
@@ -211,6 +222,7 @@ function showCombatMessage(title, message, briefing = false, duration = 3600) {
     titleElement.textContent = title;
     bodyElement.textContent = message;
     panel.classList.toggle('briefing', briefing);
+    panel.classList.toggle('alert', !briefing && /ALERTA/.test(title));
     panel.classList.add('visible');
     clearTimeout(combatMessageTimer);
     combatMessageTimer = setTimeout(() => panel.classList.remove('visible'), duration);
@@ -268,20 +280,15 @@ window.showLevelUp = function (level, message) {
 
     const card = document.createElement('div');
     card.id = 'level-up-card';
-    card.style.cssText = `
-        position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-        padding:30px;border-radius:18px;text-align:center;z-index:20000;
-        color:white;pointer-events:none;background:rgba(0,0,0,0.7);
-        border:1px solid #00ffff;backdrop-filter:blur(10px);
-    `;
-
+    card.setAttribute('role', 'status');
     card.innerHTML = `
-        <h2 style="color:#00ffff;margin:0;font-size:20px;text-transform:uppercase;letter-spacing:2px;">Zona Alcançada</h2>
-        <div style="font-size:60px;font-weight:bold;margin:10px 0;color:#fff;">${level}</div>
-        <p style="font-size:16px;max-width:300px;line-height:1.4;margin:10px 0;">${message || ''}</p>
+        <span class="lu-title">Zona alcançada</span><span class="lu-level">${level}</span>
+        <div class="lu-msg">${message || ''}</div>
     `;
     document.body.appendChild(card);
-    setTimeout(() => card.remove(), 5000);
+    requestAnimationFrame(() => card.classList.add('visible'));
+    setTimeout(() => card.classList.remove('visible'), 3200);
+    setTimeout(() => card.remove(), 3700);
 };
 
 // ====================== SCORE / HIT ======================
@@ -417,7 +424,7 @@ function animate() {
                 if (audioInitialized) soundManager.startShipEngine();
             }
         }
-        renderer.render(scene, camera);
+        renderFrame();
         return;
     }
 
@@ -563,7 +570,7 @@ function animate() {
         }
     }
 
-    renderer.render(scene, camera);
+    renderFrame();
     perfMonitor.tick(deltaTime);
 }
 

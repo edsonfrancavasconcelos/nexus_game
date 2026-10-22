@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { markBloom } from './BloomPipeline.js';
 import { awardPoints, explosionSizeFor } from './Scoring.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -537,6 +538,7 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
         const laser = new THREE.Group();
         laser.add(new THREE.Mesh(ENEMY_LASER_GEO, ENEMY_LASER_MAT));
         laser.add(new THREE.Mesh(ENEMY_LASER_GLOW_GEO, ENEMY_LASER_GLOW_MAT));
+        markBloom(laser);
         laser.position.copy(enemy.position);
         laser.lookAt(pPos);
         this.scene.add(laser);

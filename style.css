@@ -766,10 +766,7 @@ canvas {
 
 #level-up-card,
 .level-transition-card {
-    background: transparent !important;
-    backdrop-filter: none !important;
-    border: none !important;
-    box-shadow: none !important;
+    border-radius: 0;
 }
 
 /* Roll controls */

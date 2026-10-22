@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { markBloom } from './BloomPipeline.js';
 import { awardPoints, explosionSizeFor } from './Scoring.js';
 
 const LASER_OUTER_GEO = new THREE.CylinderGeometry(0.9, 0.9, 13, 8).rotateX(Math.PI / 2);
@@ -147,6 +148,7 @@ export class LaserManager {
         this.missileParticleMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
         this.missileParticleMesh.count = 0;
         this.missileParticleMesh.frustumCulled = false;
+        markBloom(this.missileParticleMesh);
         this.scene.add(this.missileParticleMesh);
         this._particleDummy = new THREE.Object3D();
         this._particleColor = new THREE.Color();
@@ -174,6 +176,7 @@ export class LaserManager {
             ring.rotation.x = Math.PI / 2;
             flash.add(ring);
             flash.userData = { life: 0, glowMat, ringMat };
+            markBloom(flash);
             flash.visible = false;
             this.muzzlePool.push(flash);
         }
@@ -189,6 +192,7 @@ export class LaserManager {
         trail.position.z = -17;
         nose.position.z = 7.5;
         laser.add(trail, glow, edge, core, nose);
+        markBloom(laser);
         laser.userData = { direction: new THREE.Vector3(), life: 0, trail };
         return laser;
     }
@@ -255,6 +259,7 @@ export class LaserManager {
             missile.add(heat);
 
             missile.userData = { direction: new THREE.Vector3(), flame, flameCore, trail, heat };
+            [tip, rearGlow, flame, flameCore, trail, heat].forEach(markBloom);
         }
 
         missile.position.copy(position);

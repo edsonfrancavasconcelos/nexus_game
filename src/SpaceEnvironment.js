@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { SpaceFX } from './SpaceFX.js';
+import { BackgroundEvents } from './BackgroundEvents.js';
 
 function createCloudTexture() {
     const canvas = document.createElement('canvas');
@@ -15,18 +17,26 @@ function createCloudTexture() {
 
 function createPlanetCloudTexture() {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
+    canvas.width = 512;
+    canvas.height = 256;
     const ctx = canvas.getContext('2d');
-    for (let i = 0; i < 52; i++) {
+    // Nuvens em faixas: concentradas perto do equador, com blobs grandes e pequenos.
+    for (let i = 0; i < 150; i++) {
         const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const radius = 4 + Math.random() * 13;
+        const y = canvas.height * (0.5 + (Math.random() + Math.random() - 1) * 0.42);
+        const radius = 6 + Math.random() * 26;
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-        gradient.addColorStop(0, 'rgba(255,255,255,0.18)');
+        gradient.addColorStop(0, 'rgba(255,255,255,0.2)');
         gradient.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = gradient;
-        ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+        for (const dx of [-canvas.width, 0, canvas.width]) {
+            ctx.save();
+            ctx.translate(x + dx, y);
+            ctx.scale(1.8, 1);
+            ctx.translate(-x, -y);
+            ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+            ctx.restore();
+        }
     }
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
@@ -34,17 +44,70 @@ function createPlanetCloudTexture() {
     return texture;
 }
 
-function createNebulaTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 128;
-    const ctx = canvas.getContext('2d');
-    const gradient = ctx.createRadialGradient(64, 64, 5, 64, 64, 64);
-    gradient.addColorStop(0, 'rgba(112,145,255,0.32)');
-    gradient.addColorStop(0.4, 'rgba(82,85,190,0.16)');
-    gradient.addColorStop(1, 'rgba(38,40,120,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 128, 128);
-    return new THREE.CanvasTexture(canvas);
+// Direção (mundo) de onde vem a luz da estrela, normalizada.
+const STAR_DIRECTION = new THREE.Vector3(-0.7, 0.45, 0.55).normalize();
+
+const PLANET_VERT = `
+varying vec3 vNormalView;
+varying vec3 vViewPos;
+void main() {
+    vNormalView = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vViewPos = mv.xyz;
+    gl_Position = projectionMatrix * mv;
+}`;
+
+const ATMOSPHERE_FRAG = `
+uniform vec3 uColor;
+uniform vec3 uStarDir;
+uniform float uOpacity;
+varying vec3 vNormalView;
+varying vec3 vViewPos;
+void main() {
+    vec3 n = normalize(vNormalView);
+    vec3 viewDir = normalize(-vViewPos);
+    // Casca BackSide: o brilho cresce rumo à borda do planeta e some na borda externa.
+    float f = clamp(-dot(n, viewDir) / 0.42, 0.0, 1.0);
+    float rim = pow(f, 1.6);
+    vec3 starView = normalize((viewMatrix * vec4(uStarDir, 0.0)).xyz);
+    float side = mix(0.2, 1.0, smoothstep(-0.5, 0.6, dot(n, starView)));
+    vec3 col = mix(uColor, vec3(0.85, 0.95, 1.0), pow(rim, 3.0) * 0.5);
+    gl_FragColor = vec4(col * rim * side, rim * side * uOpacity);
+}`;
+
+const SHADOW_FRAG = `
+uniform vec3 uStarDir;
+uniform float uOpacity;
+varying vec3 vNormalView;
+varying vec3 vViewPos;
+void main() {
+    vec3 n = normalize(vNormalView);
+    vec3 starView = normalize((viewMatrix * vec4(uStarDir, 0.0)).xyz);
+    float d = dot(n, starView);
+    float night = 1.0 - smoothstep(-0.18, 0.28, d);
+    float twilight = smoothstep(-0.25, 0.0, d) * (1.0 - smoothstep(0.0, 0.3, d));
+    float lit = smoothstep(0.35, 1.0, d);
+    vec3 col = mix(vec3(0.01, 0.015, 0.035), vec3(1.0, 0.86, 0.62), lit);
+    col = mix(col, vec3(1.0, 0.45, 0.22), twilight * 0.5);
+    float a = night * 0.8 + lit * 0.07 + twilight * 0.06;
+    gl_FragColor = vec4(col, a * uOpacity);
+}`;
+
+function createPlanetShaderMaterial(fragmentShader, uniforms, extra = {}) {
+    return new THREE.ShaderMaterial({
+        vertexShader: PLANET_VERT,
+        fragmentShader,
+        uniforms: { uOpacity: { value: 1 }, uStarDir: { value: STAR_DIRECTION }, ...uniforms },
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+        ...extra
+    });
+}
+
+// ShaderMaterial não usa material.opacity sozinho; copia para o uniform antes de desenhar.
+function syncOpacityUniform(mesh) {
+    mesh.onBeforeRender = () => { mesh.material.uniforms.uOpacity.value = mesh.material.opacity; };
 }
 
 // Inicializa o loader padrão sem nenhuma modificação quebrada
@@ -52,22 +115,17 @@ const loader = new GLTFLoader();
 
 const cloudTexture = createCloudTexture();
 const planetCloudTexture = createPlanetCloudTexture();
-const nebulaTexture = createNebulaTexture();
-const planetLayerGeometry = new THREE.SphereGeometry(1, 24, 16);
-const atmosphereMaterial = new THREE.MeshBasicMaterial({
-    color: 0x59bfff,
-    transparent: true,
-    opacity: 0.19,
+const planetLayerGeometry = new THREE.SphereGeometry(1, 40, 28);
+const atmosphereMaterial = createPlanetShaderMaterial(ATMOSPHERE_FRAG, { uColor: { value: new THREE.Color(0x3fa9ff) } }, {
     blending: THREE.AdditiveBlending,
-    side: THREE.BackSide,
-    depthWrite: false,
-    toneMapped: false
+    side: THREE.BackSide
 });
+const planetShadowMaterial = createPlanetShaderMaterial(SHADOW_FRAG, {});
 const planetCloudMaterial = new THREE.MeshBasicMaterial({
     map: planetCloudTexture,
-    color: 0xc9efff,
+    color: 0xe4f6ff,
     transparent: true,
-    opacity: 0.24,
+    opacity: 0.34,
     depthWrite: false
 });
 const distantHullGeometry = new THREE.BoxGeometry(1, 0.8, 7);
@@ -115,14 +173,6 @@ const distantDebrisMaterial = new THREE.MeshStandardMaterial({
     depthTest: false,
     depthWrite: false,
     roughness: 0.9
-});
-const nebulaMaterial = new THREE.SpriteMaterial({
-    map: nebulaTexture,
-    color: 0x8d9fff,
-    transparent: true,
-    opacity: 0.18,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
 });
 
 const PLANET_FOV_HALF_ANGLE = THREE.MathUtils.degToRad(35);
@@ -278,13 +328,19 @@ export class SpaceEnvironment {
         const layers = new THREE.Group();
         if (planet.userData.visualCenter) layers.position.copy(planet.userData.visualCenter);
         const atmosphere = new THREE.Mesh(planetLayerGeometry, atmosphereMaterial.clone());
-        atmosphere.scale.setScalar(radius * 1.075);
+        atmosphere.scale.setScalar(radius * 1.12);
         atmosphere.renderOrder = -99;
+        syncOpacityUniform(atmosphere);
         const clouds = new THREE.Mesh(planetLayerGeometry, planetCloudMaterial.clone());
         clouds.scale.setScalar(radius * 1.012);
         clouds.rotation.set(0.28, Math.random() * Math.PI * 2, 0.12);
         clouds.renderOrder = -98;
-        layers.add(atmosphere, clouds);
+        // Casca de sombra por cima de planeta e nuvens: lado noturno escuro e luz quente da estrela.
+        const shade = new THREE.Mesh(planetLayerGeometry, planetShadowMaterial.clone());
+        shade.scale.setScalar(radius * 1.016);
+        shade.renderOrder = -97;
+        syncOpacityUniform(shade);
+        layers.add(atmosphere, clouds, shade);
         layers.userData.clouds = clouds;
         planet.add(layers);
         planet.userData.visualLayers = layers;
@@ -322,17 +378,8 @@ export class SpaceEnvironment {
     }
 
     initParticles() {
-        this.starGeometry = new THREE.BufferGeometry();
-        for (let i = 0; i < this.starCount; i++) {
-            this.resetParticle(i, this.starPositions, this.starVelocities, 40, 20);
-            this.setStarColor(i);
-            this.starSizes[i] = Math.random() * 2.5 + 1.0;
-        }
-        this.starGeometry.setAttribute('position', new THREE.BufferAttribute(this.starPositions, 3));
-        this.starGeometry.setAttribute('color', new THREE.BufferAttribute(this.starColors, 3));
-        const starMaterial = new THREE.PointsMaterial({ size: 2.0, vertexColors: true, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, sizeAttenuation: true });
-        this.stars = new THREE.Points(this.starGeometry, starMaterial);
-        this.scene.add(this.stars);
+        this.fx = new SpaceFX(this.scene, this.starCount, this.isMobile);
+        this.events = new BackgroundEvents(this.scene, this.isMobile);
 
         this.cloudGeometry = new THREE.BufferGeometry();
         for (let i = 0; i < this.cloudCount; i++) {
@@ -344,26 +391,6 @@ export class SpaceEnvironment {
         this.clouds = new THREE.Points(this.cloudGeometry, cloudMat);
         this.scene.add(this.clouds);
 
-        for (let i = 0; i < this.dustCount; i++) {
-            const i3 = i * 3;
-            this.dustPositions[i3] = (Math.random() - 0.5) * 1800;
-            this.dustPositions[i3 + 1] = (Math.random() - 0.5) * 1200;
-            this.dustPositions[i3 + 2] = -80 - Math.random() * 1700;
-            this.dustVelocities[i] = 22 + Math.random() * 62;
-        }
-        this.dustGeometry = new THREE.BufferGeometry();
-        this.dustGeometry.setAttribute('position', new THREE.BufferAttribute(this.dustPositions, 3));
-        this.dustPoints = new THREE.Points(this.dustGeometry, new THREE.PointsMaterial({
-            color: 0x8edfff,
-            size: this.isMobile ? 2.3 : 3.2,
-            sizeAttenuation: true,
-            transparent: true,
-            opacity: 0.36,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending
-        }));
-        this.dustPoints.renderOrder = -5;
-        this.scene.add(this.dustPoints);
     }
 
     initBattleBackdrop() {
@@ -419,15 +446,6 @@ export class SpaceEnvironment {
             this.distantDebris.push(debris);
         }
 
-        this.nebulaSprites = [];
-        for (let i = 0; i < 2; i++) {
-            const nebula = new THREE.Sprite(nebulaMaterial);
-            nebula.position.set(i === 0 ? -950 : 970, i === 0 ? 540 : -450, -1850);
-            nebula.scale.set(2300, 1500, 1);
-            nebula.renderOrder = -30;
-            this.battleBackdrop.add(nebula);
-            this.nebulaSprites.push(nebula);
-        }
         this.scene.add(this.battleBackdrop);
     }
 
@@ -461,6 +479,7 @@ export class SpaceEnvironment {
             this.ambientLight.intensity = 0.75 + Math.random() * 0.15;
         }
         if (this.clouds?.material) this.clouds.material.color.setHex(theme.cloud);
+        this.fx?.setTheme(theme.cloud);
     }
 
     setLevelTheme(level) {
@@ -544,13 +563,12 @@ export class SpaceEnvironment {
         });
 
         const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;
-        this.stars.material.opacity = 0.85 * pulse;
         this.clouds.material.opacity = 0.3 * pulse;
-        this.moveParticles(this.starPositions, this.starVelocities, this.starCount, this.stars, deltaTime, moveInput, playerPosition);
+        this.fx.update(deltaTime, playerPosition, moveInput);
+        this.events.update(deltaTime, playerPosition);
         this.moveParticles(this.cloudPositions, this.cloudVelocities, this.cloudCount, this.clouds, deltaTime, moveInput);
         if (playerPosition) {
             this.battleBackdrop.position.set(playerPosition.x, playerPosition.y, playerPosition.z - 320);
-            this.dustPoints.position.copy(playerPosition);
         }
         this.backdropTime += deltaTime;
         this.distantFlashes.forEach((flash, index) => {
@@ -562,20 +580,6 @@ export class SpaceEnvironment {
             debris.rotation.x += deltaTime * (0.012 + index * 0.002);
             debris.rotation.y += deltaTime * (0.018 + index * 0.003);
         });
-        const inputSpeed = Math.min(1, Math.hypot(moveInput?.x || 0, moveInput?.y || 0));
-        for (let i = 0; i < this.dustCount; i++) {
-            const i3 = i * 3;
-            this.dustPositions[i3 + 2] += (this.dustVelocities[i] + inputSpeed * 90) * deltaTime;
-            this.dustPositions[i3] -= (moveInput?.x || 0) * 18 * deltaTime;
-            this.dustPositions[i3 + 1] -= (moveInput?.y || 0) * 18 * deltaTime;
-            if (this.dustPositions[i3 + 2] > -45) {
-                this.dustPositions[i3] = (Math.random() - 0.5) * 1800;
-                this.dustPositions[i3 + 1] = (Math.random() - 0.5) * 1200;
-                this.dustPositions[i3 + 2] = -1500 - Math.random() * 250;
-                this.dustVelocities[i] = 22 + Math.random() * 62;
-            }
-        }
-        this.dustGeometry.attributes.position.needsUpdate = true;
     }
 
     resetPlanetPosition(planet, index) {

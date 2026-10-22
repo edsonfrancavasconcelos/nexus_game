@@ -1,4 +1,5 @@
 ﻿import * as THREE from 'three';
+import { markBloom } from './BloomPipeline.js';
 import { awardPoints, explosionSizeFor } from './Scoring.js';
 import { Afterburner } from './Afterburner.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -192,6 +193,7 @@ export class Player {
             new THREE.Mesh(PDC_CORE_GEO, PDC_CORE_MAT),
             new THREE.Mesh(PDC_GLOW_GEO, PDC_GLOW_MAT)
         );
+        markBloom(mesh);
         mesh.visible = false;
         return { mesh, dir: new THREE.Vector3(), life: 0, startTime: 0, offset: 0 };
     }

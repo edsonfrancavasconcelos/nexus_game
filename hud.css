@@ -1,0 +1,422 @@
+/* ==========================================================================
+   HUD responsiva — camada final de apresentação (carregada depois de style.css).
+   Só layout/estilo: nenhum id, classe usada pelo JS ou comportamento mudou.
+
+   Escala: tudo é múltiplo de --u, que acompanha o menor lado da viewport
+   (celular ≈ 8px, Full HD ≈ 16px, 4K ≈ 28px). Safe areas via env().
+   ========================================================================== */
+
+:root {
+    --u: clamp(7px, calc(1.15vmin + 4px), 28px);
+    --m: calc(var(--u) * 1.4);
+    --sa-t: env(safe-area-inset-top, 0px);
+    --sa-r: env(safe-area-inset-right, 0px);
+    --sa-b: env(safe-area-inset-bottom, 0px);
+    --sa-l: env(safe-area-inset-left, 0px);
+    --pad-t: max(var(--m), var(--sa-t));
+    --pad-r: max(var(--m), var(--sa-r));
+    --pad-b: max(var(--m), var(--sa-b));
+    --pad-l: max(var(--m), var(--sa-l));
+
+    --hud-cell: calc(var(--u) * 5.4);
+    --hud-pad: calc(var(--u) * 0.7);
+    --hud-gap: calc(var(--u) * 0.45);
+    --hud-rows: 2;
+    --hud-h: calc(var(--hud-cell) * var(--hud-rows) + var(--hud-gap) * (var(--hud-rows) - 1) + var(--hud-pad) * 2);
+
+    --btn-main: calc(var(--u) * 9);
+    --btn-side: calc(var(--u) * 6.4);
+    --btn-pause: calc(var(--u) * 5.4);
+    --btn-gap: calc(var(--u) * 1.1);
+    --joy: calc(var(--u) * 13.5);
+    --roll: calc(var(--u) * 5.6);
+
+    --alert-top: calc(var(--pad-t) + var(--hud-h) + var(--u));
+    --ink: #f2fbff;
+    --accent: #8ff3ff;
+    --shadow-text: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 calc(var(--u) * 0.6) rgba(0, 0, 0, 0.55);
+}
+
+/* Landscape largo: HUD em uma única linha. */
+@media (min-width: 600px) and (min-aspect-ratio: 7/5) {
+    :root { --hud-rows: 1; }
+}
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* ------------------------------- HUD (topo) ------------------------------- */
+body #ui {
+    position: fixed !important;
+    top: var(--pad-t) !important;
+    left: var(--pad-l) !important;
+    z-index: 900 !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: var(--hud-gap) !important;
+    align-items: stretch !important;
+    width: min(44 * var(--u), calc(100vw - var(--pad-l) - var(--pad-r))) !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - var(--pad-l) - var(--pad-r)) !important;
+    padding: var(--hud-pad) !important;
+    background: rgba(3, 10, 22, 0.36) !important;
+    border: 1px solid rgba(143, 243, 255, 0.2);
+    border-radius: calc(var(--u) * 1.1);
+    box-shadow: 0 calc(var(--u) * 0.3) calc(var(--u) * 1.4) rgba(0, 0, 0, 0.28);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: var(--ink);
+    font-family: 'Orbitron', 'Segoe UI', Arial, sans-serif;
+    letter-spacing: 0;
+    pointer-events: none;
+}
+
+@media (min-width: 600px) and (min-aspect-ratio: 7/5) {
+    body #ui {
+        grid-template-columns: 8.5fr 5.5fr 8fr 6fr 6fr 8fr 5.5fr 8fr !important;
+        width: min(60 * var(--u), calc(100vw - var(--pad-l) - var(--pad-r))) !important;
+    }
+}
+
+/* Ordem visual: pontuação/fase/progresso/vidas; depois armas e cargas. */
+body #ui > :nth-child(1) { order: 1; }
+body #ui > :nth-child(2) { order: 2; }
+body #ui > :nth-child(6) { order: 7; }
+body #ui > :nth-child(3) { order: 3; }
+body #ui > :nth-child(8) { order: 4; }
+body #ui > :nth-child(4) { order: 5; }
+body #ui > :nth-child(5) { order: 6; }
+body #ui > :nth-child(7) { order: 8; }
+
+body #ui > div {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: calc(var(--u) * 0.25);
+    height: var(--hud-cell);
+    min-width: 0;
+    min-height: 0;
+    padding: calc(var(--u) * 0.3) calc(var(--u) * 0.4);
+    border: 0;
+    border-radius: calc(var(--u) * 0.7);
+    background: rgba(255, 255, 255, 0.045);
+    text-align: center;
+    overflow: hidden;
+}
+
+body #ui .hud-score { background: rgba(143, 243, 255, 0.1); }
+
+body #ui .hud-label {
+    max-width: 100%;
+    font-size: max(8px, calc(var(--u) * 1));
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+    color: var(--accent);
+    opacity: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: var(--shadow-text);
+}
+
+body #ui .hud-value-large {
+    max-width: 100%;
+    font-size: calc(var(--u) * 1.9);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    text-shadow: var(--shadow-text);
+}
+
+body #ui .hud-score .hud-value-large { font-size: calc(var(--u) * 1.65); }
+
+body #ui .hud-value {
+    font-size: max(9px, calc(var(--u) * 1.15));
+    line-height: 1;
+    color: var(--accent);
+    text-shadow: var(--shadow-text);
+}
+
+body #ui .hud-bar {
+    width: 100%;
+    height: calc(var(--u) * 0.75);
+    border: 1px solid rgba(143, 243, 255, 0.3);
+    background: rgba(255, 255, 255, 0.14);
+}
+
+/* ------------------------------ Botões de ação ----------------------------- */
+body #btnShoot,
+body #btnMissile,
+body #btnPDC,
+body #btnPause {
+    position: fixed !important;
+    top: auto !important;
+    left: auto !important;
+    border-width: max(2px, calc(var(--u) * 0.22));
+    font-size: calc(var(--u) * 3);
+    z-index: 999;
+}
+
+body #btnShoot {
+    width: var(--btn-main) !important;
+    height: var(--btn-main) !important;
+    right: var(--pad-r) !important;
+    bottom: var(--pad-b) !important;
+}
+
+body #btnMissile {
+    width: var(--btn-side) !important;
+    height: var(--btn-side) !important;
+    right: calc(var(--pad-r) + (var(--btn-main) - var(--btn-side)) / 2) !important;
+    bottom: calc(var(--pad-b) + var(--btn-main) + var(--btn-gap)) !important;
+}
+
+body #btnPDC {
+    width: var(--btn-side) !important;
+    height: var(--btn-side) !important;
+    right: calc(var(--pad-r) + (var(--btn-main) - var(--btn-side)) / 2) !important;
+    bottom: calc(var(--pad-b) + var(--btn-main) + var(--btn-side) + var(--btn-gap) * 2) !important;
+}
+
+/* Pausa acima do PDC, no mesmo eixo vertical. */
+body #btnPause {
+    width: var(--btn-pause) !important;
+    height: var(--btn-pause) !important;
+    right: calc(var(--pad-r) + (var(--btn-main) - var(--btn-pause)) / 2) !important;
+    bottom: calc(var(--pad-b) + var(--btn-main) + var(--btn-side) * 2 + var(--btn-gap) * 3) !important;
+}
+
+/* ------------------------- Joystick e giros (rolls) ------------------------ */
+body #mobile-controls {
+    left: var(--pad-l);
+    bottom: var(--pad-b);
+    width: var(--joy);
+    height: var(--joy);
+}
+
+body #joystick-area {
+    width: 100%;
+    height: 100%;
+    border-width: max(2px, calc(var(--u) * 0.25));
+}
+
+/* O JS substitui o transform do stick; centralizar por offset mantém o repouso no meio. */
+body #stick {
+    width: calc(var(--u) * 5.6);
+    height: calc(var(--u) * 5.6);
+    top: calc(50% - var(--u) * 2.8);
+    left: calc(50% - var(--u) * 2.8);
+    transform: none;
+}
+
+/* Roll fica no vão entre joystick e botões de ação. */
+body #roll-controls {
+    position: fixed !important;
+    left: calc(var(--pad-l) + var(--joy) + var(--u)) !important;
+    right: calc(var(--pad-r) + var(--btn-main) + var(--u)) !important;
+    bottom: var(--pad-b) !important;
+    transform: none !important;
+    display: flex;
+    justify-content: center;
+    gap: calc(var(--u) * 0.8) !important;
+    pointer-events: none !important;
+    z-index: 9999 !important;
+}
+
+body #roll-controls .game-btn {
+    width: var(--roll);
+    height: var(--roll);
+    min-width: 44px;
+    min-height: 44px;
+    flex: none;
+    pointer-events: auto;
+    font-size: max(9px, calc(var(--u) * 1.15));
+    border-width: max(2px, calc(var(--u) * 0.2));
+}
+
+/* Sem joystick (mouse): centraliza o par de rolls entre as bordas simétricas. */
+@media (hover: hover) and (pointer: fine) {
+    body #roll-controls {
+        left: calc(var(--pad-l) + var(--btn-main) + var(--u)) !important;
+    }
+}
+
+/* ------------------------------- Seletor de zona -------------------------- */
+body #nexusSelector {
+    top: var(--alert-top);
+    left: var(--pad-l);
+    width: min(30 * var(--u), calc(100vw - var(--pad-l) - var(--pad-r)));
+    padding: calc(var(--u) * 0.7);
+    gap: calc(var(--u) * 0.6);
+    border-radius: calc(var(--u) * 1.1);
+}
+
+body .zone-header {
+    width: 100%;
+    padding: calc(var(--u) * 0.9) calc(var(--u) * 1.1);
+    font-size: max(11px, calc(var(--u) * 1.4));
+    border-radius: calc(var(--u) * 0.9);
+    letter-spacing: 0.04em;
+}
+
+body .zone-option {
+    padding: calc(var(--u) * 0.8) calc(var(--u) * 1.1);
+    font-size: max(11px, calc(var(--u) * 1.3));
+}
+
+body .zone-list.open { max-height: min(35vh, 35dvh, calc(var(--u) * 30)); }
+
+body .test-status {
+    font-size: max(9px, calc(var(--u) * 1.1));
+    padding: calc(var(--u) * 0.6) calc(var(--u) * 0.8);
+}
+
+/* ---------------------------------- Alertas -------------------------------- */
+body #combat-message,
+body #level-up-card {
+    position: fixed;
+    top: var(--alert-top);
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: min(46 * var(--u), calc(100vw - var(--pad-l) - var(--pad-r)));
+    max-width: none;
+    padding: calc(var(--u) * 0.8) calc(var(--u) * 1.4);
+    border: 1px solid rgba(143, 243, 255, 0.26) !important;
+    border-left: calc(var(--u) * 0.25) solid var(--accent) !important;
+    border-radius: calc(var(--u) * 1);
+    background: rgba(4, 12, 26, 0.36) !important;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 calc(var(--u) * 0.4) calc(var(--u) * 1.6) rgba(0, 0, 0, 0.28) !important;
+    color: var(--ink);
+    text-align: center;
+    text-shadow: var(--shadow-text);
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, calc(var(--u) * -0.7));
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    will-change: opacity, transform;
+}
+
+body #combat-message { gap: calc(var(--u) * 0.3); z-index: 14000; }
+
+body #combat-message.visible,
+body #level-up-card.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+body #combat-message-title {
+    color: var(--accent);
+    font-size: max(10px, calc(var(--u) * 1.2));
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-shadow: var(--shadow-text);
+}
+
+body #combat-message-body {
+    font-size: max(12px, calc(var(--u) * 1.7));
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+body #combat-message.briefing { border-left-color: #ffc64c !important; }
+body #combat-message.briefing #combat-message-title { color: #ffd37a; }
+body #combat-message.alert { border-left-color: #ff6b7a !important; }
+body #combat-message.alert #combat-message-title { color: #ff9aa5; }
+
+/* Cartão de nova zona: faixa compacta logo abaixo do aviso principal. */
+body #level-up-card {
+    z-index: 13900;
+    top: calc(var(--alert-top) + var(--u) * 10);
+    width: min(34 * var(--u), calc(100vw - var(--pad-l) - var(--pad-r)));
+    padding: calc(var(--u) * 0.6) calc(var(--u) * 1.2);
+    border-left-color: #ffc64c !important;
+}
+
+body #level-up-card .lu-title {
+    color: #ffd37a;
+    font-size: max(10px, calc(var(--u) * 1.15));
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+body #level-up-card .lu-level {
+    margin: 0 0 0 calc(var(--u) * 0.6);
+    color: #fff;
+    font-size: calc(var(--u) * 2.2);
+    font-weight: 800;
+}
+
+body #level-up-card .lu-msg {
+    margin-top: calc(var(--u) * 0.2);
+    font-size: max(11px, calc(var(--u) * 1.4));
+    line-height: 1.25;
+}
+
+/* Contagem inicial: no terço superior, fora da nave. */
+body #countdown-display {
+    position: fixed;
+    top: 26%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    z-index: 10000;
+    font-family: 'Orbitron', 'Segoe UI', Arial, sans-serif;
+    font-size: calc(var(--u) * 8);
+    font-weight: 800;
+    color: var(--accent);
+    opacity: 0.9;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+}
+
+/* Dano: vinheta mais leve, só nas bordas. */
+body #damage-flash {
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 0, 24, 0.5) 100%);
+}
+
+/* Telas cheias respeitam safe areas e rolam em vez de cortar conteúdo. */
+body #overlay {
+    padding: var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l);
+}
+
+body .menu-content {
+    max-height: calc(100vh - var(--sa-t) - var(--sa-b));
+    max-height: calc(100dvh - var(--sa-t) - var(--sa-b));
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+body #campaign-ending {
+    padding: max(20px, var(--sa-t)) max(20px, var(--sa-r)) max(20px, var(--sa-b)) max(20px, var(--sa-l));
+}
+
+body .campaign-ending-card {
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+/* Telas curtas: avisos mais enxutos para liberar a visão. */
+@media (max-height: 480px) {
+    body #combat-message,
+    body #level-up-card { width: min(40 * var(--u), calc(100vw - var(--pad-l) - var(--pad-r))); }
+    body #combat-message-body { font-size: max(11px, calc(var(--u) * 1.5)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body #combat-message,
+    body #level-up-card { transition: opacity 0.2s linear; transform: translate(-50%, 0); }
+}
+
+/* Em telas de toque o blur já é desligado em style.css; reforça o contraste sem ele. */
+@media (pointer: coarse) {
+    body #ui { background: rgba(3, 10, 22, 0.42) !important; }
+    body #combat-message,
+    body #level-up-card { background: rgba(4, 12, 26, 0.4) !important; }
+}

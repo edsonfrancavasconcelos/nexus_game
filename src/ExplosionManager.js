@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { markBloom } from './BloomPipeline.js';
 
 export class ExplosionManager {
     constructor(scene, soundManager, isMobile = false) {
@@ -47,6 +48,7 @@ export class ExplosionManager {
         this.sparkMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
         this.sparkMesh.frustumCulled = false;
         this.sparkMesh.count = 0;
+        markBloom(this.sparkMesh);
         this.scene.add(this.sparkMesh);
         this._dummy = new THREE.Object3D();
         this._color = new THREE.Color();
@@ -90,6 +92,7 @@ export class ExplosionManager {
                 blending: THREE.AdditiveBlending,
                 depthWrite: false
             }));
+            markBloom(sprite);
         }
         sprite.material.map = texture;
         sprite.material.needsUpdate = true;
@@ -163,6 +166,7 @@ export class ExplosionManager {
             });
             sprite = new THREE.Sprite(mat);
             sprite.frustumCulled = true;
+            markBloom(sprite);
         }
         return sprite;
     }
