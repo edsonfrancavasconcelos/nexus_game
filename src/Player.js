@@ -357,7 +357,7 @@ export class Player {
     }
 
     _createPlasmaThrusters() {
-        this.thrusterLocalPos = new THREE.Vector3(0, 2.0, -9.8);
+        this.thrusterLocalPos =         new THREE.Vector3(0, 2.0, -10.4);
         const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
         this.afterburner = new Afterburner(this.shipModel, this.thrusterLocalPos, { mobile });
     }

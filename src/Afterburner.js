@@ -53,11 +53,11 @@ function makeConeGeometry(radius, radial, tip) {
 }
 
 const LAYERS = [
-    { name: 'plasma', radius: 1.8, tip: 0.45, length: 8.0, falloff: 1.3, intensity: 0.75, diamonds: 0.0, distort: 0.16,
+    { name: 'plasma', radius: 1.0, tip: 0.45, length: 8.0, falloff: 1.3, intensity: 0.5, diamonds: 0.0, distort: 0.16,
       a: [0.45, 0.2, 1.0], b: [0.1, 0.45, 1.0], tc: [0.2, 0.9, 1.0] },
-    { name: 'mid', radius: 1.2, tip: 0.3, length: 6.0, falloff: 1.1, intensity: 1.1, diamonds: 0.0, distort: 0.1,
+    { name: 'mid', radius: 0.7, tip: 0.3, length: 6.0, falloff: 1.1, intensity: 0.9, diamonds: 0.0, distort: 0.1,
       a: [0.2, 0.55, 1.0], b: [0.3, 0.8, 1.0], tc: [0.3, 0.95, 1.0] },
-    { name: 'core', radius: 0.55, tip: 0.2, length: 4.2, falloff: 1.1, intensity: 1.15, diamonds: 0.6, distort: 0.05,
+    { name: 'core', radius: 0.4, tip: 0.2, length: 4.2, falloff: 1.1, intensity: 1.15, diamonds: 0.6, distort: 0.05,
       a: [1.0, 1.0, 1.0], b: [0.55, 0.8, 1.0], tc: [0.15, 0.4, 1.0] }
 ];
 
@@ -122,7 +122,7 @@ export class Afterburner {
 
     _respawn(s) {
         const a = Math.random() * Math.PI * 2;
-        const r = 0.2 + Math.random() * 0.9;
+        const r = 0.1 + Math.random() * 0.45;
         s.x = Math.cos(a) * r;
         s.y = Math.sin(a) * r;
         s.speed = 1.6 + Math.random() * 1.4;
@@ -160,7 +160,7 @@ export class Afterburner {
             const p = s.phase;
             const z = -p * reach;
             const len = s.len * (0.6 + th);
-            dummy.position.set(s.x * (1 + p * 0.6), s.y * (1 + p * 0.6), z - len * 0.5);
+            dummy.position.set(s.x * (1 + p * 0.3), s.y * (1 + p * 0.3), z - len * 0.5);
             dummy.scale.set(1, 1, len);
             dummy.updateMatrix();
             this.streaks.setMatrixAt(i, dummy.matrix);
