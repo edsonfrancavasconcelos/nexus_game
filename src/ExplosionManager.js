@@ -15,6 +15,7 @@ export class ExplosionManager {
 
         const textureLoader = new THREE.TextureLoader();
         this.explosionTexture = textureLoader.load('/assets/img/explosion.png');
+        this.explosionTexture.anisotropy = 4;
         this.explosionTexture.wrapS = THREE.RepeatWrapping;
         this.explosionTexture.wrapT = THREE.RepeatWrapping;
         this.explosionTexture.repeat.set(1 / this.spriteColumns, 1 / this.spriteRows);

@@ -177,9 +177,9 @@ export class SpaceFX {
     _createNebulae(isMobile) {
         const size = isMobile ? 96 : 192;
         const defs = [
-            { seed: 11, x: -1700, y: 900, z: -4200, scale: 3800, rot: 0.2, opacity: 0.22 },
-            { seed: 29, x: 1900, y: -700, z: -4600, scale: 4200, rot: -0.6, opacity: 0.2 },
-            { seed: 47, x: 200, y: 200, z: -5200, scale: 5200, rot: 1.1, opacity: 0.14 }
+            { seed: 11, x: -1700, y: 900, z: -4200, scale: 3800, rot: 0.2, opacity: 0.22, drift: 4 },
+            { seed: 29, x: 1900, y: -700, z: -4600, scale: 4200, rot: -0.6, opacity: 0.2, drift: 8 },
+            { seed: 47, x: 200, y: 200, z: -5200, scale: 5200, rot: 1.1, opacity: 0.14, drift: 13 }
         ];
         this.nebulae = new THREE.Group();
         this.nebulaSprites = defs.map((d) => {
@@ -197,7 +197,13 @@ export class SpaceFX {
             sprite.position.set(d.x, d.y, d.z);
             sprite.scale.set(d.scale, d.scale, 1);
             sprite.renderOrder = -50;
-            sprite.userData = { rotSpeed: (d.seed % 2 ? 1 : -1) * 0.004, baseRot: d.rot };
+            sprite.userData = {
+                rotSpeed: (d.seed % 2 ? 1 : -1) * 0.004,
+                baseRot: d.rot,
+                drift: d.drift,
+                startZ: d.z,
+                baseOpacity: d.opacity
+            };
             this.nebulae.add(sprite);
             return sprite;
         });
@@ -251,6 +257,12 @@ export class SpaceFX {
         this.nebulae.position.set(px * 0.97, py * 0.97, pz);
         for (const sprite of this.nebulaSprites) {
             sprite.material.rotation += sprite.userData.rotSpeed * dt;
+            sprite.position.z += sprite.userData.drift * dt;
+            if (sprite.position.z > 300) {
+                sprite.position.z = sprite.userData.startZ;
+            }
+            sprite.material.opacity = sprite.userData.baseOpacity
+                * (0.92 + Math.sin(this.time * 0.12 + sprite.position.z * 0.001) * 0.08);
         }
     }
 }

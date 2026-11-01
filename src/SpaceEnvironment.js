@@ -12,7 +12,9 @@ function createCloudTexture() {
     grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 128, 128);
-    return new THREE.CanvasTexture(canvas);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.anisotropy = 4;
+    return texture;
 }
 
 function createPlanetCloudTexture() {
@@ -41,6 +43,7 @@ function createPlanetCloudTexture() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
     return texture;
 }
 
@@ -177,7 +180,7 @@ const distantDebrisMaterial = new THREE.MeshStandardMaterial({
 
 const PLANET_FOV_HALF_ANGLE = THREE.MathUtils.degToRad(35);
 const PLANET_START_DISTANCE = 15000;
-const PLANET_MIN_DISTANCE = 8000;
+const PLANET_MIN_DISTANCE = 900;
 
 function getPlanetHalfWidth(distance) {
     return distance * Math.tan(PLANET_FOV_HALF_ANGLE) * (window.innerWidth / window.innerHeight);
@@ -259,7 +262,69 @@ export class SpaceEnvironment {
         this.initParticles();
         this.initEnvironment();
         this.initBattleBackdrop();
+        this.terrainMode = /[?&]background=terrain(?:&|$)/.test(window.location.search);
+        if (this.terrainMode) this.initTerrain();
         this.initPlanets();
+    }
+
+    initTerrain() {
+        this.terrain = {
+            strips: [],
+            stripDepth: 1800,
+            speed: 210,
+            time: 0
+        };
+        this.fx.nebulae.visible = false;
+        this.clouds.visible = false;
+        this.fx.layers.forEach((layer) => { layer.material.opacity *= 0.3; });
+        const terrainMaterial = new THREE.MeshStandardMaterial({
+            color: 0x263e46,
+            roughness: 0.92,
+            metalness: 0.08,
+            emissive: 0x071318,
+            emissiveIntensity: 0.35
+        });
+        const terrainGeometry = new THREE.PlaneGeometry(5200, this.terrain.stripDepth, 32, 24);
+        const positions = terrainGeometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const z = positions.getY(i);
+            const ridge = Math.sin(x * 0.006) * 14 + Math.sin(z * 0.018 + x * 0.002) * 5;
+            const detail = Math.sin(x * 0.031 + z * 0.02) * 2.5;
+            positions.setZ(i, ridge + detail);
+        }
+        terrainGeometry.rotateX(-Math.PI / 2);
+
+        for (let i = 0; i < 3; i++) {
+            const strip = new THREE.Mesh(terrainGeometry, terrainMaterial);
+            strip.position.set(0, -72, -900 - i * this.terrain.stripDepth);
+            strip.renderOrder = -12;
+            this.scene.add(strip);
+            this.terrain.strips.push(strip);
+        }
+
+        const mountainMaterial = new THREE.MeshStandardMaterial({
+            color: 0x172b38,
+            roughness: 1,
+            metalness: 0,
+            emissive: 0x050b12,
+            emissiveIntensity: 0.3
+        });
+        this.terrain.mountains = [];
+        const mountainGeometry = new THREE.ConeGeometry(1, 1, 7);
+        for (let i = 0; i < 12; i++) {
+            const mountain = new THREE.Mesh(mountainGeometry, mountainMaterial);
+            mountain.position.set((i - 5.5) * 360, 20 + (i % 3) * 35, -1700 - (i % 2) * 350);
+            mountain.scale.set(150 + (i % 4) * 70, 260 + (i % 5) * 55, 180 + (i % 3) * 60);
+            mountain.rotation.y = i * 0.7;
+            mountain.userData.baseX = mountain.position.x;
+            mountain.renderOrder = -15;
+            this.scene.add(mountain);
+            this.terrain.mountains.push(mountain);
+        }
+        this.terrain.light = new THREE.DirectionalLight(0xffd5a3, 1.5);
+        this.terrain.light.position.set(-500, 900, 700);
+        this.scene.add(this.terrain.light);
     }
 
     initPlanets() {
@@ -353,7 +418,7 @@ export class SpaceEnvironment {
     }
 
     _positionPlanetAtHorizon(planet, index, playerPosition = null) {
-        const initialDistance = PLANET_START_DISTANCE;
+        const initialDistance = PLANET_START_DISTANCE + (Math.random() * 5000 - 1000);
         const halfWidth = getPlanetHalfWidth(initialDistance);
         const halfHeight = initialDistance * Math.tan(PLANET_FOV_HALF_ANGLE);
         const xOffsets = [-0.34, -0.25, 0.25, 0.34];
@@ -364,8 +429,9 @@ export class SpaceEnvironment {
         const baseRadius = planet.userData.baseRadius || 50;
 
         planet.userData.initialDistance = initialDistance;
-        planet.userData.visualOffsetX = xOffsets[index % xOffsets.length] * halfWidth;
-        planet.userData.visualOffsetY = yOffsets[index % yOffsets.length] * halfHeight;
+        planet.userData.approachSpeed = 105 + (index % 3) * 28 + Math.random() * 35;
+        planet.userData.visualOffsetX = (xOffsets[index % xOffsets.length] + (Math.random() - 0.5) * 0.08) * halfWidth;
+        planet.userData.visualOffsetY = (yOffsets[index % yOffsets.length] + (Math.random() - 0.5) * 0.06) * halfHeight;
         planet.userData.done = false;
         planet.userData.offscreen = false;
         planet.userData.offscreenElapsed = 0;
@@ -492,8 +558,11 @@ export class SpaceEnvironment {
 
     update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager = null) {
         if (this._pendingLoads.length) this._loadPlanetModels();
-        this.planets.forEach((p) => {
-            if (p.userData?.done) return;
+        this.planets.forEach((p, index) => {
+            if (p.userData?.done) {
+                this.resetPlanetPosition(p, index);
+                return;
+            }
             if (p.userData.visualLayers?.userData.clouds) {
                 p.userData.visualLayers.userData.clouds.rotation.y += deltaTime * 0.012;
             }
@@ -501,13 +570,12 @@ export class SpaceEnvironment {
             const playerX = playerPosition?.x || 0;
             const playerY = playerPosition?.y || 0;
             const playerZ = playerPosition?.z || 0;
-            p.position.z = Math.min(
-                p.position.z + 80 * deltaTime,
-                playerZ - PLANET_MIN_DISTANCE
-            );
+            const baseRadius = p.userData.baseRadius || 50;
+            const sizeFactor = THREE.MathUtils.clamp(50 / Math.max(baseRadius, 1), 0.35, 2.2);
+            const approachSpeed = p.userData.approachSpeed * (0.75 + sizeFactor * 0.25);
+            p.position.z += approachSpeed * deltaTime;
 
             const distance = Math.max(PLANET_MIN_DISTANCE, playerZ - p.position.z);
-            const baseRadius = p.userData.baseRadius || 50;
             p.scale.setScalar(getPlanetVisualScale(
                 baseRadius,
                 distance,
@@ -516,7 +584,10 @@ export class SpaceEnvironment {
 
             const halfWidth = getPlanetHalfWidth(distance);
             const radius = baseRadius * p.scale.x;
-            if (distance <= 9000 && !p.userData.offscreen) {
+            if (distance <= 900 && !p.userData.offscreen) {
+                p.userData.offscreen = true;
+                p.userData.offscreenElapsed = 0;
+            } else if (distance <= 9000 && !p.userData.offscreen) {
                 const direction = Math.sign(p.userData.visualOffsetX) || 1;
                 const targetOffset = direction * (halfWidth + radius + 400);
                 p.userData.visualOffsetX = THREE.MathUtils.damp(
@@ -562,6 +633,7 @@ export class SpaceEnvironment {
             }
         });
 
+        if (this.terrainMode) this.updateTerrain(deltaTime, playerPosition);
         const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;
         this.clouds.material.opacity = 0.3 * pulse;
         this.fx.update(deltaTime, playerPosition, moveInput);
@@ -570,6 +642,7 @@ export class SpaceEnvironment {
         if (playerPosition) {
             this.battleBackdrop.position.set(playerPosition.x, playerPosition.y, playerPosition.z - 320);
         }
+
         this.backdropTime += deltaTime;
         this.distantFlashes.forEach((flash, index) => {
             const pulse = (Math.sin(this.backdropTime * 2.6 + index * 2.3) + 1) * 0.5;
@@ -580,6 +653,28 @@ export class SpaceEnvironment {
             debris.rotation.x += deltaTime * (0.012 + index * 0.002);
             debris.rotation.y += deltaTime * (0.018 + index * 0.003);
         });
+    }
+
+    updateTerrain(deltaTime, playerPosition) {
+        const terrain = this.terrain;
+        terrain.time += deltaTime;
+        const playerX = playerPosition?.x || 0;
+        const playerZ = playerPosition?.z || 0;
+        const speedPulse = terrain.speed * (1 + Math.sin(terrain.time * 0.8) * 0.04);
+        for (const strip of terrain.strips) {
+            strip.position.x = playerX;
+            strip.position.z += speedPulse * deltaTime;
+            if (strip.position.z > playerZ + 500) {
+                strip.position.z -= terrain.stripDepth * terrain.strips.length;
+            }
+        }
+        for (const mountain of terrain.mountains) {
+            mountain.position.x = mountain.userData.baseX + playerX * 0.08;
+            mountain.position.z += speedPulse * 0.18 * deltaTime;
+            if (mountain.position.z > playerZ - 700) {
+                mountain.position.z -= 2600;
+            }
+        }
     }
 
     resetPlanetPosition(planet, index) {

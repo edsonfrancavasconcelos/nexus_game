@@ -65,9 +65,12 @@ camera.position.set(0, 5, 55);
 
 const clock = new THREE.Clock();
 const renderer = new THREE.WebGLRenderer({
-    antialias: false,
+    antialias: quality.bloom === 0 && !isMobileDevice,
     powerPreference: isMobileDevice ? "default" : "high-performance"
 });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = isMobileDevice ? 1.08 : 1.18;
 
 let resizeTimer = null;
 let dynamicPixelRatio = null;

@@ -107,6 +107,7 @@ const MISSILE_PARTICLE_MAT = new THREE.MeshBasicMaterial({
 const MUZZLE_POOL_SIZE = 12;
 const MUZZLE_GLOW_GEO = new THREE.SphereGeometry(1, 8, 6);
 const MUZZLE_RING_GEO = new THREE.TorusGeometry(0.72, 0.12, 5, 12);
+const MUZZLE_CORE_GEO = new THREE.CylinderGeometry(0.08, 0.42, 4.6, 7).rotateX(Math.PI / 2);
 const _muzzlePoolSeed = new THREE.Vector3();
 const _aim = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -171,11 +172,44 @@ export class LaserManager {
                 depthWrite: false,
                 toneMapped: false
             });
+            const heatMat = new THREE.MeshBasicMaterial({
+                color: 0xff9a52,
+                transparent: true,
+                opacity: 0,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                toneMapped: false
+            });
+            const coreMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                toneMapped: false
+            });
+            const smokeMat = new THREE.MeshBasicMaterial({
+                color: 0x7893a2,
+                transparent: true,
+                opacity: 0,
+                depthWrite: false,
+                toneMapped: false
+            });
             flash.add(new THREE.Mesh(MUZZLE_GLOW_GEO, glowMat));
+            const heatHalo = new THREE.Mesh(MUZZLE_GLOW_GEO, heatMat);
+            heatHalo.position.z = 0.25;
+            heatHalo.scale.set(0.8, 0.8, 1.3);
+            flash.add(heatHalo);
+            const smoke = new THREE.Mesh(MUZZLE_GLOW_GEO, smokeMat);
+            smoke.position.z = -0.9;
+            smoke.scale.set(0.55, 0.55, 1.8);
+            flash.add(smoke);
+            const core = new THREE.Mesh(MUZZLE_CORE_GEO, coreMat);
+            core.position.z = 1.1;
+            flash.add(core);
             const ring = new THREE.Mesh(MUZZLE_RING_GEO, ringMat);
-            ring.rotation.x = Math.PI / 2;
             flash.add(ring);
-            flash.userData = { life: 0, glowMat, ringMat };
+            flash.userData = { life: 0, glowMat, ringMat, heatMat, coreMat, smokeMat };
             markBloom(flash);
             flash.visible = false;
             this.muzzlePool.push(flash);
@@ -208,6 +242,9 @@ export class LaserManager {
         flash.visible = true;
         flash.userData.glowMat.opacity = 0.95;
         flash.userData.ringMat.opacity = 0.9;
+        flash.userData.heatMat.opacity = 0.5;
+        flash.userData.coreMat.opacity = 0.95;
+        flash.userData.smokeMat.opacity = 0.14;
         this.scene.add(flash);
         this.activeMuzzleFlashes.push(flash);
     }
@@ -226,7 +263,7 @@ export class LaserManager {
         this.lasers.push(laser);
         this._spawnMuzzleFlash(worldGunPos, direction);
 
-        if (this.soundManager) this.soundManager.play('playerShot');
+        if (this.soundManager) this.soundManager.play('playerShot', { volume: 0.3, playbackRate: 1.08 });
     }
 
     createMissile(position, quaternion) {
@@ -287,6 +324,9 @@ export class LaserManager {
         flash.scale.setScalar(0.35 + (1 - progress) * 1.1);
         flash.userData.glowMat.opacity = progress * 0.95;
         flash.userData.ringMat.opacity = progress * 0.9;
+        flash.userData.heatMat.opacity = progress * 0.5;
+        flash.userData.coreMat.opacity = progress * 0.95;
+        flash.userData.smokeMat.opacity = progress * 0.14;
         if (flash.userData.life <= 0) {
             this.scene.remove(flash);
             flash.visible = false;

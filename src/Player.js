@@ -210,7 +210,7 @@ export class Player {
         if (this.shipModel) this.shipModel.updateMatrixWorld(true);
 
         const ship = this.shipModel || this.mesh;
-        const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, -11.0);
+        const noseLocal = this.gunNose || new THREE.Vector3(0, 2.2, 11.0);
         const spawnPos = noseLocal.clone().applyMatrix4(ship.matrixWorld);
 
         const missileQuat = new THREE.Quaternion();
@@ -309,7 +309,13 @@ export class Player {
                 if (child.isMesh) {
                     child.castShadow = false;
                     child.receiveShadow = false;
-                    if (child.material) child.material.precision = "mediump";
+                    if (child.material) {
+                        child.material.precision = "mediump";
+                        const materials = Array.isArray(child.material) ? child.material : [child.material];
+                        materials.forEach((material) => {
+                            if (material.map) material.map.anisotropy = 4;
+                        });
+                    }
                 }
             });
             this.mesh.add(this.shipModel);
@@ -328,7 +334,9 @@ export class Player {
     _createGunPositions() {
         this.gunLeft = new THREE.Vector3(-8.2, 1.6, -7.5);
         this.gunRight = new THREE.Vector3(8.2, 1.6, -7.5);
-        this.gunNose = new THREE.Vector3(0, 2.2, -11.0);
+        // O modelo é girado 180 graus no eixo Y; +Z local é o nariz no mundo.
+        // Os pontos das asas permanecem inalterados para preservar o disparo existente.
+        this.gunNose = new THREE.Vector3(0, 2.2, 11.0);
     }
 
     _createNavigationLights() {
@@ -394,11 +402,13 @@ export class Player {
         const direction = _pDir.set(0, 0, 1);
         this.shipModel.getWorldQuaternion(_pQuat);
         direction.applyQuaternion(_pQuat).normalize();
-        const guns = this._guns || (this._guns = [this.gunLeft, this.gunRight, this.gunNose]);
+        const guns = this._guns || (this._guns = [this.gunLeft, this.gunRight]);
         for (let g = 0; g < guns.length; g++) {
             _pWorld.copy(guns[g]).applyMatrix4(this.shipModel.matrixWorld);
             this.laserManager.fire(_pWorld, direction);
         }
+        _pWorld.copy(this.gunNose).applyMatrix4(this.shipModel.matrixWorld);
+        this.laserManager.fire(_pWorld, direction);
     }
 
     update(moveInput, deltaTime, enemyManager, onPlayerHit = null, onEnemyDestroyed = null) {
