@@ -1,9 +1,9 @@
-// Perfis de qualidade automáticos: LOW (aparelhos antigos), MEDIUM (intermediários), HIGH (PC/fortes).
+﻿// Perfis de qualidade automáticos: LOW (aparelhos antigos), MEDIUM (intermediários), HIGH (PC/fortes).
 // Override manual para testes: ?quality=low|medium|high
 const PROFILES = {
-    low:    { name: 'LOW',    maxPixelRatio: 0.9, minPixelRatio: 0.5, far: 20000, stars: 450,  clouds: 60,  maxEnemies: 6,  maxExplosions: 10, bloom: 0 },
-    medium: { name: 'MEDIUM', maxPixelRatio: 1.2, minPixelRatio: 0.6, far: 30000, stars: 700,  clouds: 90,  maxEnemies: 8,  maxExplosions: 16, bloom: 0.35 },
-    high:   { name: 'HIGH',   maxPixelRatio: 1.5, minPixelRatio: 0.7, far: 50000, stars: 1500, clouds: 220, maxEnemies: 12, maxExplosions: 28, bloom: 0.5 }
+    low:    { name: 'LOW',    maxPixelRatio: 0.9, minPixelRatio: 0.5, far: 20000, stars: 450,  clouds: 60,  maxEnemies: 10,  maxExplosions: 10, bloom: 0, msaa: 0, shipShadows: false },
+    medium: { name: 'MEDIUM', maxPixelRatio: 1.2, minPixelRatio: 0.6, far: 30000, stars: 700,  clouds: 90,  maxEnemies: 16,  maxExplosions: 16, bloom: 0.26, msaa: 2, shipShadows: true },
+    high:   { name: 'HIGH',   maxPixelRatio: 1.5, minPixelRatio: 0.7, far: 50000, stars: 1500, clouds: 220, maxEnemies: 24, maxExplosions: 28, bloom: 0.36, msaa: 4, shipShadows: true }
 };
 
 export function detectQualityProfile(isMobile) {

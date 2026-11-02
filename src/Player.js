@@ -1,8 +1,10 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { markBloom } from './BloomPipeline.js';
 import { awardPoints, explosionSizeFor } from './Scoring.js';
 import { Afterburner } from './Afterburner.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { RAPTOR_FLIGHT_FEEL } from './flight/RaptorFlightFeel.js';
 
 const _pDir = new THREE.Vector3();
 const _pQuat = new THREE.Quaternion();
@@ -11,6 +13,14 @@ const _pMove = new THREE.Vector3();
 const _pLook = new THREE.Vector3();
 const _pSpawn = new THREE.Vector3();
 const PDC_POOL_SIZE = 32;
+// Movimento lateral: ~30% mais rápido que o original (acel 40, amortecimento 0.90 por frame a 60 Hz).
+const FEEL = RAPTOR_FLIGHT_FEEL;
+const STEER_ACCEL = FEEL.steer.accel;
+const STEER_ACCEL_Y = FEEL.steer.vertAccel;
+const STEER_DAMPING = FEEL.steer.damping;
+const STEER_BRAKE = FEEL.steer.brake;
+const BANK_RESPONSE = FEEL.roll.response;
+const AFTERBURNER_SPEED_REF = 6.5;
 const PDC_BULLET_GEO = new THREE.CylinderGeometry(0.32, 0.22, 6.0, 8).rotateX(Math.PI / 2);
 const PDC_CORE_GEO = new THREE.CylinderGeometry(0.11, 0.11, 6.8, 6).rotateX(Math.PI / 2);
 const PDC_GLOW_GEO = new THREE.CylinderGeometry(0.62, 0.62, 5.0, 8, 1, true).rotateX(Math.PI / 2);
@@ -56,6 +66,15 @@ export class Player {
         this.speed = 0.90;
         this.pitch = 0;
         this.roll = 0;
+        this._yaw = 0;
+        this._bankExtra = 0;
+        this._pitchExtra = 0;
+        this._prevVyN = 0;
+        this._swayTime = 0;
+        this.flight = null;
+        this.worldPosition = new THREE.Vector3();
+        this._aimEuler = new THREE.Euler(0, Math.PI, 0);
+        this._aimQuat = new THREE.Quaternion();
         this.rotationSpeed = 8.0;
         this.velocity = new THREE.Vector2(0, 0);
 
@@ -167,6 +186,11 @@ export class Player {
         this._updatePDCProjectiles(enemyManager, dt, onEnemyDestroyed);
     }
 
+    shiftWorld(dx, dy = 0) {
+        if (!dx && !dy) return;
+        for (const p of this.pdcProjectiles) { p.mesh.position.x -= dx; p.mesh.position.y -= dy; }
+    }
+
     _firePDCShot(targetPos, cannon) {
         this.firingLightPulse = Math.max(this.firingLightPulse, 0.8);
         const projectile = this.pdcProjectilePool.pop() || this._createPDCProjectile();
@@ -214,7 +238,8 @@ export class Player {
         const spawnPos = noseLocal.clone().applyMatrix4(ship.matrixWorld);
 
         const missileQuat = new THREE.Quaternion();
-        ship.getWorldQuaternion(missileQuat);
+        if (this.shipModel && !this.isRolling) this._getAimQuat(missileQuat);
+        else ship.getWorldQuaternion(missileQuat);
         const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(missileQuat).normalize();
         spawnPos.addScaledVector(forward, 14);
 
@@ -305,17 +330,12 @@ export class Player {
         loader.load('/assets/models/nave_game.glb', (gltf) => {
             this.shipModel = gltf.scene;
             this.shipModel.scale.set(2, 2, 2);
+            // Caixa do modelo (antes de entrar na cena) para posicionar luzes de navegação nas asas.
+            this._shipBounds = new THREE.Box3().setFromObject(this.shipModel);
             this.shipModel.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = false;
                     child.receiveShadow = false;
-                    if (child.material) {
-                        child.material.precision = "mediump";
-                        const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        materials.forEach((material) => {
-                            if (material.map) material.map.anisotropy = 4;
-                        });
-                    }
                 }
             });
             this.mesh.add(this.shipModel);
@@ -323,7 +343,111 @@ export class Player {
             this._createPlasmaThrusters();
             this._createGunPositions();
             this._createNavigationLights();
+            this._enhanceShip();
         });
+    }
+
+    // Qualidade visual da nave: { renderer, shadows }. Pode ser chamado antes ou depois do modelo carregar.
+    applyQuality(opts) {
+        this._shipQuality = opts;
+        if (this.shipModel) this._enhanceShip();
+    }
+
+    _enhanceShip() {
+        const q = this._shipQuality;
+        if (!q || !this.shipModel || this._shipEnhanced) return;
+        this._shipEnhanced = true;
+        const renderer = q.renderer;
+        const aniso = renderer.capabilities.getMaxAnisotropy();
+
+        // Reflexos sutis: cubemap de estúdio aplicado só aos materiais da nave.
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+        pmrem.dispose();
+
+        if (q.shadows) {
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
+
+        this.shipModel.traverse((child) => {
+            if (!child.isMesh) return;
+            child.castShadow = !!q.shadows;
+            child.receiveShadow = !!q.shadows;
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((material) => {
+                if (!material) return;
+                material.precision = null;
+                for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) {
+                    if (material[key]) material[key].anisotropy = aniso;
+                }
+                if (material.map) material.map.colorSpace = THREE.SRGBColorSpace;
+                if (material.isMeshStandardMaterial) {
+                    material.envMap = envMap;
+                    material.envMapIntensity = 0.55;
+                    material.metalness = Math.min(1, material.metalness * 1.05 + 0.04);
+                    material.roughness = Math.max(0.18, material.roughness * 0.9);
+                }
+                material.needsUpdate = true;
+            });
+        });
+
+        // Luz principal com sombra (acompanha a nave) e contraluz ciano para separar do cenário.
+        const key = new THREE.DirectionalLight(0xfff1dc, 1.5);
+        key.position.set(-14, 34, 12);
+        key.target.position.set(0, 0, 0);
+        key.castShadow = !!q.shadows;
+        if (q.shadows) {
+            const s = key.shadow;
+            s.mapSize.set(q.mobile ? 512 : 1024, q.mobile ? 512 : 1024);
+            s.camera.left = -30; s.camera.right = 30; s.camera.top = 30; s.camera.bottom = -30;
+            s.camera.near = 1; s.camera.far = 90;
+            s.bias = -0.0004;
+            s.normalBias = 0.05;
+        }
+        const rim = new THREE.DirectionalLight(0x7fe9ff, 0.9);
+        rim.position.set(16, 10, -30);
+        this.mesh.add(key, key.target, rim);
+        this.shipKeyLight = key;
+
+        this._createWingBeacons();
+    }
+
+    // Luzes de posição (vermelha/verde) e strobe branco; materiais básicos pequenos, fora do bloom.
+    _createWingBeacons() {
+        const b = this._shipBounds;
+        if (!b || this.beacons) return;
+        const half = 0.5;
+        const y = (b.min.y + b.max.y) * 0.5 * half;
+        const z = (b.min.z + b.max.z) * 0.5 * half - 1.5;
+        const make = (x, zz, color, size) => {
+            const m = new THREE.Mesh(
+                new THREE.SphereGeometry(size, 8, 6),
+                new THREE.MeshBasicMaterial({ color, toneMapped: false })
+            );
+            m.position.set(x, y + 0.4, zz);
+            this.shipModel.add(m);
+            return m;
+        };
+        const tipL = b.min.x * half * 0.76;
+        const tipR = b.max.x * half * 0.76;
+        this.beacons = {
+            left: make(tipL, z, 0xff2a2a, 0.28),
+            right: make(tipR, z, 0x2aff6a, 0.28),
+            strobeL: make(tipL, z + 1.2, 0xffffff, 0.2),
+            strobeR: make(tipR, z + 1.2, 0xffffff, 0.2)
+        };
+    }
+
+    _updateBeacons(dt) {
+        if (!this.beacons) return;
+        this._beaconT = (this._beaconT || 0) + dt;
+        const t = this._beaconT;
+        const pulse = 0.65 + 0.35 * Math.sin(t * 3.2);
+        this.beacons.left.material.color.setRGB(1 * pulse, 0.16 * pulse, 0.16 * pulse);
+        this.beacons.right.material.color.setRGB(0.16 * pulse, 1 * pulse, 0.42 * pulse);
+        const on = (t % 1.3) < 0.09 || ((t + 0.18) % 1.3) < 0.07;
+        this.beacons.strobeL.visible = this.beacons.strobeR.visible = on;
     }
 
     _createWingVacuum() {
@@ -368,7 +492,7 @@ export class Player {
 
     _updateAfterburner(dt, moveInput) {
         if (!this.afterburner) return;
-        const speed = Math.min(1, this.velocity.length() / 5);
+        const speed = Math.min(1, this.velocity.length() / AFTERBURNER_SPEED_REF);
         const input = Math.min(1, Math.hypot(moveInput.x, moveInput.y));
         this.afterburner.update(dt, 0.35 + 0.65 * Math.max(speed, input) + (this.isFiring ? 0.05 : 0));
     }
@@ -391,6 +515,13 @@ export class Player {
         }
     }
 
+    // Direção de mira independente da guinada/balanço visuais: mantém o comportamento original dos tiros.
+    _getAimQuat(out) {
+        if (this.isRolling) return this.shipModel.getWorldQuaternion(out);
+        this.mesh.getWorldQuaternion(out);
+        return out.multiply(this._aimQuat.setFromEuler(this._aimEuler));
+    }
+
     _shoot() {
         if (this.isPaused || !this.laserManager || !this.shipModel) return;
         const now = Date.now();
@@ -400,7 +531,7 @@ export class Player {
         this.mesh.updateMatrixWorld();
         this.shipModel.updateMatrixWorld();
         const direction = _pDir.set(0, 0, 1);
-        this.shipModel.getWorldQuaternion(_pQuat);
+        this._getAimQuat(_pQuat);
         direction.applyQuaternion(_pQuat).normalize();
         const guns = this._guns || (this._guns = [this.gunLeft, this.gunRight]);
         for (let g = 0; g < guns.length; g++) {
@@ -415,12 +546,19 @@ export class Player {
         if (!this.shipModel || this.isPaused) return;
         const dt = Math.min(deltaTime, 0.10);
 
-        const acel = 40.0;
-        this.velocity.x += (-moveInput.x) * acel * dt;
-        this.velocity.y += (moveInput.y) * acel * dt;
-        this.velocity.multiplyScalar(0.90);
-        this.mesh.position.x += this.velocity.x * dt * 1;
-        this.mesh.position.y += this.velocity.y * dt * 1;
+        // Aceleração e amortecimento independentes da taxa de quadros (mesmo comportamento em 60/144 Hz).
+        // Ao inverter a direção a frenagem é mais forte, para manter o controle preciso.
+        const frames = dt * 60;
+        const dir = moveInput.x; // +x = direita da tela (a câmera olha para -z)
+        const brakeX = dir * this.velocity.x < 0 ? STEER_BRAKE : 1;
+        // Vertical: segue a atitude (pitch) da nave, não o comando direto; sem ShipFlight usa o comando.
+        const vertCmd = this.shipFlight ? this.shipFlight.pitchCmd : moveInput.y;
+        const brakeY = vertCmd * this.velocity.y < 0 ? STEER_BRAKE : 1;
+        this.velocity.x += dir * STEER_ACCEL * brakeX * dt;
+        this.velocity.y += vertCmd * STEER_ACCEL_Y * brakeY * dt;
+        this.velocity.multiplyScalar(Math.pow(STEER_DAMPING, frames));
+        this.mesh.position.x += this.velocity.x * dt;
+        this.mesh.position.y += this.velocity.y * dt;
 
         if (this.isRolling) {
             this.rollTimer += dt;
@@ -435,10 +573,35 @@ export class Player {
                 this.shipModel.rotation.set(0, Math.PI, 0);
             }
         } else {
-            const suavizacao = 0.01;
-            this.pitch = THREE.MathUtils.lerp(this.pitch, moveInput.y * 0.3, suavizacao);
-            this.roll = THREE.MathUtils.lerp(this.roll, -moveInput.x * 0.9, suavizacao);
-            this.shipModel.rotation.set(this.pitch, Math.PI, this.roll);
+            // Inclinação ao virar: proporcional à velocidade lateral real, com resposta rápida e limitada.
+            const bankX = THREE.MathUtils.clamp(moveInput.x, -1.2, 1.2);
+            const bankY = THREE.MathUtils.clamp(vertCmd, -1.2, 1.2);
+            const suavizacao = 1 - Math.exp(-dt * BANK_RESPONSE);
+            // Euler XYZ: o pitch é aplicado por último no mundo (sem a inversão do giro de 180°), então +pitch = nariz para cima.
+            // O roll é aplicado antes do giro de 180°, por isso +roll = asa direita para baixo.
+            const rollCfg = FEEL.roll;
+            const rollTarget = Math.sign(bankX) * Math.pow(Math.abs(bankX), rollCfg.curve) * rollCfg.max;
+            this.pitch = THREE.MathUtils.lerp(this.pitch, bankY * rollCfg.pitchMax, suavizacao);
+            this.roll = THREE.MathUtils.lerp(this.roll, rollTarget, suavizacao);
+            this._aimEuler.set(this.pitch, Math.PI, this.roll);
+
+            // Tudo aqui é consequência do comando do jogador (velocidade lateral/vertical real).
+            // Sem balanço ou correção automática: sem input a nave fica estável.
+            const vxN = THREE.MathUtils.clamp(this.velocity.x / FEEL.steer.refSpeed, -1.2, 1.2);
+            const vyN = THREE.MathUtils.clamp(this.velocity.y / FEEL.steer.refSpeed, -1.2, 1.2);
+            const flightK = 1 - Math.exp(-dt * rollCfg.followRate);
+            this._yaw += (-vxN * rollCfg.yawFromSpeed - this._yaw) * flightK;
+            this._bankExtra += (vxN * rollCfg.bankFromSpeed - this._bankExtra) * flightK;
+            const vyAccel = THREE.MathUtils.clamp((vyN - this._prevVyN) / Math.max(dt, 1e-3) * 0.02, -0.15, 0.15);
+            this._pitchExtra += (vyAccel - this._pitchExtra) * flightK;
+            this._prevVyN = vyN;
+            // A mira segue o nariz (pitch + yaw): o tiro sai na direção para onde a nave aponta.
+            this._aimEuler.set(this.pitch + this._pitchExtra, Math.PI + this._yaw, this.roll);
+            this.shipModel.rotation.set(
+                this.pitch + this._pitchExtra,
+                Math.PI + this._yaw,
+                this.roll + this._bankExtra
+            );
         }
 
         if (this.missileCount < this.maxMissiles) {
@@ -453,6 +616,7 @@ export class Player {
         if (this.isFiring) this._shoot();
         this._updatePDC(enemyManager, dt, onEnemyDestroyed);
         this._updateAfterburner(dt, moveInput);
+        this._updateBeacons(dt);
 
         // ===== AJUSTE AQUI =====
         const FLASH_INTENSITY = 150;

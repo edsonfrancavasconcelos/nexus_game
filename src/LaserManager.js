@@ -426,6 +426,16 @@ export class LaserManager {
     this._updateMissileParticles(deltaTime);
 }
 
+    // Compensa o deslocamento da origem de render: tudo o que já está no mundo fica parado nele.
+    shiftWorld(dx, dy = 0) {
+        if (!dx && !dy) return;
+        const mv = (o) => { o.position.x -= dx; o.position.y -= dy; };
+        for (const l of this.lasers) mv(l);
+        for (const m of this.missiles) mv(m.mesh);
+        for (const f of this.activeMuzzleFlashes) mv(f);
+        for (const p of this.activeMissileParticles) mv(p);
+    }
+
     _spawnMissileParticle(missile) {
         const particle = this.missileParticlePool.pop();
         if (!particle) return;

@@ -85,6 +85,7 @@ export class SpaceFX {
         this.scene = scene;
         this.time = 0;
         this.layers = [];
+        this.spaceVisible = true;
         this.sprite = createStarSprite();
 
         STAR_LAYERS.forEach((cfg, index) => this._createStarLayer(cfg, Math.max(40, Math.round(starCount * cfg.share)), index));
@@ -152,7 +153,7 @@ export class SpaceFX {
         this.dust.lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
             color: 0x9fdcff,
             transparent: true,
-            opacity: 0.28,
+            opacity: 0.14,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
             fog: false
@@ -217,6 +218,13 @@ export class SpaceFX {
         });
     }
 
+    // Desliga estrelas e nebulosas (e o custo de atualizá-las); a poeira de velocidade continua ativa.
+    setSpaceVisible(visible) {
+        this.spaceVisible = visible;
+        this.layers.forEach((layer) => { layer.group.visible = visible; });
+        this.nebulae.visible = visible;
+    }
+
     update(dt, playerPosition, moveInput) {
         this.time += dt;
         const px = playerPosition?.x || 0, py = playerPosition?.y || 0, pz = playerPosition?.z || 0;
@@ -224,6 +232,7 @@ export class SpaceFX {
         const strafe = Math.min(1, Math.hypot(mx, my));
 
         for (const layer of this.layers) {
+            if (!this.spaceVisible) break;
             const { cfg, count, positions, geometry, material, group } = layer;
             // A camada fica parcialmente "para trás" quando o jogador se move -> parallax lateral.
             group.position.set(px * cfg.follow, py * cfg.follow, pz);
@@ -254,6 +263,7 @@ export class SpaceFX {
         }
         this._writeDust(boost);
 
+        if (!this.spaceVisible) return;
         this.nebulae.position.set(px * 0.97, py * 0.97, pz);
         for (const sprite of this.nebulaSprites) {
             sprite.material.rotation += sprite.userData.rotSpeed * dt;

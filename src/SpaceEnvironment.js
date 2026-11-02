@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SpaceFX } from './SpaceFX.js';
 import { BackgroundEvents } from './BackgroundEvents.js';
+import { BiomeManager } from './environments/BiomeManager.js';
 
 function createCloudTexture() {
     const canvas = document.createElement('canvas');
@@ -17,224 +17,12 @@ function createCloudTexture() {
     return texture;
 }
 
-function createPlanetCloudTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    // Nuvens em faixas: concentradas perto do equador, com blobs grandes e pequenos.
-    for (let i = 0; i < 150; i++) {
-        const x = Math.random() * canvas.width;
-        const y = canvas.height * (0.5 + (Math.random() + Math.random() - 1) * 0.42);
-        const radius = 6 + Math.random() * 26;
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-        gradient.addColorStop(0, 'rgba(255,255,255,0.2)');
-        gradient.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = gradient;
-        for (const dx of [-canvas.width, 0, canvas.width]) {
-            ctx.save();
-            ctx.translate(x + dx, y);
-            ctx.scale(1.8, 1);
-            ctx.translate(-x, -y);
-            ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-            ctx.restore();
-        }
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = 4;
-    return texture;
-}
-
-// Direção (mundo) de onde vem a luz da estrela, normalizada.
-const STAR_DIRECTION = new THREE.Vector3(-0.7, 0.45, 0.55).normalize();
-
-const PLANET_VERT = `
-varying vec3 vNormalView;
-varying vec3 vViewPos;
-void main() {
-    vNormalView = normalize(normalMatrix * normal);
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vViewPos = mv.xyz;
-    gl_Position = projectionMatrix * mv;
-}`;
-
-const ATMOSPHERE_FRAG = `
-uniform vec3 uColor;
-uniform vec3 uStarDir;
-uniform float uOpacity;
-varying vec3 vNormalView;
-varying vec3 vViewPos;
-void main() {
-    vec3 n = normalize(vNormalView);
-    vec3 viewDir = normalize(-vViewPos);
-    // Casca BackSide: o brilho cresce rumo à borda do planeta e some na borda externa.
-    float f = clamp(-dot(n, viewDir) / 0.42, 0.0, 1.0);
-    float rim = pow(f, 1.6);
-    vec3 starView = normalize((viewMatrix * vec4(uStarDir, 0.0)).xyz);
-    float side = mix(0.2, 1.0, smoothstep(-0.5, 0.6, dot(n, starView)));
-    vec3 col = mix(uColor, vec3(0.85, 0.95, 1.0), pow(rim, 3.0) * 0.5);
-    gl_FragColor = vec4(col * rim * side, rim * side * uOpacity);
-}`;
-
-const SHADOW_FRAG = `
-uniform vec3 uStarDir;
-uniform float uOpacity;
-varying vec3 vNormalView;
-varying vec3 vViewPos;
-void main() {
-    vec3 n = normalize(vNormalView);
-    vec3 starView = normalize((viewMatrix * vec4(uStarDir, 0.0)).xyz);
-    float d = dot(n, starView);
-    float night = 1.0 - smoothstep(-0.18, 0.28, d);
-    float twilight = smoothstep(-0.25, 0.0, d) * (1.0 - smoothstep(0.0, 0.3, d));
-    float lit = smoothstep(0.35, 1.0, d);
-    vec3 col = mix(vec3(0.01, 0.015, 0.035), vec3(1.0, 0.86, 0.62), lit);
-    col = mix(col, vec3(1.0, 0.45, 0.22), twilight * 0.5);
-    float a = night * 0.8 + lit * 0.07 + twilight * 0.06;
-    gl_FragColor = vec4(col, a * uOpacity);
-}`;
-
-function createPlanetShaderMaterial(fragmentShader, uniforms, extra = {}) {
-    return new THREE.ShaderMaterial({
-        vertexShader: PLANET_VERT,
-        fragmentShader,
-        uniforms: { uOpacity: { value: 1 }, uStarDir: { value: STAR_DIRECTION }, ...uniforms },
-        transparent: true,
-        depthWrite: false,
-        toneMapped: false,
-        ...extra
-    });
-}
-
-// ShaderMaterial não usa material.opacity sozinho; copia para o uniform antes de desenhar.
-function syncOpacityUniform(mesh) {
-    mesh.onBeforeRender = () => { mesh.material.uniforms.uOpacity.value = mesh.material.opacity; };
-}
-
-// Inicializa o loader padrão sem nenhuma modificação quebrada
-const loader = new GLTFLoader();
-
 const cloudTexture = createCloudTexture();
-const planetCloudTexture = createPlanetCloudTexture();
-const planetLayerGeometry = new THREE.SphereGeometry(1, 40, 28);
-const atmosphereMaterial = createPlanetShaderMaterial(ATMOSPHERE_FRAG, { uColor: { value: new THREE.Color(0x3fa9ff) } }, {
-    blending: THREE.AdditiveBlending,
-    side: THREE.BackSide
-});
-const planetShadowMaterial = createPlanetShaderMaterial(SHADOW_FRAG, {});
-const planetCloudMaterial = new THREE.MeshBasicMaterial({
-    map: planetCloudTexture,
-    color: 0xe4f6ff,
-    transparent: true,
-    opacity: 0.34,
-    depthWrite: false
-});
-const distantHullGeometry = new THREE.BoxGeometry(1, 0.8, 7);
-const distantWingGeometry = new THREE.BoxGeometry(6, 0.3, 2.1);
-const distantEngineGeometry = new THREE.SphereGeometry(0.42, 8, 6);
-const distantDebrisGeometry = new THREE.TetrahedronGeometry(1, 0);
-const distantHullMaterial = new THREE.MeshStandardMaterial({
-    color: 0x182739,
-    emissive: 0x122c45,
-    emissiveIntensity: 0.55,
-    metalness: 0.7,
-    roughness: 0.48,
-    depthTest: false,
-    depthWrite: false
-});
-const distantWingMaterial = new THREE.MeshStandardMaterial({
-    color: 0x243346,
-    emissive: 0x10253a,
-    emissiveIntensity: 0.35,
-    metalness: 0.62,
-    roughness: 0.5,
-    depthTest: false,
-    depthWrite: false
-});
-const distantEngineMaterial = new THREE.MeshBasicMaterial({
-    color: 0x51dfff,
-    transparent: true,
-    opacity: 0.65,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-});
-const distantFlashMaterial = new THREE.MeshBasicMaterial({
-    color: 0x8bdfff,
-    transparent: true,
-    opacity: 0.2,
-    blending: THREE.AdditiveBlending,
-    depthTest: false,
-    depthWrite: false,
-    toneMapped: false
-});
-const distantDebrisMaterial = new THREE.MeshStandardMaterial({
-    color: 0x283746,
-    emissive: 0x101c29,
-    emissiveIntensity: 0.25,
-    depthTest: false,
-    depthWrite: false,
-    roughness: 0.9
-});
-
-const PLANET_FOV_HALF_ANGLE = THREE.MathUtils.degToRad(35);
-const PLANET_START_DISTANCE = 15000;
-const PLANET_MIN_DISTANCE = 900;
-
-function getPlanetHalfWidth(distance) {
-    return distance * Math.tan(PLANET_FOV_HALF_ANGLE) * (window.innerWidth / window.innerHeight);
-}
-
-function getPlanetVisualScale(baseRadius, distance, initialDistance) {
-    const initialRadius = getPlanetHalfWidth(initialDistance) * 0.035;
-    const approachGrowth = Math.pow(initialDistance / Math.max(distance, PLANET_MIN_DISTANCE), 1.5);
-    return (initialRadius / baseRadius) * approachGrowth;
-}
-
-function preparePlanetRendering(planet) {
-    planet.renderOrder = -100;
-    const materials = [];
-    planet.traverse((child) => {
-        if (!child.isMesh) return;
-        child.renderOrder = -100;
-        const childMaterials = Array.isArray(child.material) ? child.material : [child.material];
-        childMaterials.forEach((material) => {
-            if (!material) return;
-            materials.push({
-                material,
-                opacity: material.opacity,
-                transparent: material.transparent
-            });
-            material.depthTest = true;
-            material.depthWrite = false;
-        });
-    });
-    planet.userData.visualMaterials = materials;
-    planet.userData.visualOpacity = 1;
-}
-
-function setPlanetOpacity(planet, opacity) {
-    if (planet.userData.visualOpacity === opacity) return;
-    planet.userData.visualOpacity = opacity;
-    planet.userData.visualMaterials.forEach(({ material, opacity: baseOpacity, transparent }) => {
-        const nextTransparent = opacity < 1 || transparent;
-        if (material.transparent !== nextTransparent) {
-            material.transparent = nextTransparent;
-            material.needsUpdate = true;
-        }
-        material.opacity = baseOpacity * opacity;
-    });
-}
-
 
 export class SpaceEnvironment {
-    constructor(scene, starCount = 2000, cloudCount = 400) {
+    constructor(scene, starCount = 2000, cloudCount = 400, farDistance = 30000) {
         const isMobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900;
         this.scene = scene;
-        this.loader = new GLTFLoader();
-        this.planets = [];
-        this._pendingLoads = [];
         this.isMobile = isMobile;
         this.ambientLight = null;
         this.currentThemeIndex = 0;
@@ -261,186 +49,22 @@ export class SpaceEnvironment {
 
         this.initParticles();
         this.initEnvironment();
-        this.initBattleBackdrop();
-        this.terrainMode = /[?&]background=terrain(?:&|$)/.test(window.location.search);
-        if (this.terrainMode) this.initTerrain();
-        this.initPlanets();
-    }
-
-    initTerrain() {
-        this.terrain = {
-            strips: [],
-            stripDepth: 1800,
-            speed: 210,
-            time: 0
-        };
-        this.fx.nebulae.visible = false;
+        // Cenário principal: viagem por biomas (planície, floresta, cidade, região extrema).
+        // Estrelas, nebulosas, nuvens espaciais e eventos de fundo ficam desligados.
+        this.biomes = new BiomeManager(this.scene, { isMobile, far: farDistance });
+        this.fx.setSpaceVisible(false);
         this.clouds.visible = false;
-        this.fx.layers.forEach((layer) => { layer.material.opacity *= 0.3; });
-        const terrainMaterial = new THREE.MeshStandardMaterial({
-            color: 0x263e46,
-            roughness: 0.92,
-            metalness: 0.08,
-            emissive: 0x071318,
-            emissiveIntensity: 0.35
-        });
-        const terrainGeometry = new THREE.PlaneGeometry(5200, this.terrain.stripDepth, 32, 24);
-        const positions = terrainGeometry.attributes.position;
-        for (let i = 0; i < positions.count; i++) {
-            const x = positions.getX(i);
-            const z = positions.getY(i);
-            const ridge = Math.sin(x * 0.006) * 14 + Math.sin(z * 0.018 + x * 0.002) * 5;
-            const detail = Math.sin(x * 0.031 + z * 0.02) * 2.5;
-            positions.setZ(i, ridge + detail);
-        }
-        terrainGeometry.rotateX(-Math.PI / 2);
-
-        for (let i = 0; i < 3; i++) {
-            const strip = new THREE.Mesh(terrainGeometry, terrainMaterial);
-            strip.position.set(0, -72, -900 - i * this.terrain.stripDepth);
-            strip.renderOrder = -12;
-            this.scene.add(strip);
-            this.terrain.strips.push(strip);
-        }
-
-        const mountainMaterial = new THREE.MeshStandardMaterial({
-            color: 0x172b38,
-            roughness: 1,
-            metalness: 0,
-            emissive: 0x050b12,
-            emissiveIntensity: 0.3
-        });
-        this.terrain.mountains = [];
-        const mountainGeometry = new THREE.ConeGeometry(1, 1, 7);
-        for (let i = 0; i < 12; i++) {
-            const mountain = new THREE.Mesh(mountainGeometry, mountainMaterial);
-            mountain.position.set((i - 5.5) * 360, 20 + (i % 3) * 35, -1700 - (i % 2) * 350);
-            mountain.scale.set(150 + (i % 4) * 70, 260 + (i % 5) * 55, 180 + (i % 3) * 60);
-            mountain.rotation.y = i * 0.7;
-            mountain.userData.baseX = mountain.position.x;
-            mountain.renderOrder = -15;
-            this.scene.add(mountain);
-            this.terrain.mountains.push(mountain);
-        }
-        this.terrain.light = new THREE.DirectionalLight(0xffd5a3, 1.5);
-        this.terrain.light.position.set(-500, 900, 700);
-        this.scene.add(this.terrain.light);
+        this.events.root.visible = false;
+        this.fx.dust.lines.material.color.set(0xffe2b8);
+        this._syncAmbient();
     }
 
-    initPlanets() {
-        const planetFiles = [
-            '/assets/models/planeta.glb',
-            '/assets/models/planeta_dourado.glb',
-            '/assets/models/moon.glb',
-            '/assets/models/green_planeta.glb'
-        ];
-
-        planetFiles.forEach((path, index) => {
-            const placeholderGeo = new THREE.SphereGeometry(50, 32, 32);
-            const placeholderMat = new THREE.MeshPhongMaterial({ 
-                color: Math.random() * 0xffffff,
-                emissive: 0x111111
-            });
-            const placeholder = new THREE.Mesh(placeholderGeo, placeholderMat);
-            placeholder.userData = { laneIndex: index, baseRadius: 50 };
-            this._positionPlanetAtHorizon(placeholder, index);
-            this._addPlanetVisualLayers(placeholder, placeholder.userData.baseRadius);
-            preparePlanetRendering(placeholder);
-            this.scene.add(placeholder);
-            this.planets.push(placeholder);
-            
-            this._pendingLoads.push(() => this.loader.load(
-                path, 
-                (gltf) => {
-                    const p = gltf.scene;
-                    p.position.copy(placeholder.position);
-                    const box = new THREE.Box3().setFromObject(p);
-                    const sphere = new THREE.Sphere();
-                    box.getBoundingSphere(sphere);
-                    p.updateMatrixWorld(true);
-                    p.userData = {
-                        ...p.userData,
-                        ...placeholder.userData,
-                        baseRadius: sphere.radius || 50,
-                        transitionPlaceholder: placeholder,
-                        transitionElapsed: 0,
-                        visualOpacity: 1
-                    };
-                    p.userData.visualCenter = p.worldToLocal(sphere.center.clone());
-                    p.scale.copy(placeholder.scale).multiplyScalar(
-                        (placeholder.userData.baseRadius || 50) / (p.userData.baseRadius || 50)
-                    );
-                    p.visible = true;
-                    this._addPlanetVisualLayers(p, p.userData.baseRadius);
-                    preparePlanetRendering(p);
-                    setPlanetOpacity(p, 0);
-                    this.scene.add(p);
-
-                    const idx = this.planets.indexOf(placeholder);
-                    if (idx !== -1) {
-                        this.planets[idx] = p;
-                    }
-                },
-                undefined,
-                (error) => {
-                    console.error(`❌ Erro ao carregar ${path}:`, error);
-                }
-            ));
-        });
+    attachPost(bloomPipeline) {
+        this.biomes.attachPost(bloomPipeline);
     }
 
-    _addPlanetVisualLayers(planet, radius) {
-        const layers = new THREE.Group();
-        if (planet.userData.visualCenter) layers.position.copy(planet.userData.visualCenter);
-        const atmosphere = new THREE.Mesh(planetLayerGeometry, atmosphereMaterial.clone());
-        atmosphere.scale.setScalar(radius * 1.12);
-        atmosphere.renderOrder = -99;
-        syncOpacityUniform(atmosphere);
-        const clouds = new THREE.Mesh(planetLayerGeometry, planetCloudMaterial.clone());
-        clouds.scale.setScalar(radius * 1.012);
-        clouds.rotation.set(0.28, Math.random() * Math.PI * 2, 0.12);
-        clouds.renderOrder = -98;
-        // Casca de sombra por cima de planeta e nuvens: lado noturno escuro e luz quente da estrela.
-        const shade = new THREE.Mesh(planetLayerGeometry, planetShadowMaterial.clone());
-        shade.scale.setScalar(radius * 1.016);
-        shade.renderOrder = -97;
-        syncOpacityUniform(shade);
-        layers.add(atmosphere, clouds, shade);
-        layers.userData.clouds = clouds;
-        planet.add(layers);
-        planet.userData.visualLayers = layers;
-    }
-
-    _loadPlanetModels() {
-        const pending = this._pendingLoads;
-        this._pendingLoads = [];
-        pending.forEach((fn) => fn());
-    }
-
-    _positionPlanetAtHorizon(planet, index, playerPosition = null) {
-        const initialDistance = PLANET_START_DISTANCE + (Math.random() * 5000 - 1000);
-        const halfWidth = getPlanetHalfWidth(initialDistance);
-        const halfHeight = initialDistance * Math.tan(PLANET_FOV_HALF_ANGLE);
-        const xOffsets = [-0.34, -0.25, 0.25, 0.34];
-        const yOffsets = [-0.12, 0.12, 0.12, -0.12];
-        const playerX = playerPosition?.x || 0;
-        const playerY = playerPosition?.y || 0;
-        const playerZ = playerPosition?.z || 0;
-        const baseRadius = planet.userData.baseRadius || 50;
-
-        planet.userData.initialDistance = initialDistance;
-        planet.userData.approachSpeed = 105 + (index % 3) * 28 + Math.random() * 35;
-        planet.userData.visualOffsetX = (xOffsets[index % xOffsets.length] + (Math.random() - 0.5) * 0.08) * halfWidth;
-        planet.userData.visualOffsetY = (yOffsets[index % yOffsets.length] + (Math.random() - 0.5) * 0.06) * halfHeight;
-        planet.userData.done = false;
-        planet.userData.offscreen = false;
-        planet.userData.offscreenElapsed = 0;
-        planet.position.set(
-            playerX + planet.userData.visualOffsetX,
-            playerY + planet.userData.visualOffsetY,
-            playerZ - initialDistance
-        );
-        planet.scale.setScalar(getPlanetVisualScale(baseRadius, initialDistance, initialDistance));
+    _syncAmbient() {
+        if (this.ambientLight) this.ambientLight.color.copy(this.biomes.ambientColor);
     }
 
     initParticles() {
@@ -457,62 +81,6 @@ export class SpaceEnvironment {
         this.clouds = new THREE.Points(this.cloudGeometry, cloudMat);
         this.scene.add(this.clouds);
 
-    }
-
-    initBattleBackdrop() {
-        this.battleBackdrop = new THREE.Group();
-        this.battleBackdrop.renderOrder = -20;
-        this.backdropTime = 0;
-        this.distantShips = [];
-        const shipOffsets = [
-            [-820, 260, -760],
-            [720, -330, -1020],
-            [-90, 520, -1220]
-        ];
-        shipOffsets.forEach(([x, y, z], index) => {
-            const ship = new THREE.Group();
-            const hull = new THREE.Mesh(distantHullGeometry, distantHullMaterial);
-            hull.scale.set(3.2, 2.6, 1);
-            const leftWing = new THREE.Mesh(distantWingGeometry, distantWingMaterial);
-            leftWing.position.set(-2.4, 0, 0.8);
-            const rightWing = new THREE.Mesh(distantWingGeometry, distantWingMaterial);
-            rightWing.position.set(2.4, 0, 0.8);
-            const engine = new THREE.Mesh(distantEngineGeometry, distantEngineMaterial);
-            engine.position.set(0, 0, -4);
-            engine.scale.set(1.1, 0.55, 1.4);
-            ship.add(hull, leftWing, rightWing, engine);
-            ship.position.set(x, y, z);
-            ship.scale.setScalar(index === 2 ? 1.35 : 1);
-            ship.rotation.y = index === 1 ? Math.PI * 0.28 : -Math.PI * 0.2;
-            ship.traverse((object) => {
-                if (object.isMesh) object.renderOrder = -20;
-            });
-            this.battleBackdrop.add(ship);
-            this.distantShips.push(ship);
-        });
-
-        this.distantFlashes = [];
-        for (let i = 0; i < 2; i++) {
-            const flash = new THREE.Mesh(distantEngineGeometry, distantFlashMaterial.clone());
-            flash.position.set(i === 0 ? -720 : 730, i === 0 ? 350 : -300, i === 0 ? -940 : -1180);
-            flash.scale.setScalar(12);
-            flash.renderOrder = -20;
-            this.battleBackdrop.add(flash);
-            this.distantFlashes.push(flash);
-        }
-
-        this.distantDebris = [];
-        for (let i = 0; i < 4; i++) {
-            const debris = new THREE.Mesh(distantDebrisGeometry, distantDebrisMaterial);
-            debris.position.set(-560 + i * 390, 210 - (i % 2) * 430, -790 - i * 180);
-            debris.scale.set(4 + (i % 3) * 2, 2.5 + (i % 2), 5 + (i % 2) * 2);
-            debris.rotation.set(i * 0.4, i * 0.7, i * 0.2);
-            debris.renderOrder = -20;
-            this.battleBackdrop.add(debris);
-            this.distantDebris.push(debris);
-        }
-
-        this.scene.add(this.battleBackdrop);
     }
 
     setStarColor(i) {
@@ -548,144 +116,15 @@ export class SpaceEnvironment {
         this.fx?.setTheme(theme.cloud);
     }
 
-    setLevelTheme(level) {
-        if (level <= 1) { this.currentThemeIndex = 0; this.applyTheme(this.themes[0]); return; }
-        let nextIndex = 1 + Math.floor(Math.random() * (this.themes.length - 1));
-        if (nextIndex === this.currentThemeIndex) nextIndex = 1 + ((nextIndex + 1) % (this.themes.length - 1));
-        this.currentThemeIndex = nextIndex;
-        this.applyTheme(this.themes[nextIndex]);
+    // Os biomas são determinísticos por nível (sem tema aleatório); a transição é gradual.
+    setLevelTheme(level, instant = false) {
+        this.biomes.setLevel(level, { instant });
     }
 
     update(deltaTime, playerPosition, moveInput, currentLevel = 1, playerMesh = null, soundManager = null) {
-        if (this._pendingLoads.length) this._loadPlanetModels();
-        this.planets.forEach((p, index) => {
-            if (p.userData?.done) {
-                this.resetPlanetPosition(p, index);
-                return;
-            }
-            if (p.userData.visualLayers?.userData.clouds) {
-                p.userData.visualLayers.userData.clouds.rotation.y += deltaTime * 0.012;
-            }
-
-            const playerX = playerPosition?.x || 0;
-            const playerY = playerPosition?.y || 0;
-            const playerZ = playerPosition?.z || 0;
-            const baseRadius = p.userData.baseRadius || 50;
-            const sizeFactor = THREE.MathUtils.clamp(50 / Math.max(baseRadius, 1), 0.35, 2.2);
-            const approachSpeed = p.userData.approachSpeed * (0.75 + sizeFactor * 0.25);
-            p.position.z += approachSpeed * deltaTime;
-
-            const distance = Math.max(PLANET_MIN_DISTANCE, playerZ - p.position.z);
-            p.scale.setScalar(getPlanetVisualScale(
-                baseRadius,
-                distance,
-                p.userData.initialDistance || PLANET_START_DISTANCE
-            ));
-
-            const halfWidth = getPlanetHalfWidth(distance);
-            const radius = baseRadius * p.scale.x;
-            if (distance <= 900 && !p.userData.offscreen) {
-                p.userData.offscreen = true;
-                p.userData.offscreenElapsed = 0;
-            } else if (distance <= 9000 && !p.userData.offscreen) {
-                const direction = Math.sign(p.userData.visualOffsetX) || 1;
-                const targetOffset = direction * (halfWidth + radius + 400);
-                p.userData.visualOffsetX = THREE.MathUtils.damp(
-                    p.userData.visualOffsetX,
-                    targetOffset,
-                    0.8,
-                    deltaTime
-                );
-            }
-
-            p.position.x = playerX + p.userData.visualOffsetX;
-            p.position.y = playerY + p.userData.visualOffsetY;
-
-            const fullyOutsideView = Math.abs(p.userData.visualOffsetX) - radius > halfWidth;
-            if (fullyOutsideView) {
-                p.userData.offscreen = true;
-                p.userData.offscreenElapsed += deltaTime;
-            }
-            const fadeOpacity = p.userData.offscreen
-                ? 1 - THREE.MathUtils.smoothstep(p.userData.offscreenElapsed, 0, 2.5)
-                : 1;
-
-            let modelOpacity = 1;
-            const transitionPlaceholder = p.userData.transitionPlaceholder;
-            if (transitionPlaceholder) {
-                p.userData.transitionElapsed += deltaTime;
-                modelOpacity = THREE.MathUtils.smoothstep(p.userData.transitionElapsed, 0, 0.8);
-                transitionPlaceholder.position.copy(p.position);
-                transitionPlaceholder.scale.copy(p.scale);
-                setPlanetOpacity(transitionPlaceholder, fadeOpacity * (1 - modelOpacity));
-            }
-            setPlanetOpacity(p, fadeOpacity * modelOpacity);
-
-            if (transitionPlaceholder && modelOpacity >= 1) {
-                this.scene.remove(transitionPlaceholder);
-                p.userData.transitionPlaceholder = null;
-            }
-
-            if (p.userData.offscreenElapsed >= 2.5) {
-                p.userData.done = true;
-                p.visible = false;
-                this.scene.remove(p);
-            }
-        });
-
-        if (this.terrainMode) this.updateTerrain(deltaTime, playerPosition);
-        const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;
-        this.clouds.material.opacity = 0.3 * pulse;
+        this.biomes.update(deltaTime, playerPosition, moveInput, currentLevel);
+        this._syncAmbient();
         this.fx.update(deltaTime, playerPosition, moveInput);
-        this.events.update(deltaTime, playerPosition);
-        this.moveParticles(this.cloudPositions, this.cloudVelocities, this.cloudCount, this.clouds, deltaTime, moveInput);
-        if (playerPosition) {
-            this.battleBackdrop.position.set(playerPosition.x, playerPosition.y, playerPosition.z - 320);
-        }
-
-        this.backdropTime += deltaTime;
-        this.distantFlashes.forEach((flash, index) => {
-            const pulse = (Math.sin(this.backdropTime * 2.6 + index * 2.3) + 1) * 0.5;
-            flash.scale.setScalar(9 + pulse * 8);
-            flash.material.opacity = 0.08 + pulse * 0.2;
-        });
-        this.distantDebris.forEach((debris, index) => {
-            debris.rotation.x += deltaTime * (0.012 + index * 0.002);
-            debris.rotation.y += deltaTime * (0.018 + index * 0.003);
-        });
-    }
-
-    updateTerrain(deltaTime, playerPosition) {
-        const terrain = this.terrain;
-        terrain.time += deltaTime;
-        const playerX = playerPosition?.x || 0;
-        const playerZ = playerPosition?.z || 0;
-        const speedPulse = terrain.speed * (1 + Math.sin(terrain.time * 0.8) * 0.04);
-        for (const strip of terrain.strips) {
-            strip.position.x = playerX;
-            strip.position.z += speedPulse * deltaTime;
-            if (strip.position.z > playerZ + 500) {
-                strip.position.z -= terrain.stripDepth * terrain.strips.length;
-            }
-        }
-        for (const mountain of terrain.mountains) {
-            mountain.position.x = mountain.userData.baseX + playerX * 0.08;
-            mountain.position.z += speedPulse * 0.18 * deltaTime;
-            if (mountain.position.z > playerZ - 700) {
-                mountain.position.z -= 2600;
-            }
-        }
-    }
-
-    resetPlanetPosition(planet, index) {
-        if (planet.userData.transitionPlaceholder) {
-            this.scene.remove(planet.userData.transitionPlaceholder);
-            planet.userData.transitionPlaceholder = null;
-        }
-        this._positionPlanetAtHorizon(planet, index);
-        planet.visible = true;
-        this.scene.add(planet);
-        setPlanetOpacity(planet, 1);
     }
 
     moveParticles(pos, vel, count, points, dt, moveInput, playerPos = null) {
@@ -709,7 +148,6 @@ export class SpaceEnvironment {
                 this.setStarColor(i); 
             }
         }
-        points.geometry.attributes.position.needsUpdate = true;
-    }
-
-}
+        points.geometry.attributes.position.        needsUpdate = true;
+            }
+        }

@@ -40,6 +40,11 @@ export class ScorePopup {
         });
     }
 
+    shiftWorld(dx, dy = 0) {
+        if (!dx && !dy) return;
+        for (const p of this.popups) { p.position.x -= dx; p.position.y -= dy; }
+    }
+
     update(deltaTime) {
         if (!deltaTime) return;
 

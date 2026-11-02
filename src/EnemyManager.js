@@ -26,6 +26,10 @@ export class EnemyManager {
         this.scorePopup = scorePopup;
         this.scene = scene;
         this.camera = camera;
+        this.flightPath = null;
+        this.ship = null;
+        this._spawnWorld = new THREE.Vector3();
+        this._pathTmp = new THREE.Vector3();
         this.enemies = [];
         this.enemyProjectiles = [];
         this.templates = {};
@@ -36,7 +40,9 @@ export class EnemyManager {
         this.waveTimer = 0;
         this.enemySpeed = 220;
         this.maxEnemiesOnScreen = isMobile ? 8 : 12;
-        this.waveCooldown = isMobile ? 1.15 : 0.8;
+        this.waveCooldown = isMobile ? 1.9 : 1.5;
+        this.formationTimer = 3;
+        this.loadFactor = 1;
         this.lastWaveSpawnAt = 0;
 
         // Templates
@@ -53,6 +59,18 @@ export class EnemyManager {
 
     async init() { 
         return Promise.resolve(); 
+    }
+
+    // Inimigos e projéteis vivem no mundo: quando a origem da cena anda em x (a nave deriva no mundo),
+    // eles compensam para ficarem parados em relação ao terreno.
+    shiftWorld(dx, dy = 0) {
+        if (!dx && !dy) return;
+        for (let i = 0; i < this.enemies.length; i++) { this.enemies[i].position.x -= dx; this.enemies[i].position.y -= dy; }
+        for (let i = 0; i < this.enemyProjectiles.length; i++) {
+            const p = this.enemyProjectiles[i].mesh.position;
+            p.x -= dx;
+            p.y -= dy;
+        }
     }
 
  clearAllEnemies() {
@@ -176,11 +194,75 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
 
     spawnWave(player, currentLevel = 1) {
         if (!this.enemyTemplate || !player?.mesh) return;
-        if (this.enemies.length >= this.maxEnemiesOnScreen) return;
+        if (this.enemies.length >= this._cap()) return;
         const now = performance.now();
         if (now - this.lastWaveSpawnAt < 120) return;
         this.lastWaveSpawnAt = now;
+        this._spawnOne(this._pickConfig(currentLevel), null);
+    }
 
+    // Limite efetivo de inimigos; encolhe quando o FPS cai.
+    _cap() {
+        return Math.max(4, Math.round(this.maxEnemiesOnScreen * this.loadFactor));
+    }
+
+    setLoadFactor(fps) {
+        this.loadFactor = fps >= 50 || !fps ? 1 : fps >= 40 ? 0.75 : 0.55;
+    }
+
+    // Onda em formação: mesmo tipo/velocidade, posições relativas à câmera, convergindo para o jogador.
+    spawnFormation(player, currentLevel = 1) {
+        if (!this.enemyTemplate || !player?.mesh) return 0;
+        const free = this._cap() - this.enemies.length;
+        if (free < 3) return 0;
+        let cfg = this._pickConfig(currentLevel);
+        // Obstáculos não formam esquadrão: viram um campo curto de rochas.
+        const hazard = cfg.type === 'meteoro' || cfg.type === 'asteroide';
+        const want = Math.min(free, hazard ? 3 : Math.min(3 + Math.floor(currentLevel / 3), 8) + (Math.random() < 0.5 ? 1 : 0));
+        const shapes = hazard ? ['line'] : ['v', 'line', 'column', 'diamond', 'grid', 'pincer', 'circle'];
+        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+        const gap = 95;
+        const offsets = [];
+        for (let i = 0; i < want; i++) {
+            const k = i - (want - 1) / 2;
+            let o;
+            switch (shape) {
+                case 'v': o = [k * gap, -Math.abs(k) * gap * 0.6, Math.abs(k) * 70]; break;
+                case 'column': o = [0, k * gap * 0.9, i * 60]; break;
+                case 'diamond': {
+                    const a = (i / want) * Math.PI * 2;
+                    o = [Math.cos(a) * gap * 1.1, Math.sin(a) * gap * 0.8, (i % 2) * 90];
+                    break;
+                }
+                case 'grid': o = [((i % 3) - 1) * gap, (Math.floor(i / 3) - 0.5) * gap, 0]; break;
+                case 'pincer': o = [(i % 2 ? 1 : -1) * (260 + Math.floor(i / 2) * 90), Math.floor(i / 2) * 40 - 40, Math.floor(i / 2) * 50]; break;
+                case 'circle': {
+                    const a = (i / want) * Math.PI * 2;
+                    o = [Math.cos(a) * gap * 1.5, Math.sin(a) * gap * 1.1, 0];
+                    break;
+                }
+                default: o = [k * gap * 1.2, 0, 0];
+            }
+            offsets.push(o);
+        }
+        const entrySide = Math.floor(Math.random() * 4);
+        const baseLat = entrySide < 2 ? (entrySide === 0 ? -1 : 1) * (350 + Math.random() * 300) : (Math.random() - 0.5) * 260;
+        const baseVert = entrySide >= 2 ? (entrySide === 2 ? -1 : 1) * (100 + Math.random() * 140) : (Math.random() - 0.5) * 200;
+        const converge = shape === 'pincer' ? 1 : 0.55;
+        const seed = Math.random() * Math.PI * 2;
+        const baseSpeed = cfg.speed;
+        offsets.forEach((o, i) => {
+            const member = { ...cfg, speed: baseSpeed };
+            this._spawnOne(member, {
+                lat: baseLat + o[0], vert: baseVert + o[1], depth: o[2],
+                converge, seed, delay: i * 0.18
+            });
+        });
+        this.lastWaveSpawnAt = performance.now();
+        return want;
+    }
+
+    _pickConfig(currentLevel) {
         const rand = Math.random();
         let selectedTemplate = this.enemyTemplate;
         let type = 'comum';
@@ -250,6 +332,12 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
             }
         }
 
+        return { selectedTemplate, type, speed, passSound, laserSound, hp };
+    }
+
+    // slot: posição de formação ({lat, vert, depth, converge, seed, delay}) ou null para entrada avulsa.
+    _spawnOne(cfg, slot) {
+        const { selectedTemplate, type, speed, passSound, laserSound, hp } = cfg;
         const enemy = selectedTemplate.clone();
         if (type === 'meteoro') {
             this._addLocalGlow(enemy, 0xff8a3d);
@@ -262,24 +350,52 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
         const camRight = new THREE.Vector3();
         camRight.setFromMatrixColumn(this.camera.matrixWorld, 0).normalize();
 
-        const spawnDistance = 2200;
-        const centerSpawnPoint = camPos.clone().addScaledVector(camDirection, spawnDistance);
+        let spawnDistance = 2200 + (slot?.depth || 0);
         const entrySide = Math.floor(Math.random() * 4);
-        const lateralOffset = entrySide < 2
+        let lateralOffset = slot ? slot.lat : entrySide < 2
             ? (entrySide === 0 ? -1 : 1) * (400 + Math.random() * 280)
             : (Math.random() - 0.5) * 220;
-        const verticalOffset = entrySide >= 2
+        let verticalOffset = slot ? slot.vert : entrySide >= 2
             ? (entrySide === 2 ? -1 : 1) * (120 + Math.random() * 140)
             : (Math.random() - 0.5) * 220;
 
-        const finalSpawnPos = centerSpawnPoint.clone()
-            .addScaledVector(camRight, lateralOffset)
-            .addScaledVector(new THREE.Vector3(0, 1, 0), verticalOffset);
+        // Entradas avulsas também podem vir pela lateral (flanco) ou por cima, não só de frente.
+        if (!slot && this.ship) {
+            const roll = Math.random();
+            if (roll < 0.2) {
+                spawnDistance = 900 + Math.random() * 500;
+                lateralOffset = (Math.random() < 0.5 ? -1 : 1) * (520 + Math.random() * 220);
+                verticalOffset = (Math.random() - 0.3) * 160;
+            } else if (roll < 0.35) {
+                spawnDistance = 1400 + Math.random() * 400;
+                lateralOffset = (Math.random() - 0.5) * 300;
+                verticalOffset = 260 + Math.random() * 120;
+            }
+        }
+
+        const finalSpawnPos = new THREE.Vector3();
+        if (this.ship) {
+            // O ponto nasce no mundo 3D (relativo à posição e ao rumo reais da nave) e é convertido para a cena.
+            this.ship.worldPointAhead(spawnDistance, lateralOffset, verticalOffset, this._spawnWorld);
+            this.ship.toScene(this._spawnWorld, finalSpawnPos);
+        } else {
+            finalSpawnPos.copy(camPos).addScaledVector(camDirection, spawnDistance)
+                .addScaledVector(camRight, lateralOffset)
+                .addScaledVector(new THREE.Vector3(0, 1, 0), verticalOffset);
+        }
 
         enemy.position.copy(finalSpawnPos);
-        const moveDir = new THREE.Vector3().subVectors(camPos, enemy.position).normalize();
+        // Em formação cada nave mira um ponto deslocado, mantendo o desenho até chegar perto do jogador.
+        const aim = camPos.clone();
+        if (slot) {
+            const spread = 1 - slot.converge;
+            aim.addScaledVector(camRight, lateralOffset * spread).y += verticalOffset * spread;
+        }
+        const moveDir = new THREE.Vector3().subVectors(aim, enemy.position).normalize();
 
-        const shootTimer = (type === 'meteoro' || type === 'asteroide') ? 99999 : 0.8 + Math.random() * 1.2;
+        const baseShoot = (type === 'meteoro' || type === 'asteroide') ? 99999 : 0.8 + Math.random() * 1.2;
+        // Quanto mais inimigos em campo, mais espaçados os tiros (mantém a dificuldade equilibrada).
+        const shootTimer = baseShoot + (baseShoot < 9999 ? this.enemies.length * 0.05 + (slot?.delay || 0) : 0);
 
         enemy.userData = { 
             type, 
@@ -290,7 +406,8 @@ loadModel('/assets/models/roblox.glb', 'enemyTemplate6', [7, 7, 7], 0);
             passSound, 
             laserSound, 
             passSoundPlayed: false,
-            wanderSeed: Math.random() * Math.PI * 2,
+            wanderSeed: slot ? slot.seed : Math.random() * Math.PI * 2,
+            formation: !!slot,
             attackRange: 900 + Math.random() * 300
         };
 
@@ -319,11 +436,16 @@ update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, sound
         }
 
         // Spawning
-       const adjustedCooldown = Math.max(0.25, this.waveCooldown - (currentLevel * 0.015));
+        const adjustedCooldown = Math.max(0.6, this.waveCooldown - (currentLevel * 0.015));
         this.waveTimer += deltaTime;
         if (this.waveTimer > adjustedCooldown) {
             this.spawnWave(player, currentLevel);
             this.waveTimer = 0;
+        }
+        this.formationTimer -= deltaTime;
+        if (this.formationTimer <= 0) {
+            this.spawnFormation(player, currentLevel);
+            this.formationTimer = Math.max(4, 7.5 - currentLevel * 0.05) * (this.loadFactor < 1 ? 1.4 : 1);
         }
 
         // Projéteis inimigos
@@ -355,6 +477,7 @@ update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, sound
         }
 
         // Atualização dos inimigos
+        this._hasObstacles = this.enemies.some((e) => e?.userData?.type === 'asteroide' || e?.userData?.type === 'meteoro');
         const maxEnemyLoop = Math.min(this.enemies.length, this.maxEnemiesOnScreen + 4);
         for (let i = this.enemies.length - 1; i >= 0 && i >= this.enemies.length - maxEnemyLoop; i--) {
         const enemy = this.enemies[i];
@@ -373,7 +496,7 @@ update(laserManager, onScoreIncrease, player, deltaTime, explosionManager, sound
             data.shootTimer -= deltaTime;
             if (data.shootTimer <= 0) {
                 this._enemyShoot(enemy, player, soundManager);
-                data.shootTimer = 1.4 + Math.random() * 1.2;
+                data.shootTimer = (1.4 + Math.random() * 1.2) * (1 + 0.04 * this.enemies.length);
             }
         }
 
@@ -462,7 +585,8 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
             const laser = playerLasers[j];
             if (!laser) continue;
 
-            if (enemy.position.distanceTo(laser.position) < ((data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 55)) {
+            const hitR = (data.type === 'meteoro' || data.type === 'asteroide') ? 70 : 55;
+            if (enemy.position.distanceToSquared(laser.position) < hitR * hitR) {
                 pontoDoImpactoReal = laser.position.clone();
                 laser.userData = { destroyed: true };
                 this.scene.remove(laser);
@@ -501,6 +625,7 @@ if (soundManager && !data.passSoundPlayed && data.passSound) {
     _hitsAsteroid(enemy, enemyIndex, previousPosition) {
         const enemyType = enemy?.userData?.type;
         if (!enemyType || enemyType === 'meteoro' || enemyType === 'asteroide') return false;
+        if (!this._hasObstacles) return false;
 
         enemy.updateMatrixWorld(true);
         const enemyBox = this.enemyCollisionBox.setFromObject(enemy);

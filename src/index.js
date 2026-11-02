@@ -4,7 +4,20 @@ import { ScorePopup } from './ScorePopup.js';
 import { SoundManager } from './SoundManager.js';
 import { InputManager } from './InputManager.js';
 import { Player } from './Player.js';
+import { ChaseCamera } from './flight/ChaseCamera.js';
+import { FlightAssist } from './flight/FlightAssist.js';
+import { ShipFlight } from './flight/ShipFlight.js';
+import { FlightCollision } from './flight/FlightCollision.js';
+import { FlightDebug } from './flight/FlightDebug.js';
+import { FireDebug } from './flight/FireDebug.js';
+import { CollisionDebug } from './flight/CollisionDebug.js';
+import { FlightTestMode } from './flight/FlightTestMode.js';
+import { WorldObstacles } from './environments/WorldObstacles.js';
 import { LaserManager } from './LaserManager.js';
+import { ProjectileImpacts } from './flight/ProjectileImpacts.js';
+import { EnemyDamageFX } from './flight/EnemyDamageFX.js';
+import { ClimbCinematic } from './flight/ClimbCinematic.js';
+import { ManhattanLandmarks } from './environments/ManhattanLandmarks.js';
 import { EnemyManager } from './EnemyManager.js';
 import { ExplosionManager } from './ExplosionManager.js';
 import { SpaceEnvironment } from './SpaceEnvironment.js';
@@ -89,6 +102,7 @@ applyViewportSettings();
 if (quality.bloom > 0) {
     bloomPipeline = new BloomPipeline(renderer, scene, camera, {
         strength: quality.bloom,
+        msaaSamples: quality.msaa,
         resolutionScale: isMobileDevice ? 0.35 : 0.5
     });
     applyViewportSettings();
@@ -116,9 +130,11 @@ explosionManager.maxActiveExplosions = quality.maxExplosions;
 const inputManager = new InputManager();
 const scorePopup = new ScorePopup(scene, camera);
 const player = new Player(scene, laserManager, explosionManager);
+player.applyQuality({ renderer, shadows: quality.shipShadows, mobile: isMobileDevice });
 const enemyManager = new EnemyManager(scene, camera, scorePopup, isMobileDevice);
 enemyManager.maxEnemiesOnScreen = quality.maxEnemies;
-const spaceEnvironment = new SpaceEnvironment(scene, quality.stars, quality.clouds);
+const spaceEnvironment = new SpaceEnvironment(scene, quality.stars, quality.clouds, quality.far);
+spaceEnvironment.attachPost(bloomPipeline);
 const progressionManager = new ProgressionManager();
 let naveMae = new NaveMae(scene);
 
@@ -181,8 +197,8 @@ function updateResourceHUD() {
     }
 }
 
-function updateEnvironmentTheme(level = progressionManager.getLevel()) {
-    if (spaceEnvironment?.setLevelTheme) spaceEnvironment.setLevelTheme(level);
+function updateEnvironmentTheme(level = progressionManager.getLevel(), instant = false) {
+    if (spaceEnvironment?.setLevelTheme) spaceEnvironment.setLevelTheme(level, instant);
 }
 
 function updateLevelUI(currentLevel) {
@@ -216,7 +232,7 @@ const missionBriefings = {
 let combatMessageTimer = null;
 let campaignEndingShown = false;
 
-function showCombatMessage(title, message, briefing = false, duration = 3600) {
+function showCombatMessage(title, message, briefing = false, duration = 2200) {
     const panel = $id('combat-message');
     const titleElement = $id('combat-message-title');
     const bodyElement = $id('combat-message-body');
@@ -237,7 +253,7 @@ function showMissionBriefing(level) {
         `MISSÃO ${level}`,
         data.task
     ];
-    showCombatMessage(title, message, true, 4200);
+    showCombatMessage(title, message, true, 2800);
 }
 
 function showCampaignEnding() {
@@ -290,8 +306,8 @@ window.showLevelUp = function (level, message) {
     `;
     document.body.appendChild(card);
     requestAnimationFrame(() => card.classList.add('visible'));
-    setTimeout(() => card.classList.remove('visible'), 3200);
-    setTimeout(() => card.remove(), 3700);
+    setTimeout(() => card.classList.remove('visible'), 2200);
+    setTimeout(() => card.remove(), 2700);
 };
 
 // ====================== SCORE / HIT ======================
@@ -350,6 +366,32 @@ const _camOffset = new THREE.Vector3();
 const _camTarget = new THREE.Vector3();
 const _camLook = new THREE.Vector3();
 const _camLookDelta = new THREE.Vector3(0, 2, -5);
+const flightPath = spaceEnvironment.biomes.flight;
+const flightAssist = new FlightAssist();
+const shipFlight = new ShipFlight();
+const flightCollision = new FlightCollision(shipFlight);
+spaceEnvironment.biomes.ship = shipFlight;
+// Altitude real e colisão futura: a sonda de chão só informa a altura; hitsGround() não é chamada ainda.
+shipFlight.setGroundProbe((x, z) => spaceEnvironment.biomes.groundHeightAt(x, z));
+flightCollision.setGroundProbe((x, z) => spaceEnvironment.biomes.groundHeightAt(x, z));
+flightCollision.setObstacles(new WorldObstacles(spaceEnvironment.biomes));
+const flightDebug = new FlightDebug(scene, shipFlight, flightCollision, spaceEnvironment.biomes);
+const fireDebug = new FireDebug(scene, player);
+const projectileImpacts = new ProjectileImpacts(scene, laserManager, flightCollision.obstacles, explosionManager);
+const enemyDamageFX = new EnemyDamageFX(enemyManager, projectileImpacts);
+const collisionDebug = new CollisionDebug(scene, flightCollision, shipFlight);
+let collisionFitted = false;
+enemyManager.ship = shipFlight;
+player.shipFlight = shipFlight;
+player.flight = flightPath;
+enemyManager.flightPath = flightPath;
+const chaseCamera = new ChaseCamera(camera);
+const climbCinematic = new ClimbCinematic(camera);
+const manhattanLandmarks = new ManhattanLandmarks(scene, spaceEnvironment.biomes);
+const flightTest = new FlightTestMode({
+    scene, biomes: spaceEnvironment.biomes, ship: shipFlight, collision: flightCollision,
+    obstacles: flightCollision.obstacles, chaseCamera, enemyManager, explosionManager, debug: flightDebug
+});
 const _cameraShakeOffset = new THREE.Vector3();
 explosionManager.onCinematicImpact = (strength) => {
     cinematicShakeTimer = Math.max(cinematicShakeTimer, 0.28);
@@ -359,17 +401,6 @@ explosionManager.onCinematicImpact = (strength) => {
 function updateCamera(deltaTime) {
     if (!player.shipModel) return;
     if (!hitModelBasePosition) hitModelBasePosition = player.shipModel.position.clone();
-
-    const pitchInfluence = player.shipModel.rotation.x * 0.15;
-    const rollInfluence = player.shipModel.rotation.z * 0.1;
-
-    _camOffset.set(0, 8, 75);
-    _camOffset.y += Math.sin(pitchInfluence) * 8;
-    _camOffset.z -= Math.cos(pitchInfluence) * 8;
-    _camOffset.x += Math.sin(rollInfluence) * 6;
-
-    _camTarget.copy(player.shipModel.position).add(_camOffset);
-    camera.position.lerp(_camTarget, 0.08);
 
     if (damageVisualTimer > 0) damageVisualTimer = Math.max(0, damageVisualTimer - deltaTime);
     if (cinematicShakeTimer > 0) {
@@ -388,8 +419,14 @@ function updateCamera(deltaTime) {
         Math.cos(performance.now() * 0.17) * (1.2 * shakeStrength + impactStrength * 0.72),
         0
     );
-    _camLook.copy(player.shipModel.position).add(_camLookDelta).add(_cameraShakeOffset);
-    camera.lookAt(_camLook);
+    const dtCam = Math.min(deltaTime, 0.1);
+    player.worldPosition.copy(shipFlight.worldPosition);
+    chaseCamera.speedFactor = flightAssist.speedFactor;
+    chaseCamera.altitudeNorm = shipFlight.altitudeNorm;
+    chaseCamera.pitchNorm = shipFlight.pitchCmd;
+    spaceEnvironment.biomes.flightBoost = Math.min(1, Math.hypot(player.velocity.x, player.velocity.y) / 7.8 + Math.max(flightAssist.speedFactor - 1, 0) * 4);
+    chaseCamera.update(dtCam, player.mesh.position, player.velocity, flightPath, null, _cameraShakeOffset);
+    climbCinematic.apply(dtCam, shipFlight.climbRate, chaseCamera.fov);
 }
 
 // ====================== ANIMATE ======================
@@ -417,10 +454,11 @@ function animate() {
                 display.style.display = 'none';
 
                 const nivelInicial = progressionManager.getLevel();
-                enemyManager.spawnWave(player, nivelInicial);
+                if (!flightTest.enabled) enemyManager.spawnWave(player, nivelInicial);
                 updateLevelUI(nivelInicial);
-                showMissionBriefing(nivelInicial);
-                updateEnvironmentTheme(nivelInicial);
+                if (!flightTest.enabled) showMissionBriefing(nivelInicial);
+                updateEnvironmentTheme(nivelInicial, true);
+                flightTest.begin();
                 progressionManager.resetLevelResources();
                 syncLevelResources();
 
@@ -436,13 +474,37 @@ function animate() {
     if (currentLevel >= 45) naveMae.preload?.();
 
     // Input
-    const keyboardInput = inputManager.update();
+    const keyboardInput = inputManager.update(deltaTime);
     const input = {
         x: window.moveInput.x !== 0 ? window.moveInput.x : keyboardInput.x,
         y: window.moveInput.y !== 0 ? window.moveInput.y : keyboardInput.y
     };
+    flightTest.assist(input);
 
     player.update(input, deltaTime, enemyManager, handlePlayerHit, handleEnemyScore);
+
+    // Voo real: a nave avança pelo mundo; o ambiente e os inimigos usam essa posição como referência.
+    const dtFlight = Math.min(deltaTime, 0.1);
+    flightAssist.update(dtFlight, player.velocity);
+    spaceEnvironment.biomes.speedScale = flightAssist.speedFactor;
+    shipFlight.update(dtFlight, player.velocity, spaceEnvironment.biomes.speed, player.mesh.position, input.y);
+    const originDx = shipFlight.originShiftX;
+    const originDy = shipFlight.originShiftY;
+    enemyManager.shiftWorld(originDx, originDy);
+    laserManager.shiftWorld(originDx, originDy);
+    projectileImpacts.shiftWorld(originDx, originDy);
+    manhattanLandmarks.shiftWorld(originDx);
+    explosionManager.shiftWorld(originDx, originDy);
+    scorePopup.shiftWorld(originDx, originDy);
+    player.shiftWorld(originDx, originDy);
+    if (boss) { boss.ship = shipFlight; boss.shiftWorld?.(originDx, originDy); }
+
+    if (!collisionFitted && player.shipModel) { flightCollision.fitToModel(player.shipModel); collisionFitted = true; }
+    if (flightCollision.enabled || flightDebug.enabled || collisionDebug.enabled) flightCollision.evaluate(player.mesh.position, shipFlight.velocity, spaceEnvironment.biomes.speed);
+    flightDebug.update(player.mesh.position);
+    collisionDebug.update(player.mesh.position);
+    fireDebug.update();
+    flightTest.update(player.mesh.position);
 
     if (spaceEnvironment) {
         spaceEnvironment.update(
@@ -455,6 +517,7 @@ function animate() {
         );
     }
 
+    enemyManager.setLoadFactor(perfMonitor.fps);
     enemyManager.update(
         laserManager,
         handleEnemyScore,
@@ -477,6 +540,9 @@ function animate() {
     }
 
     laserManager.update(deltaTime, enemyManager, handleEnemyScore, explosionManager, player.mesh.position);
+    projectileImpacts.update(deltaTime);
+    enemyDamageFX.update(deltaTime);
+    manhattanLandmarks.update();
     explosionManager.update(deltaTime);
     scorePopup.update(deltaTime);
     updateCamera(deltaTime);
@@ -622,7 +688,7 @@ function toggleGamePause() {
 function startGame() {
     if (currentState === GAME_STATE.PLAYING) return;
 
-    countdown = 5;
+    countdown = flightTest.enabled ? 0.05 : 5;
     isGameStarted = false;
     score = 0;
     enemiesDestroyed = 0;
@@ -659,6 +725,10 @@ function startGame() {
     if (nexusSelector) nexusSelector.style.display = 'none';
 
     player.mesh.position.set(0, -1, 8);
+    player.velocity.set(0, 0);
+    chaseCamera.reset(0, -1);
+    flightAssist.reset();
+    shipFlight.reset();
     enemyManager.clearAllEnemies();
 
     updateHUD();
@@ -711,6 +781,7 @@ window.addEventListener('DOMContentLoaded', () => {
         startBtn.addEventListener('click', handleStart);
         startBtn.addEventListener('touchstart', handleStart, { passive: false });
     }
+    if (flightTest.enabled) startGame();
 
     const btnShoot = document.getElementById('btnShoot');
     if (btnShoot) {

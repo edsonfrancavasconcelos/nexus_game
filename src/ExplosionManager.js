@@ -119,6 +119,19 @@ export class ExplosionManager {
         }
     }
 
+    // Compensa o deslocamento da origem de render: explosões e faíscas ficam fixas no mundo.
+    shiftWorld(dx, dy = 0) {
+        if (!dx && !dy) return;
+        const mv = (o) => { o.position.x -= dx; o.position.y -= dy; };
+        for (const exp of this.explosions) {
+            if (exp.isDebris) { mv(exp.mesh); continue; }
+            mv(exp.sprite);
+            if (exp.flash) mv(exp.flash);
+            if (exp.ring) mv(exp.ring);
+        }
+        for (const sp of this.sparks) { sp.pos.x -= dx; sp.pos.y -= dy; }
+    }
+
     _updateSparks(dt) {
         const mesh = this.sparkMesh;
         const d = this._dummy;

@@ -40,6 +40,14 @@ export class NaveMae {
 
         this.loader = new GLTFLoader();
         this._preloaded = false;
+        this.ship = null;
+    }
+
+    // Compensa o deslocamento da origem de render: a Nave-Mãe mantém sua posição real no mundo.
+    shiftWorld(dx, dy = 0) {
+        if ((!dx && !dy) || !this.mesh) return;
+        this.mesh.position.x -= dx;
+        this.mesh.position.y -= dy;
     }
 
     // Assets do boss (~16 MB) só são baixados perto do nível 50
@@ -221,7 +229,10 @@ update(deltaTime, playerPosition, laserManager = null, explosionManager = null, 
     if (playerPosition) {
         const bossOrbitX = Math.sin(timeSinceSpawn * 0.14) * 90;
         const bossOrbitY = Math.cos(timeSinceSpawn * 0.08) * 16;
-        target.x = THREE.MathUtils.clamp((playerPosition.x ?? 0) * 0.05 + bossOrbitX, -120, 120);
+        // O alvo é calculado em coordenadas de mundo e convertido para a cena (origem flutuante).
+        const originX = this.ship?.renderOrigin?.x ?? 0;
+        const worldX = THREE.MathUtils.clamp(((playerPosition.x ?? 0) + originX) * 0.05 + bossOrbitX, -120, 120);
+        target.x = worldX - originX;
         target.y = Math.max(26, (playerPosition.y ?? 20) + 24 + bossOrbitY);
     }
 

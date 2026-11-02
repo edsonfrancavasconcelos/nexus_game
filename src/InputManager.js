@@ -9,7 +9,8 @@ export class InputManager {
             Space: false // Certifique-se de que o event.code enviado seja exatamente 'Space'
         };
 
-        this.inputAcceleration = 0.22;
+        this.inputAcceleration = 0.3;
+        this.inputRelease = 0.36;
         this.currentX = 0;
         this.currentY = 0;
         this.joystickActive = false;
@@ -87,7 +88,7 @@ export class InputManager {
         });
     }
 
-    update() {
+    update(deltaTime = 1 / 60) {
         if (!this.joystickActive) {
             let targetX = 0, targetY = 0;
             if (this.keys.ArrowLeft) targetX = -1;
@@ -95,8 +96,14 @@ export class InputManager {
             if (this.keys.ArrowUp) targetY = 1;
             if (this.keys.ArrowDown) targetY = -1;
 
-            this.currentX += (targetX - this.currentX) * this.inputAcceleration;
-            this.currentY += (targetY - this.currentY) * this.inputAcceleration;
+            // Resposta mais rápida e independente do FPS; ao soltar ou inverter, a entrada volta mais depressa.
+            const frames = Math.min(deltaTime, 0.1) * 60;
+            const rate = (target, current) => {
+                const base = Math.abs(target) > Math.abs(current) && target * current >= 0 ? this.inputAcceleration : this.inputRelease;
+                return 1 - Math.pow(1 - base, frames);
+            };
+            this.currentX += (targetX - this.currentX) * rate(targetX, this.currentX);
+            this.currentY += (targetY - this.currentY) * rate(targetY, this.currentY);
             
             return { 
                 x: this.currentX, 
